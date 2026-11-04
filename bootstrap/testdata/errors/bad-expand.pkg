@@ -1,0 +1,4 @@
+use std
+for i = 1 to
+  print i
+end

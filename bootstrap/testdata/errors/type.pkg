@@ -1,0 +1,3 @@
+use std
+let s = "a"
+print s + 1

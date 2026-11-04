@@ -192,6 +192,7 @@ type Node struct {
 	Pos      Pos
 	Type     string
 	Slots    map[string]*Node
+	Order    []string // slot names in pattern order: the canonical walk order
 	Items    []*Node
 	Int      int64
 	Str      string
@@ -205,9 +206,45 @@ type Node struct {
 }
 
 type Program struct {
-	Main  *Node // block
+	Main  *Node // block of top-level statements
 	Frame *Frame
 	Funcs []*Node
+	Top   []*Node // every top-level item, statements and functions, in source order
+}
+
+// setSlot fills a slot, remembering the order slots were filled in.
+func (n *Node) setSlot(name string, c *Node) {
+	if _, ok := n.Slots[name]; !ok {
+		n.Order = append(n.Order, name)
+	}
+	n.Slots[name] = c
+}
+
+// Children returns the node's slots in order, then its items.
+func (n *Node) Children() []*Node {
+	out := make([]*Node, 0, len(n.Order)+len(n.Items))
+	for _, name := range n.Order {
+		out = append(out, n.Slots[name])
+	}
+	return append(out, n.Items...)
+}
+
+// number gives every node its ID: a pre-order walk of the top-level items
+// in source order, starting at 1. IDs name labels in the generated code, so
+// they depend only on the final tree, never on parse attempts that failed.
+func number(prog *Program) {
+	id := 0
+	var walk func(*Node)
+	walk = func(n *Node) {
+		id++
+		n.ID = id
+		for _, c := range n.Children() {
+			walk(c)
+		}
+	}
+	for _, n := range prog.Top {
+		walk(n)
+	}
 }
 
 // ---------------------------------------------------------------- parser
@@ -219,7 +256,6 @@ type Parser struct {
 	frame  *Frame
 	funcs  map[string]*Node
 	undo   []func()
-	nextID int
 	far    error
 	farPos Pos
 	depth  int
@@ -232,8 +268,7 @@ func NewParser(L *Lang, toks []Token) *Parser {
 func (p *Parser) tok() Token { return p.toks[p.i] }
 
 func (p *Parser) node(kind string, pos Pos) *Node {
-	p.nextID++
-	return &Node{ID: p.nextID, Kind: kind, Pos: pos, Slots: map[string]*Node{}, toks: p.toks, start: p.i}
+	return &Node{Kind: kind, Pos: pos, Slots: map[string]*Node{}, toks: p.toks, start: p.i}
 }
 
 func later(a, b Pos) bool { return a.Line > b.Line || a.Line == b.Line && a.Col > b.Col }
@@ -309,6 +344,7 @@ func (p *Parser) ParseProgram() (*Program, error) {
 			return nil, err
 		}
 		p.far = nil
+		prog.Top = append(prog.Top, n)
 		if n.Frame != nil {
 			prog.Funcs = append(prog.Funcs, n)
 		} else {
@@ -316,6 +352,7 @@ func (p *Parser) ParseProgram() (*Program, error) {
 		}
 	}
 	prog.Main = body
+	number(prog)
 	return prog, p.checkCalls(prog)
 }
 
@@ -416,7 +453,7 @@ func (p *Parser) elems(es []pkgfile.Elem, n *Node) error {
 				return err
 			}
 			c.toks, c.start, c.end = p.toks, start, p.i
-			n.Slots[e.Slot.Name] = c
+			n.setSlot(e.Slot.Name, c)
 		}
 	}
 	return nil
@@ -453,7 +490,8 @@ func (p *Parser) slot(s *pkgfile.Slot, parent *Node) (*Node, error) {
 			return nil, err
 		}
 		// a newvar declared "of" this slot takes its type
-		for _, other := range parent.Slots {
+		for _, name := range parent.Order {
+			other := parent.Slots[name]
 			if other.Kind == "var" && other.Var != nil && other.Str == s.Name {
 				other.Var.Type, other.Type = e.Type, e.Type
 			}
@@ -569,7 +607,16 @@ func (p *Parser) declare(id Token, param bool) (*Var, error) {
 		f.Slots++
 	}
 	sc[id.Text] = v
-	p.undo = append(p.undo, func() { delete(sc, id.Text) })
+	// undoing a declaration also gives its slot back, so slot numbers
+	// depend only on the final tree
+	p.undo = append(p.undo, func() {
+		delete(sc, id.Text)
+		if param {
+			f.Params--
+		} else {
+			f.Slots--
+		}
+	})
 	return v, nil
 }
 
@@ -638,7 +685,8 @@ func (p *Parser) expr(minPrec int) (*Node, error) {
 		}
 		n := p.node(r.Kind, t.Pos)
 		n.Rule, n.start, n.end = r, start, p.i
-		n.Slots[ls.Name], n.Slots[rs.Name] = left, right
+		n.setSlot(ls.Name, left)
+		n.setSlot(rs.Name, right)
 		if err := p.setType(n); err != nil {
 			return nil, err
 		}
@@ -669,7 +717,7 @@ func (p *Parser) prefix() (*Node, error) {
 			}
 			n := p.node(r.Kind, t.Pos)
 			n.Rule, n.start, n.end = r, start, p.i
-			n.Slots[sl.Name] = operand
+			n.setSlot(sl.Name, operand)
 			if err := p.setType(n); err != nil {
 				return nil, err
 			}
@@ -827,10 +875,7 @@ func Walk(n *Node, fn func(*Node)) {
 		return
 	}
 	fn(n)
-	for _, c := range n.Slots {
-		Walk(c, fn)
-	}
-	for _, c := range n.Items {
+	for _, c := range n.Children() {
 		Walk(c, fn)
 	}
 }
@@ -841,7 +886,8 @@ func (p *Parser) checkCalls(prog *Program) error {
 		if err != nil {
 			return
 		}
-		for _, c := range n.Slots {
+		for _, name := range n.Order {
+			c := n.Slots[name]
 			if c.Kind != "func" {
 				continue
 			}
@@ -850,7 +896,8 @@ func (p *Parser) checkCalls(prog *Program) error {
 				err = fmt.Errorf("%s: unknown function %s", c.Pos, c.Ident)
 				return
 			}
-			for _, a := range n.Slots {
+			for _, aname := range n.Order {
+				a := n.Slots[aname]
 				if a.Kind == "args" && len(a.Items) != def.Frame.Params {
 					err = fmt.Errorf("%s: %s takes %d argument(s), got %d", c.Pos, c.Ident, def.Frame.Params, len(a.Items))
 					return

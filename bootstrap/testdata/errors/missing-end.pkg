@@ -1,0 +1,3 @@
+use std
+if 1
+  print 2

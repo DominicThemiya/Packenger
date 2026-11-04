@@ -26,8 +26,8 @@ type Gen struct {
 func NewGen(target string, back map[string]*pkgfile.File, prog *Program) *Gen {
 	g := &Gen{Target: target, Back: back, funcs: map[string]*Node{}, used: map[string]bool{}, dataDone: map[int]bool{}, Chosen: map[VariantUse]int{}}
 	for _, f := range prog.Funcs {
-		for _, c := range f.Slots {
-			if c.Kind == "newfunc" {
+		for _, name := range f.Order {
+			if c := f.Slots[name]; c.Kind == "newfunc" {
 				g.funcs[c.Ident] = f
 			}
 		}

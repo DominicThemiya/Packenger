@@ -235,37 +235,6 @@ func (t *Tree) usedBy(name string) []string {
 	return out
 }
 
-func patternText(p *pkgfile.Pattern) string {
-	var parts []string
-	var walk func([]pkgfile.Elem) string
-	walk = func(es []pkgfile.Elem) string {
-		var ps []string
-		for _, e := range es {
-			switch {
-			case e.Lit != "":
-				ps = append(ps, e.Lit)
-			case e.Slot != nil:
-				s := e.Slot.Name + ": " + e.Slot.Kind
-				switch {
-				case e.Slot.Kind == "newvar" && e.Slot.Arg != "":
-					s += " of " + e.Slot.Arg
-				case e.Slot.Arg != "":
-					s += " " + e.Slot.Arg
-				}
-				ps = append(ps, "{"+s+"}")
-			case e.Optional != nil:
-				ps = append(ps, "[ "+walk(e.Optional)+" ]")
-			}
-		}
-		return strings.Join(ps, " ")
-	}
-	parts = append(parts, walk(p.Elems))
-	if p.Result != "" {
-		parts = append(parts, "-> "+p.Result)
-	}
-	return strings.Join(parts, " ")
-}
-
 func slotRows(es []pkgfile.Elem, optional bool, rows *[]string) {
 	for _, e := range es {
 		if e.Optional != nil {
@@ -357,7 +326,7 @@ func (t *Tree) page(name string) string {
 		}
 		b.WriteString("Kind: " + kind + "\n\n```\n")
 		for _, p := range s.Patterns {
-			b.WriteString(patternText(p) + "\n")
+			b.WriteString(p.String() + "\n")
 		}
 		b.WriteString("```\n\n")
 		var rows []string

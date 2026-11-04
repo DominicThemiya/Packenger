@@ -5,7 +5,11 @@ packenger build <file.pkg> [-o exe]     compile to a native executable
 packenger run   <file.pkg> [-- args]    compile and run
 packenger asm   <file.pkg> [-o file]    print the generated NASM
 packenger tree  <file.pkg>              show which packages built the program
+packenger dump  tokens|ast|asm <file>   print a compiler stage as stable text
+packenger dump  pkg <package>           print a registry package as parsed
 ```
+
+The `dump` formats are specified in [dump formats](dumps.md).
 
 Flags can go before or after the file name.
 
@@ -92,5 +96,6 @@ missing `nasm`:
 ## Other tools
 
 ```sh
-go run ./cmd/pkgdoc    # regenerate docs/registry from the package files
+go run ./cmd/pkgdoc       # regenerate docs/registry from the package files
+go test ./bootstrap/      # comparison harness (PKC=/path/to/pkc to add pkc)
 ```

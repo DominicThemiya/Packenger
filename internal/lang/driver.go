@@ -29,6 +29,7 @@ type Result struct {
 	Front   map[string]*pkgfile.File // every front-end package loaded, by name
 	Back    map[string]*pkgfile.File // backend packages, by kind
 	Program *Program
+	Tokens  []Token
 	File    string
 }
 
@@ -128,10 +129,12 @@ func (c *Compiler) CompileFile(ctx context.Context, path string) (*Result, error
 	return c.Compile(ctx, filepath.Base(path), string(src))
 }
 
-func (c *Compiler) Compile(ctx context.Context, file, src string) (*Result, error) {
+// Lex runs the pipeline up to tokenizing: fetch the syntax packages named by
+// the use lines, build the grammar, and tokenize the rest of the file.
+func (c *Compiler) Lex(ctx context.Context, file, src string) ([]Token, *Lang, map[string]*pkgfile.File, []string, error) {
 	uses, body, err := scanUses(src)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", file, err)
+		return nil, nil, nil, nil, fmt.Errorf("%s: %w", file, err)
 	}
 
 	// 1. front end: the packages that define the language
@@ -151,7 +154,7 @@ func (c *Compiler) Compile(ctx context.Context, file, src string) (*Result, erro
 		return out
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, nil, err
 	}
 	var syntaxPkgs []*pkgfile.File
 	for _, f := range front {
@@ -162,18 +165,27 @@ func (c *Compiler) Compile(ctx context.Context, file, src string) (*Result, erro
 	sort.Slice(syntaxPkgs, func(i, j int) bool { return syntaxPkgs[i].Name < syntaxPkgs[j].Name })
 	L, err := NewLang(syntaxPkgs)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, nil, err
 	}
 	c.report().Grammar(GrammarInfo{
 		Packages: len(syntaxPkgs), Forms: L.forms(), Infix: len(L.infix), Prefix: len(L.prefix),
 		Keywords: sortedKeys(L.keywords), Symbols: L.Puncts,
 	})
 
-	// 2. parse with the grammar those packages define
 	toks, err := Lex(body, file, L.Puncts, false)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	return toks, L, front, uses, nil
+}
+
+func (c *Compiler) Compile(ctx context.Context, file, src string) (*Result, error) {
+	toks, L, front, uses, err := c.Lex(ctx, file, src)
 	if err != nil {
 		return nil, err
 	}
+
+	// 2. parse with the grammar those packages define
 	t0 := time.Now()
 	prog, err := NewParser(L, toks).ParseProgram()
 	if err != nil {
@@ -234,7 +246,7 @@ func (c *Compiler) Compile(ctx context.Context, file, src string) (*Result, erro
 		return a.Section+a.When < b.Section+b.When
 	})
 	c.report().Emitted(strings.Count(asm, "\n"), time.Since(t0), variants)
-	return &Result{Asm: asm, Uses: uses, Front: front, Back: back, Program: prog, File: file}, nil
+	return &Result{Asm: asm, Uses: uses, Front: front, Back: back, Program: prog, Tokens: toks, File: file}, nil
 }
 
 func sortedKeys[V any](m map[string]V) []string {

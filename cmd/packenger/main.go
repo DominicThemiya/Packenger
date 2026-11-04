@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/DominicThemiya/Packenger/internal/lang"
+	"github.com/DominicThemiya/Packenger/internal/pkgfile"
 	"github.com/DominicThemiya/Packenger/internal/registry"
 	"github.com/DominicThemiya/Packenger/internal/ui"
 )
@@ -23,6 +24,10 @@ Usage:
   packenger run   <file.pkg> [-- args]  compile and run
   packenger asm   <file.pkg> [-o file]  print the generated NASM
   packenger tree  <file.pkg>            show which packages built the program
+  packenger dump  tokens|ast|asm <file.pkg>
+                                        print a compiler stage in a stable text
+                                        format (see docs/dumps.md)
+  packenger dump  pkg <package>         print a registry package as parsed
 
 Flags:
   --registry URL   where packages are hosted (env PACKENGER_REGISTRY;
@@ -78,10 +83,19 @@ func run(args []string, srcOut *string) (int, error) {
 	if err := fs.Parse(flagsFirst(rest, map[string]bool{"v": true, "vb": true})); err != nil {
 		return 1, err
 	}
-	if fs.NArg() != 1 {
+	stage := ""
+	if cmd == "dump" {
+		if fs.NArg() != 2 {
+			return 1, fmt.Errorf("usage: packenger dump tokens|ast|asm <file.pkg>, or packenger dump pkg <package>")
+		}
+		stage = fs.Arg(0)
+		if stage != "tokens" && stage != "ast" && stage != "asm" && stage != "pkg" {
+			return 1, fmt.Errorf("unknown dump %q (tokens, ast, asm or pkg)", stage)
+		}
+	} else if fs.NArg() != 1 {
 		return 1, fmt.Errorf("%s expects one source file (see packenger --help)", cmd)
 	}
-	src := fs.Arg(0)
+	src := fs.Arg(fs.NArg() - 1)
 	*srcOut = src
 
 	exe := *out
@@ -99,6 +113,9 @@ func run(args []string, srcOut *string) (int, error) {
 		if rep != nil {
 			rep.Done(note)
 		}
+	}
+	if cmd == "dump" {
+		return dump(c, stage, src)
 	}
 	res, err := c.CompileFile(context.Background(), src)
 	if err != nil {
@@ -146,6 +163,45 @@ func run(args []string, srcOut *string) (int, error) {
 		return 0, nil
 	}
 	return 1, fmt.Errorf("unknown command %q (see packenger --help)", cmd)
+}
+
+func dump(c *lang.Compiler, stage, target string) (int, error) {
+	ctx := context.Background()
+	if stage == "pkg" {
+		src, origin, err := c.Registry.Fetch(ctx, target)
+		if err != nil {
+			return 1, err
+		}
+		f, err := pkgfile.Parse(target, origin, src)
+		if err != nil {
+			return 1, err
+		}
+		fmt.Print(pkgfile.Dump(f))
+		return 0, nil
+	}
+	src, err := os.ReadFile(target)
+	if err != nil {
+		return 1, err
+	}
+	name := filepath.Base(target)
+	if stage == "tokens" {
+		toks, _, _, _, err := c.Lex(ctx, name, string(src))
+		if err != nil {
+			return 1, err
+		}
+		fmt.Print(lang.DumpTokens(toks))
+		return 0, nil
+	}
+	res, err := c.Compile(ctx, name, string(src))
+	if err != nil {
+		return 1, err
+	}
+	if stage == "ast" {
+		fmt.Print(lang.DumpAST(res.Program))
+	} else {
+		fmt.Print(res.Asm)
+	}
+	return 0, nil
 }
 
 // flagsFirst moves flags ahead of positional arguments so that

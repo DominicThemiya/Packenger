@@ -4,7 +4,7 @@ Goal: a Packenger compiler written in Packenger (**`pkc`**) that compiles
 itself, developed alongside the Go compiler, with both producing identical
 output.
 
-Status: **planned**. Nothing here is implemented yet.
+Status: **phase 0 done** (parity infrastructure). Phases 1–5 are planned.
 
 ## Where we start
 
@@ -37,7 +37,10 @@ keep doing so, since how a package is downloaded doesn't affect the
 generated code. Errors (for example, no network) must be reported with the
 same wording by both.
 
-## Phase 0: parity infrastructure
+## Phase 0: parity infrastructure ✓
+
+Done. See [dump formats](dumps.md) for the formats, node numbering rules
+and the harness.
 
 Built first, because both compilers will change together from here on.
 

@@ -1,0 +1,4 @@
+use std
+let s = "héllo \"quoted\"\n"
+print s
+print ""

@@ -1,0 +1,5 @@
+use std
+while 1
+  fn g()
+  end
+end

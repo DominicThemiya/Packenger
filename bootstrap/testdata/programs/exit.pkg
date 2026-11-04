@@ -1,0 +1,2 @@
+use std
+return 3 * 4

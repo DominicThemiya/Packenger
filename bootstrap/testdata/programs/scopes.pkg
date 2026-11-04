@@ -1,0 +1,11 @@
+use std
+let x = 1
+if 1
+  let x = 2
+  print x
+  if 1
+    let y = x + 1
+    print y
+  end
+end
+print x

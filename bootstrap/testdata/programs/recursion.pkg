@@ -1,0 +1,18 @@
+use std
+fn fact(n)
+  if n <= 1
+    return 1
+  end
+  return n * fact(n - 1)
+end
+fn ack(m, n)
+  if m == 0
+    return n + 1
+  end
+  if n == 0
+    return ack(m - 1, 1)
+  end
+  return ack(m - 1, ack(m, n - 1))
+end
+print fact(20)
+print ack(2, 3)

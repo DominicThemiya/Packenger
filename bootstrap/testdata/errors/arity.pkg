@@ -1,0 +1,5 @@
+use std
+fn f(a)
+  return a
+end
+print f(1, 2)

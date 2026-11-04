@@ -1,0 +1,15 @@
+use std
+let x = 5
+if x > 3
+  print 1
+else
+  print 2
+end
+if x
+  print 3
+end
+let i = 0
+while i < 3
+  i = i + 1
+end
+print i
