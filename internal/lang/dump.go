@@ -61,11 +61,14 @@ func nodeLine(n *Node) string {
 		s += " = " + pkgfile.Quote(n.Str)
 	case "var":
 		where := "local"
-		if n.Var.Param {
+		switch {
+		case n.Var.Param:
 			where = "param"
+		case n.Var.Global:
+			where = "global"
 		}
 		s += fmt.Sprintf(" %s %s %d", n.Var.Name, where, n.Var.Index)
-	case "ident", "func", "newfunc", "newtype", "fielddecl":
+	case "ident", "func", "newfunc", "newtype", "fielddecl", "newconst":
 		s += " " + n.Ident
 	case "field":
 		s += " " + n.Ident

@@ -26,7 +26,11 @@ file to tokenize, so it still works on files that don't parse.
   `"h\xc3\xa9llo \x22x\x22"`.
 - Positions are `file:line:col`, with lines and columns counted from 1 and
   columns in Unicode code points. The file is the source file's base name,
-  or `<package> (expand)` for tokens that come from an expand template.
+  `<package> (expand)` for tokens that come from an expand template, or
+  `<package>.pkg` for library code (with the package file's line numbers).
+- A constant's uses are copies of its value, with the value's positions.
+- A private name `{$t}` in an expansion becomes `__t_<line>_<col>_<depth>`:
+  the position of the expanded node and the expansion nesting depth.
 
 ## tokens
 
@@ -65,7 +69,8 @@ program frame locals=1 size=16
 ```
 
 The first line describes the top-level frame. Then each top-level item
-(statement or function) follows in source order, indented two spaces and
+(statement, function, struct, global or constant) follows in source order,
+library code first (packages in name order, then the program file), indented two spaces and
 prefixed with `- `. Below a node come its slots, in the order they appear in
 the pattern, prefixed with `name: `, then its items (the statements of a
 block, the arguments of a call, ...), prefixed with `- `. Each level indents
@@ -79,11 +84,11 @@ kind #id @pos [: type] [detail] [expanded=pkg,...] [frame ...]
 
 | part | meaning |
 |---|---|
-| `kind` | the package kind (`if`, `add`, ...) or a core kind: `block`, `int`, `str`, `var`, `ident`, `func`, `newfunc`, `args`, `params`, `type`, `newtype`, `fields`, `fielddecl`, `field` |
+| `kind` | the package kind (`if`, `add`, ...) or a core kind: `block`, `int`, `str`, `var`, `ident`, `func`, `newfunc`, `args`, `params`, `type`, `newtype`, `fields`, `fielddecl`, `field`, `newconst`, `groups` (a repeated group's list), `group` (one occurrence) |
 | `#id` | the node number (see below) |
 | `@pos` | where the node starts |
 | `: type` | the node's type, if it has one (expressions) |
-| detail | `int`: `= 42`; `str`: `= "quoted"`; `var`: `name local N` or `name param N`; `ident`/`func`/`newfunc`/`newtype`/`fielddecl`: the name; `field`: `name offset N` |
+| detail | `int`: `= 42`; `str`: `= "quoted"`; `var`: `name local N`, `name param N` or `name global N` (N is 0 for globals); `ident`/`func`/`newfunc`/`newtype`/`fielddecl`/`newconst`: the name; `field`: `name offset N` |
 | `expanded=` | the packages that were expanded into this node, outermost first |
 | `frame` | on function nodes: `frame name=N params=N locals=N size=N ret="type"` |
 
@@ -129,8 +134,9 @@ In this order, each only if present:
 | `needs a b ...` | |
 | `type <name> <size>` | one line per declared type |
 | `truck m1 m2 ...` | |
-| `syntax <kind> prec=N assoc=left\|right [place] [return]` | then `  pattern <pattern>` for each pattern |
+| `syntax <kind> prec=N assoc=left\|right [place] [return] [loop] [inloop] [top]` | then `  pattern <pattern>` for each pattern |
 | `expand` | followed by the template |
+| `code` | followed by the library source |
 | `emit section=<quoted> [when slot=S op=O arg=<quoted>]` | for each emit section, followed by its lines |
 | `data` | followed by its lines |
 | `support` | followed by its lines |
@@ -138,7 +144,8 @@ In this order, each only if present:
 Body lines are printed as `  | text`, or `  |` for an empty line.
 Patterns are printed normalized: elements separated by single spaces, slots
 as `{name: kind arg}` (`{name: newvar of slot}` for newvar and field),
-optional groups as `[ ... ]`, and the result as ` -> type`.
+optional groups as `[ ... ]`, repeated groups as `[ ... ]*`, and the result
+as ` -> type`.
 
 ## The comparison harness
 

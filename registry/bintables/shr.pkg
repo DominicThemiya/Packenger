@@ -1,0 +1,9 @@
+doc >> : `sar`, by a constant or by cl.
+
+emit when right is int
+  {left}
+  sar rax, {right.value}
+emit
+  @binop
+  mov rcx, rbx
+  sar rax, cl

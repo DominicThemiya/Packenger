@@ -1,0 +1,4 @@
+doc continue: jump to the enclosing loop's next label.
+
+emit
+  jmp {loop.L.next}

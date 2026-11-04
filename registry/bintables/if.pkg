@@ -1,22 +1,19 @@
-doc Conditional jump around the then/else blocks.
-  When the condition's package has a `jfalse` section (all comparisons do),
-  the branch is taken directly on the CPU flags. Otherwise the condition is
-  computed into `rax` and tested against zero. When there is no `else`, the
-  `{else}` placeholder renders as nothing.
+doc Conditional: one conditional jump per condition, through each condition's jfalse.
+  Every condition (the first, and each `elif`) jumps past its block when
+  false; a block that runs jumps to the end. Conditions without a `jfalse`
+  section of their own use `bintables/jfalse`.
 
-emit when cond has jfalse
-  {cond!jfalse L.else}
-  {then}
-  jmp {L.end}
-  {L.else}:
-  {else}
-  {L.end}:
+needs bintables/jfalse
 emit
-  {cond}
-  test rax, rax
-  jz {L.else}
+  {cond!jfalse L.next}
   {then}
   jmp {L.end}
-  {L.else}:
+  {L.next}:
+  {each elif}
+  {it.cond!jfalse it.L.next}
+  {it.then}
+  jmp {L.end}
+  {it.L.next}:
+  {end}
   {else}
   {L.end}:

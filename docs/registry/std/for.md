@@ -8,6 +8,9 @@ truck [std](../std.md) · [source](../../../registry/std/for.pkg)
 
 ```
 for i = 1 to 5
+  if i == 3
+    continue
+  end
   print i * i
 end
 ```
@@ -19,11 +22,15 @@ packages, which is why it `needs` them:
 let i = a
 while i <= b
   ...
+next
   i = i + 1
 end
 ```
 
-Because it is an expansion:
+Because the step is in `while`'s `next` block, `continue` still advances
+the loop variable, and `break` leaves the loop. The `loop` flag on the
+syntax lets `break` and `continue` appear in the body before it is
+expanded. As an expansion:
 
 - the loop variable is an `int` declared in the surrounding block, and
   stays visible after the loop;
@@ -32,7 +39,7 @@ Because it is an expansion:
 
 ## Syntax
 
-Kind: `statement`
+Kind: `statement`; flags `loop`
 
 ```
 for {i: newvar of from} = {from: expr int} to {to: expr int} {body: block} end
@@ -62,6 +69,7 @@ source, with `{slot}` replaced by what was written there, and compiled again.
 let {i} = {from}
 while {i} <= {to}
 {body}
+next
 {i} = {i} + 1
 end
 ```

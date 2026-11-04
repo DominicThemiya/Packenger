@@ -324,6 +324,25 @@ func (t *Tree) page(name string) string {
 			}
 			kind += fmt.Sprintf(", precedence %d, %s-associative", s.Prec, assoc)
 		}
+		var flags []string
+		if s.Place {
+			flags = append(flags, "`place`")
+		}
+		if s.Return {
+			flags = append(flags, "`return`")
+		}
+		if s.Loop {
+			flags = append(flags, "`loop`")
+		}
+		if s.InLoop {
+			flags = append(flags, "`inloop`")
+		}
+		if s.Top {
+			flags = append(flags, "`top`")
+		}
+		if len(flags) > 0 {
+			kind += "; flags " + strings.Join(flags, ", ")
+		}
 		b.WriteString("Kind: " + kind + "\n\n```\n")
 		for _, p := range s.Patterns {
 			b.WriteString(p.String() + "\n")
@@ -359,6 +378,11 @@ func (t *Tree) page(name string) string {
 	if f.Expand != nil {
 		b.WriteString("## Expands to\n\nThis package has no backend: each use is rewritten to the following\nsource, with `{slot}` replaced by what was written there, and compiled again.\n\n```\n")
 		b.WriteString(strings.Join(f.Expand, "\n") + "\n```\n\n")
+	}
+
+	if f.Code != nil {
+		b.WriteString("## Library code\n\nMerged into every program that uses this package.\n\n```\n")
+		b.WriteString(strings.Join(f.Code, "\n") + "\n```\n\n")
 	}
 
 	if len(f.Emits) > 0 {

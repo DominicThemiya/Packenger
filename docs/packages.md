@@ -24,8 +24,9 @@ its body is indented by two spaces. Lines starting with `//` are comments.
 | `needs <pkg> ...` | other packages this one builds on; they're fetched too |
 | `type <name> <size>` | declare a primitive type (size 1 or 8 bytes) |
 | `truck` | makes the file a truck; the body lists member names |
-| `syntax <kind> [prec] [left\|right] [place] [return]` | one or more patterns |
+| `syntax <kind> [prec] [left\|right] [flags]` | one or more patterns |
 | `expand` | rewrite each use into other packages' syntax |
+| `code` | library source: functions, structs, globals, constants (see below) |
 | `emit [<section>] [when <cond>]` | NASM template (backend packages) |
 | `data` | NASM lines for the data section, once per use |
 | `support` | NASM lines emitted once per program if the package is used |
@@ -63,6 +64,11 @@ Header flags:
 - `return`: a return statement. Its slot named `value` is checked against
   the enclosing function's result type, and leaving it out is only allowed
   in functions without a result.
+- `loop`: a loop. Statements inside it can refer to it as `{loop}` in their
+  templates (`break` jumps to `{loop.L.end}`). Mark an expansion that turns
+  into a loop with `loop` too, so its body may contain `break`.
+- `inloop`: only allowed inside a loop (`break`, `continue`).
+- `top`: only allowed at the top level (`global`, `const`).
 
 ### Patterns
 
@@ -73,7 +79,11 @@ A pattern is a sequence of:
   `\[` for a literal bracket;
 - **slots** `{name: kind [arg]}`: the parts the user writes;
 - **optional groups** `[ ... ]`, which must start with a literal. The
-  group is taken when that literal is present.
+  group is taken when that literal is present;
+- **repeated groups** `[ ... ]*`, taken as many times as their first
+  literal appears. The occurrences form a list slot named after that
+  literal, each with its own slots: `if`'s `[elif {cond: expr bool} {then: block}]*`
+  gives a list `elif` whose items have `cond` and `then`.
 
 A pattern can end with `-> type` (the type it produces) or `-> {slot}` (the
 same type as that slot).
@@ -96,6 +106,11 @@ same type as that slot).
 | `newtype` | a name; declares a struct type | — |
 | `fields` | `name: type` lines up to the next literal | — |
 | `field` | a field name of the struct pointed to by a slot | `of <slot>` (required) |
+| `newglobal` | a name; declares a global variable | `of <slot>`, like `newvar` |
+| `newconst` | a name; declares a constant whose value is the slot named `value` | — |
+
+Field names may be keywords (`next`, `end`): after `.` and in a field list
+a name can't mean anything else.
 
 A `block` or `fields` slot must be followed by a literal, such as `end` or
 `else`, so the parser knows where it stops.
@@ -149,12 +164,57 @@ expand
 ```
 
 - Expansions can use packages that expand themselves, up to 64 levels deep.
+- `{$name}` is a **private name**: a variable name unique to this
+  expansion, so a helper variable can't collide with the user's or with
+  another expansion's:
+
+  ```
+  syntax statement
+    swap {a: var} {b: var}
+  expand
+    let {$t} = {a}
+    {a} = {b}
+    {b} = {$t}
+  ```
 - List the packages the template uses in `needs`, so they're loaded even
   when the user loads only this package.
 - Expression slots are pasted inside parentheses, so precedence is kept.
-- **Limitations:** names in the template aren't private (two expansions in
-  one block that declare the same helper variable collide); a slot used
-  twice is evaluated twice; `function` packages can't expand.
+- **Limitations:** a slot used twice is evaluated twice; `function`
+  packages can't expand.
+
+## Library code
+
+A `code` section holds ordinary Packenger source, parsed with the
+program's grammar and merged into every program that uses the package:
+
+```
+doc A small library.
+needs std
+code
+  const LIB_BASE = 100
+  global lib_calls: int = 0
+
+  struct LibBox
+    v: int
+  end
+
+  fn lib_box(v: int) -> ptr LibBox
+    lib_calls = lib_calls + 1
+    let b = new LibBox
+    b.v = v + LIB_BASE
+    return b
+  end
+```
+
+- Library code may only contain functions, structs and top-level
+  declarations (`global`, `const`). Globals in libraries are initialized
+  before the program's own code runs.
+- It can use any syntax the program loads; list what it relies on in
+  `needs`.
+- Libraries and the program share one namespace for functions, structs,
+  globals and constants; a name defined twice is an error. Prefix library
+  names (`lib_box`, `LibBox`).
+- Errors in library code point at the package file.
 
 ## Backend packages: emit templates
 
@@ -192,7 +252,9 @@ with placeholders.
 | `{L.name}` | a label unique to this use, e.g. `{L.end}:` |
 | `{D.name}` | a data label unique to this use |
 | `{a.b}` | slot `b` of slot `a`, e.g. `{cond.left}`; `self` is the node itself |
-| `{slot!section arg}` | the slot rendered with its package's named section, passing `arg` as `{target}` |
+| `{loop....}` | the enclosing loop, e.g. `{loop.L.end}` |
+| `{it.L.name}` | a label unique to the current `{each}` item |
+| `{slot!section arg}` | the slot rendered with its package's named section, passing `arg` as `{target}`. If that package has no such section, the target package named after the section renders it, with the slot as `{x}` (`bintables/jfalse` branches on any `bool`) |
 | `{each list [reverse]}` … `{end}` | repeat lines for each item; `{it}` is the item |
 | `@pkg [section]` | inline another backend package's template |
 
@@ -209,17 +271,25 @@ A missing optional slot (like `{else}` with no `else`) renders as nothing.
 | `when <slot> empty` | the list slot has no items |
 | `when <slot> missing` | an optional slot was not given |
 | `when <slot> size <n>` | the slot's type occupies `n` bytes; `when self size 1` picks byte loads |
+| `when <slot> count <n>` | the list slot has exactly `n` items |
 
-Conditions are how the backend optimizes. For example, `if` uses
-`when cond has jfalse` to branch straight on a comparison's flags:
+Conditions and sections are how the backend optimizes. For example, `if`
+branches straight on a comparison's flags through its `jfalse` section, and
+loops over its `elif` list:
 
 ```
 // registry/bintables/if.pkg
-emit when cond has jfalse
-  {cond!jfalse L.else}
+emit
+  {cond!jfalse L.next}
   {then}
   jmp {L.end}
-  {L.else}:
+  {L.next}:
+  {each elif}
+  {it.cond!jfalse it.L.next}
+  {it.then}
+  jmp {L.end}
+  {it.L.next}:
+  {end}
   {else}
   {L.end}:
 ```
@@ -232,10 +302,10 @@ literals), `str` (string literals), `var` (variable reads; its `emit addr`
 section serves `&x` and assignment) and `program` (the skeleton around
 everything). See [bintables/program](registry/bintables/program.md).
 
-The slot kinds `type`, `field`, `newtype`, `fields`, `ident`, `func`,
-`newfunc`, `args` and `params` are data for their parent's template, not
-code; use their attributes. These names are reserved and can't be package
-names.
+The slot kinds `type`, `field`, `newtype`, `fields`, `newconst`, `ident`,
+`func`, `newfunc`, `args` and `params`, and the `group`/`groups` nodes of
+repeated groups, are data for their parent's template, not code; use their
+attributes. These names are reserved and can't be package names.
 
 The conventions the `bintables` packages agree on (registers, stack layout,
 calling convention) are listed on the

@@ -1,0 +1,8 @@
+doc ^ : `xor`.
+
+emit when right simple
+  {left}
+  xor rax, {right.operand}
+emit
+  @binop
+  xor rax, rbx

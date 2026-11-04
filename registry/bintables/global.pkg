@@ -1,0 +1,8 @@
+doc Global: stored in the data section as pk_g_<name>; the initializer is a store.
+  The compiler reserves a zeroed `qword` for every global; this package only
+  renders the initial assignment, if there is one.
+
+emit when value missing
+emit
+  {value}
+  mov {name.addr}, rax

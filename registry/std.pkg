@@ -32,17 +32,18 @@ doc The standard language: typed, C-style statements, closed with end instead of
   |---|---|
   | types | `types` (`int`, `u8`, `bool`, `str`), `struct`, `as`, `true`, `false`, `null` |
   | functions | `fn`, `call`, `return` |
-  | variables | `let`, `assign` |
+  | variables | `let`, `assign`, `global`, `const` |
   | memory | `new`, `make`, `len`, `index` `a[i]`, `dot` `p.x`, `deref` `*p`, `addr` `&x` |
-  | control flow | `if`, `while`, `for` |
-  | output | `print` |
+  | control flow | `if`/`elif`/`else`, `while`/`next`, `for`, `break`, `continue` |
+  | system | `print`, `syscall`, `argv`, `cstr` |
   | statements | `exprstmt` |
   | arithmetic | `add` `+`, `sub` `-`, `mul` `*`, `div` `/`, `mod` `%`, `neg` `-x` |
+  | bits | `band` `&`, `bor` `\|`, `bxor` `^`, `shl` `<<`, `shr` `>>` |
   | comparison | `eq` `==`, `ne` `!=`, `lt` `<`, `le` `<=`, `gt` `>`, `ge` `>=` |
   | logic | `and` `&&`, `or` `||`, `not` `!` |
 
   Precedence, lowest first: `||` (10), `&&` (20), `== !=` (30),
-  `< <= > >=` (40), `+ -` (50), `* / %` (60), prefix `! -` (70), prefix
+  `< <= > >=` (40), `+ - | ^` (50), `* / % & << >>` (60), prefix `! -` (70), prefix
   `* &` (80), `as` (85), postfix `a[i]` and `p.x` (90). All infix operators
   are left-associative.
 
@@ -90,3 +91,15 @@ truck
   mod
   not
   neg
+  break
+  continue
+  global
+  const
+  syscall
+  argv
+  cstr
+  band
+  bor
+  bxor
+  shl
+  shr

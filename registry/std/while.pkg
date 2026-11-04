@@ -1,14 +1,22 @@
-doc Loop: while cond ... end
+doc Loop: while cond ... [next ...] end
   Runs the block for as long as the condition is `true`. The condition must
   be a `bool` and is checked before every iteration.
 
   ```
   let i = 0
-  while i < 3
+  while i < 10
+    if i % 2 == 0
+      continue      // jumps to the next block
+    end
     print i
-    i = i + 1
+  next
+    i = i + 1       // runs after every iteration, also after continue
   end
   ```
 
-syntax statement
-  while {cond: expr bool} {body: block} end
+  The optional `next` block runs at the end of every iteration, including
+  one ended by `continue`, like the third clause of C's `for`. `break` leaves
+  the loop.
+
+syntax statement loop
+  while {cond: expr bool} {body: block} [next {step: block}] end

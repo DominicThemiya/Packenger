@@ -17,7 +17,7 @@ print n     // 2
 
 ## Syntax
 
-Kind: `prefix`, precedence 80, left-associative
+Kind: `prefix`, precedence 80, left-associative; flags `place`
 
 ```
 * {p: expr ptr T} -> T

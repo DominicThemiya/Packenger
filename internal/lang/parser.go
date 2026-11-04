@@ -2,6 +2,7 @@ package lang
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -38,7 +39,7 @@ type Lang struct {
 }
 
 var coreKinds = map[string]bool{"block": true, "int": true, "str": true, "var": true, "ident": true, "func": true, "newfunc": true, "args": true, "params": true, "program": true,
-	"type": true, "field": true, "fields": true, "fielddecl": true, "newtype": true}
+	"type": true, "field": true, "fields": true, "fielddecl": true, "newtype": true, "newconst": true, "group": true, "groups": true}
 
 func isWord(s string) bool {
 	for _, r := range s {
@@ -181,10 +182,11 @@ func (L *Lang) lexTemplate(r *Rule) error {
 // ---------------------------------------------------------------- AST
 
 type Var struct {
-	Name  string
-	Type  string
-	Param bool
-	Index int
+	Name   string
+	Type   string
+	Param  bool
+	Global bool
+	Index  int
 }
 
 type Frame struct {
@@ -218,6 +220,7 @@ type Node struct {
 	Var      *Var
 	Field    *Field
 	Frame    *Frame
+	Loop     *Node    // the enclosing loop, for break and continue
 	Expanded []string // packages that were expanded into this node
 
 	toks       []Token
@@ -229,8 +232,17 @@ type Program struct {
 	Frame   *Frame
 	Funcs   []*Node
 	Structs []*Node
-	Top     []*Node // every top-level item, statements, functions and structs, in source order
+	Top     []*Node // every top-level item, in source order (library code first)
 	Types   *Types
+	Globals []*Var // in declaration order
+}
+
+// Unit is one stream of top-level source: library code from a package, or
+// the program file.
+type Unit struct {
+	Name string
+	Toks []Token
+	Lib  bool // library code: only functions, structs and top-level declarations
 }
 
 // Sig is a function's signature.
@@ -287,30 +299,41 @@ type Parser struct {
 	farPos   Pos
 	farHard  bool // far is a definite error (see failHard)
 	depth    int
-	lenient  bool            // first pass: unknown functions, structs and fields are allowed
+	lenient  bool            // first pass: names defined later in the file are allowed
 	sigs     map[string]*Sig // second pass: every function's signature, from the first pass
 	types    *Types
-	declared map[string]bool // structs declared so far in this pass
+	declared map[string]bool  // structs, globals and constants declared so far in this pass
+	globals  map[string]*Var  // second pass: every global, from the first pass
+	consts   map[string]*Node // constant values
+	gorder   []*Var
+	loops    []*Node // enclosing loops, innermost last
 }
 
-func newParser(L *Lang, toks []Token) *Parser {
-	return &Parser{L: L, toks: toks, funcs: map[string]*Node{}, sigs: map[string]*Sig{},
-		types: &Types{Prims: L.Prims, Structs: map[string]*Struct{}}, declared: map[string]bool{}}
+func newParser(L *Lang) *Parser {
+	return &Parser{L: L, funcs: map[string]*Node{}, sigs: map[string]*Sig{},
+		types:    &Types{Prims: L.Prims, Structs: map[string]*Struct{}},
+		declared: map[string]bool{}, globals: map[string]*Var{}, consts: map[string]*Node{}}
 }
 
 // Parse parses a program in two passes. The first pass is lenient about
 // names defined later in the file and collects every function signature and
 // struct; the second pass parses again with those known and checks all
 // types. So functions and structs can be used before they are defined.
-func Parse(L *Lang, toks []Token) (*Program, error) {
-	p1 := newParser(L, toks)
+func Parse(L *Lang, units []Unit) (*Program, error) {
+	p1 := newParser(L)
 	p1.lenient = true
-	first, err := p1.parseProgram()
+	first, err := p1.parseProgram(units)
 	if err != nil {
 		return nil, err
 	}
-	p2 := newParser(L, toks)
+	p2 := newParser(L)
 	p2.types.Structs = p1.types.Structs
+	for _, v := range first.Globals {
+		p2.globals[v.Name] = &Var{Name: v.Name, Type: v.Type, Global: true}
+	}
+	for name, c := range p1.consts {
+		p2.consts[name] = c
+	}
 	for _, f := range first.Funcs {
 		sig := &Sig{Ret: f.Frame.Ret}
 		for _, name := range f.Order {
@@ -322,7 +345,7 @@ func Parse(L *Lang, toks []Token) (*Program, error) {
 		}
 		p2.sigs[f.Frame.Name] = sig
 	}
-	prog, err := p2.parseProgram()
+	prog, err := p2.parseProgram(units)
 	if err != nil {
 		return nil, err
 	}
@@ -410,37 +433,47 @@ func (p *Parser) skipNL() {
 	}
 }
 
-func (p *Parser) parseProgram() (*Program, error) {
+func (p *Parser) parseProgram(units []Unit) (*Program, error) {
 	main := newFrame("main")
 	main.Ret, main.Top = "int", true
 	p.frame = main
 	prog := &Program{Frame: main, Types: p.types}
-	body := p.node("block", p.tok().Pos)
-	for {
-		p.skipNL()
-		t := p.tok()
-		if t.Kind == TEOF {
-			break
+	var body *Node
+	for _, u := range units {
+		p.toks, p.i = u.Toks, 0
+		if body == nil {
+			body = p.node("block", p.tok().Pos)
 		}
-		if p.isCloser(t) {
-			return nil, fmt.Errorf("%s: unexpected %s (nothing to close)", t.Pos, t)
-		}
-		n, err := p.statement(true)
-		if err != nil {
-			return nil, err
-		}
-		p.restoreFar(farState{})
-		prog.Top = append(prog.Top, n)
-		switch {
-		case n.Rule != nil && n.Rule.Syn.Kind == "struct":
-			prog.Structs = append(prog.Structs, n)
-		case n.Frame != nil:
-			prog.Funcs = append(prog.Funcs, n)
-		default:
-			body.Items = append(body.Items, n)
+		for {
+			p.skipNL()
+			t := p.tok()
+			if t.Kind == TEOF {
+				break
+			}
+			if p.isCloser(t) {
+				return nil, fmt.Errorf("%s: unexpected %s (nothing to close)", t.Pos, t)
+			}
+			n, err := p.statement(true)
+			if err != nil {
+				return nil, err
+			}
+			p.restoreFar(farState{})
+			if u.Lib && n.Frame == nil && (n.Rule == nil || n.Rule.Syn.Kind != "struct" && !n.Rule.Syn.Top) {
+				return nil, fmt.Errorf("%s: library code (%s) may only contain functions, structs and top-level declarations such as global and const", n.Pos, u.Name)
+			}
+			prog.Top = append(prog.Top, n)
+			switch {
+			case n.Rule != nil && n.Rule.Syn.Kind == "struct":
+				prog.Structs = append(prog.Structs, n)
+			case n.Frame != nil:
+				prog.Funcs = append(prog.Funcs, n)
+			default:
+				body.Items = append(body.Items, n)
+			}
 		}
 	}
 	prog.Main = body
+	prog.Globals = p.gorder
 	number(prog)
 	return prog, nil
 }
@@ -477,19 +510,30 @@ func (p *Parser) statement(top bool) (*Node, error) {
 
 func (p *Parser) match(r *Rule, top bool) (*Node, error) {
 	t := p.tok()
-	if (r.Syn.Kind == "function" || r.Syn.Kind == "struct") && !top {
+	if (r.Syn.Kind == "function" || r.Syn.Kind == "struct" || r.Syn.Top) && !top {
 		return nil, p.fail(t, "%s (%s) may only be used at the top level", t, r.Pkg.Name)
+	}
+	if r.Syn.InLoop && len(p.loops) == 0 {
+		return nil, p.failHard(t.Pos, "%s can only be used inside a loop", t)
 	}
 	s := p.save()
 	n := p.node(r.Kind, t.Pos)
 	n.Rule = r
+	if len(p.loops) > 0 {
+		n.Loop = p.loops[len(p.loops)-1]
+	}
+	loops := p.loops
 	if r.Syn.Kind == "function" {
 		n.Frame = newFrame("")
 		p.frame = n.Frame
+		p.loops = nil
+	}
+	if r.Syn.Loop {
+		p.loops = append(p.loops[:len(p.loops):len(p.loops)], n)
 	}
 	b := p.binder(n)
 	err := p.elems(r.Pat.Elems, n, b)
-	p.frame = s.frame
+	p.frame, p.loops = s.frame, loops
 	if err != nil {
 		return nil, err
 	}
@@ -544,6 +588,11 @@ func (p *Parser) finish(n *Node, b *binder, t Token) error {
 	if syn.Kind == "struct" {
 		return p.declareStruct(n, t)
 	}
+	for _, name := range n.Order {
+		if c := n.Slots[name]; c.Kind == "newconst" {
+			return p.declareConst(n, c)
+		}
+	}
 	return nil
 }
 
@@ -563,6 +612,21 @@ func (p *Parser) elems(es []pkgfile.Elem, n *Node, b *binder) error {
 				return p.fail(t, "expected '%s', found %s", e.Lit, t)
 			}
 			p.i++
+		case e.Optional != nil && e.Repeat:
+			// each occurrence becomes a group node in a list slot named
+			// after the group's first literal
+			list := p.node("groups", t.Pos)
+			for p.isLit(p.tok(), e.Optional[0].Lit) {
+				g := p.node("group", p.tok().Pos)
+				g.Loop = n.Loop
+				if err := p.elems(e.Optional, g, p.binder(g)); err != nil {
+					return err
+				}
+				g.end = p.i
+				list.Items = append(list.Items, g)
+			}
+			list.end = p.i
+			n.setSlot(e.Optional[0].Lit, list)
 		case e.Optional != nil:
 			if p.isLit(t, e.Optional[0].Lit) {
 				if err := p.elems(e.Optional, n, b); err != nil {
@@ -656,6 +720,17 @@ func (p *Parser) typeNewvars(n *Node, slot string, c *Node) error {
 	return nil
 }
 
+// fieldName reads a field name. Keywords are allowed: after '.' or in a
+// struct's field list a name can't mean anything else.
+func (p *Parser) fieldName() (Token, error) {
+	t := p.tok()
+	if t.Kind != TIdent {
+		return t, p.fail(t, "expected a field name, found %s", t)
+	}
+	p.i++
+	return t, nil
+}
+
 func (p *Parser) ident(what string) (Token, error) {
 	t := p.tok()
 	if t.Kind != TIdent {
@@ -715,10 +790,10 @@ func (p *Parser) slot(s *pkgfile.Slot, parent *Node) (*Node, error) {
 		seen := map[string]bool{}
 		for {
 			p.skipNL()
-			if p.tok().Kind == TEOF || p.isCloser(p.tok()) {
+			if p.tok().Kind == TEOF || slices.ContainsFunc(s.Follow, func(l string) bool { return p.isLit(p.tok(), l) }) {
 				return n, nil
 			}
-			id, err := p.ident("a field name")
+			id, err := p.fieldName()
 			if err != nil {
 				return nil, err
 			}
@@ -742,7 +817,7 @@ func (p *Parser) slot(s *pkgfile.Slot, parent *Node) (*Node, error) {
 			}
 		}
 	case "field":
-		id, err := p.ident("a field name")
+		id, err := p.fieldName()
 		if err != nil {
 			return nil, err
 		}
@@ -776,6 +851,36 @@ func (p *Parser) slot(s *pkgfile.Slot, parent *Node) (*Node, error) {
 		return n, nil
 	case "block":
 		return p.block()
+	case "newglobal":
+		id, err := p.ident("a global variable name")
+		if err != nil {
+			return nil, err
+		}
+		if err := p.declareTop(id); err != nil {
+			return nil, err
+		}
+		v := p.globals[id.Text]
+		if v == nil {
+			v = &Var{Name: id.Text, Type: "?", Global: true}
+			p.globals[id.Text] = v
+			p.undo = append(p.undo, func() { delete(p.globals, id.Text) })
+		}
+		p.gorder = append(p.gorder, v)
+		p.undo = append(p.undo, func() { p.gorder = p.gorder[:len(p.gorder)-1] })
+		n := p.node("var", t.Pos)
+		n.Var, n.Type, n.Str = v, v.Type, s.Arg
+		return n, nil
+	case "newconst":
+		id, err := p.ident("a constant name")
+		if err != nil {
+			return nil, err
+		}
+		if err := p.declareTop(id); err != nil {
+			return nil, err
+		}
+		n := p.node("newconst", t.Pos)
+		n.Ident = id.Text
+		return n, nil
 	case "newvar":
 		id, err := p.ident("a new variable name")
 		if err != nil {
@@ -928,7 +1033,61 @@ func (p *Parser) lookup(name string) *Var {
 			return v
 		}
 	}
+	return p.globals[name]
+}
+
+// declareTop claims a top-level name for a global or a constant.
+func (p *Parser) declareTop(id Token) error {
+	key := "name " + id.Text
+	if p.declared[key] {
+		return p.fail(id, "%s is already declared", id.Text)
+	}
+	p.declared[key] = true
+	p.undo = append(p.undo, func() { delete(p.declared, key) })
 	return nil
+}
+
+// declareConst records a constant's value, which must not depend on
+// variables or calls: it is copied to every use.
+func (p *Parser) declareConst(n, name *Node) error {
+	v, ok := n.Slots["value"]
+	if !ok {
+		return fmt.Errorf("%s: a pattern with a newconst slot needs a slot named value", n.Rule.Pkg.Origin)
+	}
+	var bad *Node
+	Walk(v, func(c *Node) {
+		if bad == nil && (c.Kind == "var" || c.Kind == "func") {
+			bad = c
+		}
+	})
+	if bad != nil {
+		return p.failHard(bad.Pos, "the value of constant %s must not use variables or calls", name.Ident)
+	}
+	old, had := p.consts[name.Ident]
+	p.consts[name.Ident] = v
+	p.undo = append(p.undo, func() {
+		if had {
+			p.consts[name.Ident] = old
+		} else {
+			delete(p.consts, name.Ident)
+		}
+	})
+	return nil
+}
+
+// clone copies a constant's value for one use.
+func clone(n *Node) *Node {
+	c := *n
+	c.Slots = map[string]*Node{}
+	for k, v := range n.Slots {
+		c.Slots[k] = clone(v)
+	}
+	c.Order = append([]string(nil), n.Order...)
+	c.Items = nil
+	for _, it := range n.Items {
+		c.Items = append(c.Items, clone(it))
+	}
+	return &c
 }
 
 func (p *Parser) block() (*Node, error) {
@@ -1183,12 +1342,21 @@ func (p *Parser) prefix() (*Node, error) {
 		}
 		v := p.lookup(t.Text)
 		if v == nil {
+			if c, ok := p.consts[t.Text]; ok {
+				p.i++
+				return clone(c), nil
+			}
 			if len(cands) > 0 && p.isLit(p.toks[p.i+1], "(") && ruleFar.err != nil {
 				// looks like a use of an expression package (e.g. a call): its error is the useful one
 				p.restoreFar(ruleFar)
 				return nil, ruleFar.err
 			}
-			return nil, p.fail(t, "unknown variable %s", t)
+			if p.lenient {
+				// a global or constant declared later; the second pass checks it
+				v = &Var{Name: t.Text, Type: "?", Global: true}
+			} else {
+				return nil, p.fail(t, "unknown variable %s", t)
+			}
 		}
 		p.i++
 		n := p.node("var", t.Pos)
@@ -1226,6 +1394,12 @@ func (p *Parser) expand(r *Rule, n *Node, s snapshot) (*Node, error) {
 	for _, t := range r.tmpl {
 		if t.Kind != THole {
 			toks = append(toks, t)
+			continue
+		}
+		if name, ok := strings.CutPrefix(t.Text, "$"); ok {
+			// a private name: unique to this expansion
+			toks = append(toks, Token{Kind: TIdent, Pos: t.Pos,
+				Text: fmt.Sprintf("__%s_%d_%d_%d", name, n.Pos.Line, n.Pos.Col, p.depth)})
 			continue
 		}
 		c, ok := n.Slots[t.Text]

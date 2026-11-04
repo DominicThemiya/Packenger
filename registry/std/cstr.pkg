@@ -1,0 +1,11 @@
+doc The address of a string's bytes, for system calls: cstr(s) -> ptr u8
+  Strings keep a zero byte after their contents, so `cstr(s)` can be passed
+  wherever the operating system expects a C string, such as a file name for
+  `open`.
+
+  ```
+  let fd = syscall(2, cstr("notes.txt"), 0, 0)   // open for reading
+  ```
+
+syntax expr
+  cstr ( {s: expr str} ) -> ptr u8

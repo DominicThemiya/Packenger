@@ -1,0 +1,11 @@
+doc The program's command-line arguments: argv -> [str]
+  ```
+  let args = argv
+  print len(args)      // the program name counts as the first argument
+  print args[0]
+  ```
+
+  The slice is built on first use and shared after that.
+
+syntax expr
+  argv -> [str]

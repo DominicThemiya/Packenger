@@ -2,39 +2,35 @@
 
 # bintables/if
 
-> Conditional jump around the then/else blocks.
+> Conditional: one conditional jump per condition, through each condition's jfalse.
 
 truck [bintables](../bintables.md) · [source](../../../registry/bintables/if.pkg) · translates [std/if](../std/if.md)
 
-When the condition's package has a `jfalse` section (all comparisons do),
-the branch is taken directly on the CPU flags. Otherwise the condition is
-computed into `rax` and tested against zero. When there is no `else`, the
-`{else}` placeholder renders as nothing.
+Every condition (the first, and each `elif`) jumps past its block when
+false; a block that runs jumps to the end. Conditions without a `jfalse`
+section of their own use `bintables/jfalse`.
+
+## Needs
+
+- [bintables/jfalse](jfalse.md)
 
 ## Emit variants
 
 The first variant whose condition holds is used.
 
-### `emit when cond has jfalse`
-
-```nasm
-{cond!jfalse L.else}
-{then}
-jmp {L.end}
-{L.else}:
-{else}
-{L.end}:
-```
-
 ### `emit`
 
 ```nasm
-{cond}
-test rax, rax
-jz {L.else}
+{cond!jfalse L.next}
 {then}
 jmp {L.end}
-{L.else}:
+{L.next}:
+{each elif}
+{it.cond!jfalse it.L.next}
+{it.then}
+jmp {L.end}
+{it.L.next}:
+{end}
 {else}
 {L.end}:
 ```

@@ -39,17 +39,18 @@ print sum(a)      // 42
 |---|---|
 | types | `types` (`int`, `u8`, `bool`, `str`), `struct`, `as`, `true`, `false`, `null` |
 | functions | `fn`, `call`, `return` |
-| variables | `let`, `assign` |
+| variables | `let`, `assign`, `global`, `const` |
 | memory | `new`, `make`, `len`, `index` `a[i]`, `dot` `p.x`, `deref` `*p`, `addr` `&x` |
-| control flow | `if`, `while`, `for` |
-| output | `print` |
+| control flow | `if`/`elif`/`else`, `while`/`next`, `for`, `break`, `continue` |
+| system | `print`, `syscall`, `argv`, `cstr` |
 | statements | `exprstmt` |
 | arithmetic | `add` `+`, `sub` `-`, `mul` `*`, `div` `/`, `mod` `%`, `neg` `-x` |
+| bits | `band` `&`, `bor` `\|`, `bxor` `^`, `shl` `<<`, `shr` `>>` |
 | comparison | `eq` `==`, `ne` `!=`, `lt` `<`, `le` `<=`, `gt` `>`, `ge` `>=` |
 | logic | `and` `&&`, `or` `||`, `not` `!` |
 
 Precedence, lowest first: `||` (10), `&&` (20), `== !=` (30),
-`< <= > >=` (40), `+ -` (50), `* / %` (60), prefix `! -` (70), prefix
+`< <= > >=` (40), `+ - | ^` (50), `* / % & << >>` (60), prefix `! -` (70), prefix
 `* &` (80), `as` (85), postfix `a[i]` and `p.x` (90). All infix operators
 are left-associative.
 
@@ -70,8 +71,8 @@ same name (`types` and `struct` only declare types and need no code);
 | [std/let](std/let.md) | Declare a variable: let name [: type] = value |
 | [std/assign](std/assign.md) | Assign to a variable, a field, a slice element or a dereferenced pointer. |
 | [std/print](std/print.md) | Print an int, u8, bool or str, followed by a newline. |
-| [std/if](std/if.md) | Conditional: if cond ... [else ...] end |
-| [std/while](std/while.md) | Loop: while cond ... end |
+| [std/if](std/if.md) | Conditional: if cond ... [elif cond ...]* [else ...] end |
+| [std/while](std/while.md) | Loop: while cond ... [next ...] end |
 | [std/for](std/for.md) | Counting loop over an inclusive range: for i = a to b ... end |
 | [std/exprstmt](std/exprstmt.md) | An expression used as a statement. |
 | [std/true](std/true.md) | The boolean true. |
@@ -100,3 +101,15 @@ same name (`types` and `struct` only declare types and need no code);
 | [std/mod](std/mod.md) | % : remainder (sign follows the left operand, like C) |
 | [std/not](std/not.md) | ! : logical not |
 | [std/neg](std/neg.md) | - : negation |
+| [std/break](std/break.md) | Leave the innermost loop: break |
+| [std/continue](std/continue.md) | Skip to the next iteration of the innermost loop: continue |
+| [std/global](std/global.md) | Global variable: global name: type [= value] |
+| [std/const](std/const.md) | Constant: const NAME = value |
+| [std/syscall](std/syscall.md) | Linux system call: syscall(number, args...) -> int |
+| [std/argv](std/argv.md) | The program's command-line arguments: argv -> [str] |
+| [std/cstr](std/cstr.md) | The address of a string's bytes, for system calls: cstr(s) -> ptr u8 |
+| [std/band](std/band.md) | & : bitwise and |
+| [std/bor](std/bor.md) | \| : bitwise or |
+| [std/bxor](std/bxor.md) | ^ : bitwise exclusive or |
+| [std/shl](std/shl.md) | << : shift left |
+| [std/shr](std/shr.md) | >> : arithmetic shift right (keeps the sign) |

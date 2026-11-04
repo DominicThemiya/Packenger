@@ -1,0 +1,49 @@
+use std
+
+// upcase <in> <out>: copy a file, converting a-z to A-Z.
+// Talks to Linux directly with system calls.
+
+const SYS_READ = 0
+const SYS_WRITE = 1
+const SYS_OPEN = 2
+const SYS_CLOSE = 3
+const O_WRONLY_CREAT_TRUNC = 577   // O_WRONLY | O_CREAT | O_TRUNC
+const MODE = 420                   // 0644
+
+fn fail(msg: str) -> int
+  syscall(SYS_WRITE, 2, cstr(msg), len(msg))
+  return 1
+end
+
+let args = argv
+if len(args) != 3
+  return fail("usage: upcase <in> <out>\n")
+end
+
+let in = syscall(SYS_OPEN, cstr(args[1]), 0, 0)
+if in < 0
+  return fail("upcase: can't open the input file\n")
+end
+let out = syscall(SYS_OPEN, cstr(args[2]), O_WRONLY_CREAT_TRUNC, MODE)
+if out < 0
+  return fail("upcase: can't create the output file\n")
+end
+
+let buf = make([u8], 4096)
+while true
+  let n = syscall(SYS_READ, in, &buf[0], len(buf))
+  if n < 0
+    return fail("upcase: read failed\n")
+  elif n == 0
+    break
+  end
+  for i = 0 to n - 1
+    let c = buf[i]
+    if c >= 'a' && c <= 'z'
+      buf[i] = ((c as int) - 32) as u8
+    end
+  end
+  syscall(SYS_WRITE, out, &buf[0], n)
+end
+syscall(SYS_CLOSE, in)
+syscall(SYS_CLOSE, out)

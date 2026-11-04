@@ -53,10 +53,18 @@ truck
   addr
   alloc
   and
+  argv
   as
   assign
+  band
   binop
+  bor
+  break
+  bxor
   call
+  const
+  continue
+  cstr
   deref
   div
   dot
@@ -65,10 +73,12 @@ truck
   false
   fn
   ge
+  global
   gt
   if
   index
   int
+  jfalse
   le
   len
   let
@@ -86,9 +96,12 @@ truck
   print
   program
   return
+  shl
+  shr
   str
   streq
   sub
+  syscall
   true
   var
   while

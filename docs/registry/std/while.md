@@ -2,7 +2,7 @@
 
 # std/while
 
-> Loop: while cond ... end
+> Loop: while cond ... [next ...] end
 
 truck [std](../std.md) · [source](../../../registry/std/while.pkg) · translated by [bintables/while](../bintables/while.md)
 
@@ -11,24 +11,33 @@ be a `bool` and is checked before every iteration.
 
 ```
 let i = 0
-while i < 3
+while i < 10
+  if i % 2 == 0
+    continue      // jumps to the next block
+  end
   print i
-  i = i + 1
+next
+  i = i + 1       // runs after every iteration, also after continue
 end
 ```
 
+The optional `next` block runs at the end of every iteration, including
+one ended by `continue`, like the third clause of C's `for`. `break` leaves
+the loop.
+
 ## Syntax
 
-Kind: `statement`
+Kind: `statement`; flags `loop`
 
 ```
-while {cond: expr bool} {body: block} end
+while {cond: expr bool} {body: block} [ next {step: block} ] end
 ```
 
 | slot | takes | type |
 |---|---|---|
 | `cond` | expression | `bool` |
 | `body` | block of statements | — |
+| `step` (optional) | block of statements | — |
 
 ## Used by
 

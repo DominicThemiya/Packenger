@@ -1,0 +1,8 @@
+doc | : `or`.
+
+emit when right simple
+  {left}
+  or rax, {right.operand}
+emit
+  @binop
+  or rax, rbx

@@ -13,13 +13,15 @@
 //	  <pattern> [-> <type> | -> {slot}]     one or more patterns
 //	expand                                  rewrite into other packages' syntax
 //	  <source with {slot} holes>
+//	code                                    library: functions, structs, globals
+//	  <Packenger source>                    and constants merged into the program
 //	emit     [<section>] [when <condition>] backend code (NASM) for this package
 //	  <asm with {placeholders}>
 //	data                                    per-use lines for the data section
 //	support                                 lines emitted once if the package is used
 //
-// Pattern elements are literals (if, end, +, ...), slots {name: kind [arg]}
-// and optional groups [ ... ].
+// Pattern elements are literals (if, end, +, ...), slots {name: kind [arg]},
+// optional groups [ ... ] and repeated groups [ ... ]*.
 package pkgfile
 
 import (
@@ -39,6 +41,8 @@ type File struct {
 	IsTruck bool
 	Syntax  []*Syntax
 	Expand  []string
+	Code    []string // library source, dedented
+	CodeAt  int      // line of the code section's first line
 	Emits   []*Emit
 	Data    []string
 	Support []string
@@ -66,6 +70,9 @@ type Syntax struct {
 	Right    bool
 	Place    bool // its nodes can be assigned to and have an address
 	Return   bool // a return statement: its value is checked against the function
+	Loop     bool // a loop: break and continue inside it refer to it
+	InLoop   bool // only allowed inside a loop (break, continue)
+	Top      bool // only allowed at the top level (global, const)
 	Patterns []*Pattern
 	Line     int
 }
@@ -80,12 +87,16 @@ type Elem struct {
 	Lit      string
 	Slot     *Slot
 	Optional []Elem
+	Repeat   bool // [ ... ]*: the group may occur any number of times
 }
 
 type Slot struct {
 	Name string
-	Kind string // expr block newvar var ident func newfunc args params type place field newtype fields
+	Kind string // expr block newvar var ident func newfunc args params type place field newtype fields newglobal newconst
 	Arg  string // expr/var/place/type: required type; newvar/field: "of <slot>"
+	// Follow lists the literals that can come right after a block or fields
+	// slot (computed when the pattern is parsed).
+	Follow []string
 }
 
 type Emit struct {
@@ -97,12 +108,12 @@ type Emit struct {
 
 type Cond struct {
 	Slot string
-	Op   string // type, is, has, simple, empty, missing, size
+	Op   string // type, is, has, simple, empty, missing, size, count
 	Arg  string
 }
 
 var sectionKeywords = map[string]bool{
-	"doc": true, "needs": true, "type": true, "truck": true, "syntax": true, "expand": true,
+	"doc": true, "needs": true, "type": true, "truck": true, "syntax": true, "expand": true, "code": true,
 	"emit": true, "data": true, "support": true,
 }
 
@@ -110,6 +121,7 @@ var slotKinds = map[string]bool{
 	"expr": true, "block": true, "newvar": true, "var": true, "ident": true,
 	"func": true, "newfunc": true, "args": true, "params": true,
 	"type": true, "place": true, "field": true, "newtype": true, "fields": true,
+	"newglobal": true, "newconst": true,
 }
 
 var syntaxKinds = map[string]bool{
@@ -124,10 +136,20 @@ func Parse(name, origin, src string) (*File, error) {
 	}
 	var cur *[]string // where body lines go
 	var curSyntax *Syntax
-	inDoc := false
+	inDoc, inCode := false, false
 	for idx, raw := range lines {
 		ln := idx + 1
 		trimmed := strings.TrimSpace(raw)
+		if inCode && (raw == "" || raw[0] == ' ' || raw[0] == '\t') {
+			// library source keeps its blank lines and comments, so line
+			// numbers in errors match the package file
+			if trimmed == "" {
+				f.Code = append(f.Code, "")
+			} else {
+				f.Code = append(f.Code, dedent(raw))
+			}
+			continue
+		}
 		if inDoc && (raw == "" || raw[0] == ' ' || raw[0] == '\t') {
 			// doc bodies are Markdown: keep blank lines, comments and indentation
 			if trimmed == "" {
@@ -144,10 +166,10 @@ func Parse(name, origin, src string) (*File, error) {
 			fields := strings.Fields(trimmed)
 			kw := fields[0]
 			if !sectionKeywords[kw] {
-				return nil, errf(ln, "unknown section %q (expected one of doc, needs, type, truck, syntax, expand, emit, data, support)", kw)
+				return nil, errf(ln, "unknown section %q (expected one of doc, needs, type, truck, syntax, expand, code, emit, data, support)", kw)
 			}
 			cur, curSyntax = nil, nil
-			inDoc = kw == "doc"
+			inDoc, inCode = kw == "doc", kw == "code"
 			args := fields[1:]
 			switch kw {
 			case "doc":
@@ -174,6 +196,11 @@ func Parse(name, origin, src string) (*File, error) {
 				s.Line = ln
 				f.Syntax = append(f.Syntax, s)
 				curSyntax = s
+			case "code":
+				if f.Code != nil {
+					return nil, errf(ln, "only one code section is allowed")
+				}
+				f.Code, f.CodeAt = []string{}, ln+1
 			case "expand":
 				if f.Expand != nil {
 					return nil, errf(ln, "only one expand section is allowed")
@@ -215,6 +242,9 @@ func Parse(name, origin, src string) (*File, error) {
 	for len(f.DocBody) > 0 && f.DocBody[len(f.DocBody)-1] == "" {
 		f.DocBody = f.DocBody[:len(f.DocBody)-1]
 	}
+	for len(f.Code) > 0 && f.Code[len(f.Code)-1] == "" {
+		f.Code = f.Code[:len(f.Code)-1]
+	}
 	for _, s := range f.Syntax {
 		if len(s.Patterns) == 0 {
 			return nil, errf(s.Line, "syntax section has no patterns")
@@ -248,6 +278,12 @@ func parseSyntaxHeader(args []string) (*Syntax, error) {
 			s.Place = true
 		case "return":
 			s.Return = true
+		case "loop":
+			s.Loop = true
+		case "inloop":
+			s.InLoop = true
+		case "top":
+			s.Top = true
 		default:
 			n, err := strconv.Atoi(a)
 			if err != nil {
@@ -276,14 +312,14 @@ func parseEmitHeader(args []string) (*Emit, error) {
 	}
 	args = args[1:]
 	switch {
-	case len(args) == 3 && (args[1] == "is" || args[1] == "has" || args[1] == "size"):
+	case len(args) == 3 && (args[1] == "is" || args[1] == "has" || args[1] == "size" || args[1] == "count"):
 		e.Cond = &Cond{Slot: args[0], Op: args[1], Arg: args[2]}
 	case len(args) == 2 && (args[1] == "simple" || args[1] == "empty" || args[1] == "missing"):
 		e.Cond = &Cond{Slot: args[0], Op: args[1]}
 	case len(args) == 2:
 		e.Cond = &Cond{Slot: args[0], Op: "type", Arg: args[1]}
 	default:
-		return nil, fmt.Errorf("bad condition; use: when <slot> <type> | <slot> is <kind> | <slot> has <section> | <slot> size <n> | <slot> simple | <slot> empty | <slot> missing")
+		return nil, fmt.Errorf("bad condition; use: when <slot> <type> | <slot> is <kind> | <slot> has <section> | <slot> size <n> | <slot> count <n> | <slot> simple | <slot> empty | <slot> missing")
 	}
 	return e, nil
 }
@@ -386,7 +422,11 @@ func parseElems(toks []string, inGroup bool) ([]Elem, []string, error) {
 			if len(group) == 0 || group[0].Lit == "" {
 				return nil, nil, fmt.Errorf("an optional group must start with a literal")
 			}
-			elems = append(elems, Elem{Optional: group})
+			repeat := len(rest) > 0 && rest[0] == "*"
+			if repeat {
+				rest = rest[1:]
+			}
+			elems = append(elems, Elem{Optional: group, Repeat: repeat})
 			toks = rest
 		case t == "]":
 			if !inGroup {
@@ -478,7 +518,11 @@ func blockClosers(es []Elem) ([]string, error) {
 	walk = func(es []Elem, after []string) error {
 		for i, e := range es {
 			if e.Optional != nil {
-				if err := walk(e.Optional, follow(es, i, after)); err != nil {
+				next := follow(es, i, after)
+				if e.Repeat {
+					next = append([]string{e.Optional[0].Lit}, next...)
+				}
+				if err := walk(e.Optional, next); err != nil {
 					return err
 				}
 			}
@@ -487,6 +531,7 @@ func blockClosers(es []Elem) ([]string, error) {
 				if len(f) == 0 {
 					return fmt.Errorf("%s slot {%s} must be followed by a literal (like 'end')", e.Slot.Kind, e.Slot.Name)
 				}
+				e.Slot.Follow = f
 				out = append(out, f...)
 			}
 		}

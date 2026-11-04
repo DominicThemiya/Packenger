@@ -67,4 +67,4 @@ section .text
 
 ## Used by
 
-[bintables/make](make.md), [bintables/new](new.md)
+[bintables/argv](argv.md), [bintables/make](make.md), [bintables/new](new.md)

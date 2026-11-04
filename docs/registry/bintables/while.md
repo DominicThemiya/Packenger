@@ -2,34 +2,29 @@
 
 # bintables/while
 
-> Loop with the condition tested at the top.
+> Loop with the condition tested at the top; break and continue jump to its labels.
 
 truck [bintables](../bintables.md) · [source](../../../registry/bintables/while.pkg) · translates [std/while](../std/while.md)
 
-Uses the condition's `jfalse` section when it has one, like `if`.
+`break` jumps to `{L.end}` and `continue` to `{L.next}`, which runs the
+`next` block before testing the condition again.
+
+## Needs
+
+- [bintables/jfalse](jfalse.md)
 
 ## Emit variants
 
 The first variant whose condition holds is used.
 
-### `emit when cond has jfalse`
+### `emit`
 
 ```nasm
 {L.top}:
 {cond!jfalse L.end}
 {body}
-jmp {L.top}
-{L.end}:
-```
-
-### `emit`
-
-```nasm
-{L.top}:
-{cond}
-test rax, rax
-jz {L.end}
-{body}
+{L.next}:
+{step}
 jmp {L.top}
 {L.end}:
 ```

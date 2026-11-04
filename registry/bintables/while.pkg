@@ -1,17 +1,13 @@
-doc Loop with the condition tested at the top.
-  Uses the condition's `jfalse` section when it has one, like `if`.
+doc Loop with the condition tested at the top; break and continue jump to its labels.
+  `break` jumps to `{L.end}` and `continue` to `{L.next}`, which runs the
+  `next` block before testing the condition again.
 
-emit when cond has jfalse
+needs bintables/jfalse
+emit
   {L.top}:
   {cond!jfalse L.end}
   {body}
-  jmp {L.top}
-  {L.end}:
-emit
-  {L.top}:
-  {cond}
-  test rax, rax
-  jz {L.end}
-  {body}
+  {L.next}:
+  {step}
   jmp {L.top}
   {L.end}:

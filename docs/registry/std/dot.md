@@ -17,7 +17,7 @@ assigned. Accessing a field through `null` crashes the program.
 
 ## Syntax
 
-Kind: `postfix`, precedence 90, left-associative
+Kind: `postfix`, precedence 90, left-associative; flags `place`
 
 ```
 {obj: expr ptr ?} . {f: field of obj} -> {f}

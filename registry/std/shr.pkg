@@ -1,0 +1,10 @@
+doc >> : arithmetic shift right (keeps the sign)
+  ```
+  print -16 >> 2   // -4
+  ```
+
+  Infix, precedence 60, left-associative. Both operands must be `int`;
+  the result is `int`. Shift counts use the low 6 bits.
+
+syntax infix 60 left
+  {left: expr int} >> {right: expr int} -> int

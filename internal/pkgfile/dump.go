@@ -25,7 +25,11 @@ func (p *Pattern) String() string {
 				}
 				ps = append(ps, "{"+s+"}")
 			case e.Optional != nil:
-				ps = append(ps, "[ "+walk(e.Optional)+" ]")
+				g := "[ " + walk(e.Optional) + " ]"
+				if e.Repeat {
+					g += "*"
+				}
+				ps = append(ps, g)
 			}
 		}
 		return strings.Join(ps, " ")
@@ -93,6 +97,15 @@ func Dump(f *File) string {
 		if s.Return {
 			flags += " return"
 		}
+		if s.Loop {
+			flags += " loop"
+		}
+		if s.InLoop {
+			flags += " inloop"
+		}
+		if s.Top {
+			flags += " top"
+		}
 		line("syntax %s prec=%d assoc=%s%s", s.Kind, s.Prec, assoc, flags)
 		for _, p := range s.Patterns {
 			line("  pattern %s", p.String())
@@ -101,6 +114,10 @@ func Dump(f *File) string {
 	if f.Expand != nil {
 		line("expand")
 		body(f.Expand)
+	}
+	if f.Code != nil {
+		line("code")
+		body(f.Code)
 	}
 	for _, e := range f.Emits {
 		head := "emit section=" + Quote(e.Section)

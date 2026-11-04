@@ -1,0 +1,16 @@
+doc Linux system call: syscall(number, args...) -> int
+  Makes a system call with up to six arguments and gives its result
+  (negative values are errors, `-errno`).
+
+  ```
+  // write(1, "hi\n", 3)
+  syscall(1, 1, cstr("hi\n"), 3)
+  ```
+
+  Arguments can be of any type and are passed as their machine words:
+  integers as is, pointers and strings as addresses. Use `cstr(s)` to pass
+  a string's bytes. With `bintables`, these are x86-64 Linux system call
+  numbers (`0` read, `1` write, `2` open, `3` close, `60` exit, ...).
+
+syntax expr
+  syscall ( {args: args} ) -> int

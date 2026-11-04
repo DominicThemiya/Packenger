@@ -33,6 +33,8 @@ instruction comes from a package.
 1. **`use` lines** are read before anything else, because the file can't be
    tokenized until its syntax is known. Packages are downloaded level by
    level, in parallel: a truck's members, then their `needs`, and so on.
+   The `code` sections of loaded library packages are tokenized too, and
+   parsed ahead of the program file.
 2. **The grammar** is assembled from every loaded syntax package:
    statements and expression forms indexed by their first literal, infix
    and prefix operator tables with precedences, the set of reserved
@@ -48,8 +50,9 @@ instruction comes from a package.
    again in its place.
 
    The file is parsed **twice**. The first pass is lenient about functions,
-   structs and fields that are defined later in the file, and collects every
-   function signature and struct layout. The second pass parses again with
+   structs, fields, globals and constants that are defined later in the
+   file, and collects every function signature, struct layout, global and
+   constant. The second pass parses again with
    all of them known, checks every type, and produces the tree. Calls are
    then checked against the signatures.
 4. **Backend packages** are downloaded only for the node kinds present in

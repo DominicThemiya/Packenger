@@ -70,10 +70,11 @@ The [`examples/`](../examples) folder has:
 |---|---|
 | `hello.pkg` | strings |
 | `fib.pkg` | recursion; a speed benchmark |
-| `fizzbuzz.pkg` | `for`, nested `if`/`else`, `%` |
+| `fizzbuzz.pkg` | `for`, `if`/`elif`/`else`, `%` |
 | `primes.pkg` | functions, `while`, early `return`, `bool` |
 | `linked.pkg` | structs, pointers, `new`, `null` |
 | `words.pkg` | strings, `u8`, slices, `make`, `len` |
+| `upcase.pkg` | `argv`, system calls, constants, `elif`, `break`: copies a file in upper case |
 | `exitcode.pkg` | the top-level `return` becomes the exit code |
 
 ## Working offline

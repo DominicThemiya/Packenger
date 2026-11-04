@@ -1,0 +1,17 @@
+doc Skip to the next iteration of the innermost loop: continue
+  In a `while` loop, `continue` runs the `next` block (if any) and then
+  checks the condition again; in `for` it advances the loop variable.
+
+  ```
+  for i = 1 to 10
+    if i % 2 == 0
+      continue
+    end
+    print i      // the odd numbers
+  end
+  ```
+
+  Only allowed inside a loop.
+
+syntax statement inloop
+  continue

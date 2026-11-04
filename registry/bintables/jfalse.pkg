@@ -1,0 +1,9 @@
+doc Fallback branch: jump to {target} if the value in {x} is false (zero).
+  Used for `{cond!jfalse target}` when the condition's package has no
+  `jfalse` section of its own (for example a `bool` variable, a call, or
+  `&&`). Comparisons provide their own, which branch on the flags directly.
+
+emit
+  {x}
+  test rax, rax
+  jz {target}

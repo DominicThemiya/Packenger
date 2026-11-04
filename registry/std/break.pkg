@@ -1,0 +1,15 @@
+doc Leave the innermost loop: break
+  ```
+  let i = 0
+  while true
+    if i == 3
+      break
+    end
+    i = i + 1
+  end
+  ```
+
+  Only allowed inside a loop (`while`, `for`).
+
+syntax statement inloop
+  break

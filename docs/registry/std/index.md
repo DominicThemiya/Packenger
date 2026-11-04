@@ -21,7 +21,7 @@ assigned: strings are immutable.
 
 ## Syntax
 
-Kind: `postfix`, precedence 90, left-associative
+Kind: `postfix`, precedence 90, left-associative; flags `place`
 
 ```
 {x: expr [T]} [ {i: expr int} ] -> T

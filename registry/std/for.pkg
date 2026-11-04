@@ -1,6 +1,9 @@
 doc Counting loop over an inclusive range: for i = a to b ... end
   ```
   for i = 1 to 5
+    if i == 3
+      continue
+    end
     print i * i
   end
   ```
@@ -12,11 +15,15 @@ doc Counting loop over an inclusive range: for i = a to b ... end
   let i = a
   while i <= b
     ...
+  next
     i = i + 1
   end
   ```
 
-  Because it is an expansion:
+  Because the step is in `while`'s `next` block, `continue` still advances
+  the loop variable, and `break` leaves the loop. The `loop` flag on the
+  syntax lets `break` and `continue` appear in the body before it is
+  expanded. As an expansion:
 
   - the loop variable is an `int` declared in the surrounding block, and
     stays visible after the loop;
@@ -24,11 +31,12 @@ doc Counting loop over an inclusive range: for i = a to b ... end
   - `to` is a keyword and cannot be used as a variable name.
 
 needs std/let std/while std/le std/assign std/add
-syntax statement
+syntax statement loop
   for {i: newvar of from} = {from: expr int} to {to: expr int} {body: block} end
 expand
   let {i} = {from}
   while {i} <= {to}
     {body}
+  next
     {i} = {i} + 1
   end

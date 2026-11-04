@@ -13,8 +13,9 @@ syntax by loading other packages (see [packages and trucks](packages.md)).
 ## Program structure
 
 - A file is a list of statements, one per line, run from top to bottom.
-- Functions (`fn`) and structs (`struct`) are declared at the top level and
-  can be used before their declaration.
+- Functions (`fn`), structs (`struct`), globals (`global`) and constants
+  (`const`) are declared at the top level and can be used before their
+  declaration.
 - Blocks are closed with `end` instead of braces.
 - Comments start with `//`.
 - Newlines end statements, except inside parentheses, so a long expression
@@ -77,8 +78,22 @@ x = x + 1                   // assignment; the value must have x's type
 
 Variables belong to the block they're declared in. An inner block can shadow
 an outer variable, but declaring the same name twice in one block is an
-error. Functions can't see top-level variables. Variables hold values of
-any type except a struct itself: use `ptr Name`.
+error. Functions can't see top-level `let` variables; use a global. Variables
+hold values of any type except a struct itself: use `ptr Name`.
+
+### Globals and constants
+
+```
+global count: int = 0      // visible in every function
+const LIMIT = 100          // copied to every use
+
+fn tick()
+  count = count + 1
+end
+```
+
+A global has a type and starts as zero unless given a value. A constant's
+value must not use variables or calls; it may use other constants.
 
 ## Functions
 
@@ -168,22 +183,35 @@ bits, so they can create unsafe pointers.
 ## Control flow
 
 ```
-if x > 5
+if x > 100
+  print "huge"
+elif x > 5
   print "big"
 else
   print "small"
 end
 
 while x > 0
-  x = x - 1
+  if x % 7 == 0
+    break               // leave the loop
+  end
+  if x % 2 == 0
+    continue            // next iteration: runs the next block first
+  end
+  print x
+next
+  x = x - 1             // runs after every iteration
 end
 
-for i = 1 to 10      // inclusive on both ends; i is an int
+for i = 1 to 10         // inclusive on both ends; i is an int
   print i
 end
 ```
 
-There is no `else if` yet; nest an `if` inside `else`.
+`break` and `continue` apply to the innermost loop. In `for`, `continue`
+still advances the loop variable. The loop variable of a `for` stays
+declared after the loop, so a second `for i` in the same block needs a
+different name.
 
 ## Operators
 
@@ -195,17 +223,18 @@ Lowest to highest precedence; all infix operators are left-associative.
 | 20 | `&&` | `bool` | [and](registry/std/and.md) |
 | 30 | `==` `!=` | any two of the same type | [eq](registry/std/eq.md), [ne](registry/std/ne.md) |
 | 40 | `<` `<=` `>` `>=` | `int` or `u8` | [lt](registry/std/lt.md), [le](registry/std/le.md), [gt](registry/std/gt.md), [ge](registry/std/ge.md) |
-| 50 | `+` `-` | `int` | [add](registry/std/add.md), [sub](registry/std/sub.md) |
-| 60 | `*` `/` `%` | `int` | [mul](registry/std/mul.md), [div](registry/std/div.md), [mod](registry/std/mod.md) |
+| 50 | `+` `-` `\|` `^` | `int` | [add](registry/std/add.md), [sub](registry/std/sub.md), [bor](registry/std/bor.md), [bxor](registry/std/bxor.md) |
+| 60 | `*` `/` `%` `&` `<<` `>>` | `int` | [mul](registry/std/mul.md), [div](registry/std/div.md), [mod](registry/std/mod.md), [band](registry/std/band.md), [shl](registry/std/shl.md), [shr](registry/std/shr.md) |
 | 70 | prefix `!` `-` | `bool`, `int` | [not](registry/std/not.md), [neg](registry/std/neg.md) |
 | 80 | prefix `*` `&` | pointer, place | [deref](registry/std/deref.md), [addr](registry/std/addr.md) |
 | 85 | `as` | any | [as](registry/std/as.md) |
 | 90 | `a[i]` `p.x` | slice or `str`, struct pointer | [index](registry/std/index.md), [dot](registry/std/dot.md) |
 
 Comparisons produce `bool`. `&&` and `||` short-circuit. `/` rounds toward
-zero and `%` takes the sign of the left operand, as in C.
+zero and `%` takes the sign of the left operand, as in C; `>>` keeps the
+sign.
 
-## Output
+## Output and the operating system
 
 ```
 print 42        // ints and u8s print as numbers
@@ -213,7 +242,36 @@ print "text"
 print 1 < 2     // true
 ```
 
-`print` writes the value and a newline to stdout.
+`print` writes the value and a newline to stdout. Everything else goes
+through Linux system calls:
+
+```
+let args = argv                                  // [str]: the command line
+let fd = syscall(2, cstr(args[1]), 0, 0)         // open(path, O_RDONLY)
+let buf = make([u8], 4096)
+let n = syscall(0, fd, &buf[0], len(buf))        // read
+syscall(1, 1, &buf[0], n)                        // write to stdout
+```
+
+`syscall(number, args...)` takes up to six arguments of any type and
+returns an `int` (negative values are errors). `cstr(s)` gives a string's
+bytes as a zero-terminated C string. See
+[examples/upcase.pkg](../examples/upcase.pkg).
+
+## Libraries
+
+A package can ship code: functions, structs, globals and constants that are
+merged into every program that uses it.
+
+```
+use std
+use mylib          // a package with a code section
+
+print lib_box(5).v
+```
+
+Library names share one namespace with the program's, so libraries should
+prefix their names. See [packages and trucks](packages.md#library-code).
 
 ## Errors
 
@@ -229,9 +287,9 @@ Compile errors point at the source:
 ## Limits
 
 - Memory is never freed.
-- No `else if`, `break` or `continue` yet; no globals or constants.
-- No input, and output is `print` only.
 - No generic functions; slices and pointers are the only parameterized types.
+- No standard library beyond `print` and system calls yet (it's the next
+  phase of the [self-hosting plan](self-hosting.md)).
 
 For each construct's exact syntax and edge cases, see its page in the
 [package reference](registry/README.md).

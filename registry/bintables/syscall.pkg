@@ -1,0 +1,75 @@
+doc syscall: evaluate the arguments, then load them into rax, rdi, rsi, rdx, r10, r8, r9.
+  The arguments are pushed from last to first and popped into the system
+  call registers in order, so the first argument (the call number) lands in
+  `rax`. One variant per argument count, from 1 to 7.
+
+emit when args count 1
+  {each args reverse}
+  {it}
+  push rax
+  {end}
+  pop rax
+  syscall
+emit when args count 2
+  {each args reverse}
+  {it}
+  push rax
+  {end}
+  pop rax
+  pop rdi
+  syscall
+emit when args count 3
+  {each args reverse}
+  {it}
+  push rax
+  {end}
+  pop rax
+  pop rdi
+  pop rsi
+  syscall
+emit when args count 4
+  {each args reverse}
+  {it}
+  push rax
+  {end}
+  pop rax
+  pop rdi
+  pop rsi
+  pop rdx
+  syscall
+emit when args count 5
+  {each args reverse}
+  {it}
+  push rax
+  {end}
+  pop rax
+  pop rdi
+  pop rsi
+  pop rdx
+  pop r10
+  syscall
+emit when args count 6
+  {each args reverse}
+  {it}
+  push rax
+  {end}
+  pop rax
+  pop rdi
+  pop rsi
+  pop rdx
+  pop r10
+  pop r8
+  syscall
+emit when args count 7
+  {each args reverse}
+  {it}
+  push rax
+  {end}
+  pop rax
+  pop rdi
+  pop rsi
+  pop rdx
+  pop r10
+  pop r8
+  pop r9
+  syscall

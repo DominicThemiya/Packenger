@@ -1,0 +1,9 @@
+doc << : `shl`, by a constant or by cl.
+
+emit when right is int
+  {left}
+  shl rax, {right.value}
+emit
+  @binop
+  mov rcx, rbx
+  shl rax, cl

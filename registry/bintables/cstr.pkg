@@ -1,0 +1,5 @@
+doc cstr: a string's bytes start 8 bytes after its address.
+
+emit
+  {s}
+  add rax, 8

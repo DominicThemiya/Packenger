@@ -4,8 +4,8 @@ Goal: a Packenger compiler written in Packenger (**`pkc`**) that compiles
 itself, developed alongside the Go compiler, with both producing identical
 output.
 
-Status: **phases 0 and 1 done** (parity infrastructure, type system).
-Phases 2–5 are planned.
+Status: **phases 0–2 done** (parity infrastructure, type system, core
+language features). Phases 3–5 are planned.
 
 ## Where we start
 
@@ -119,7 +119,23 @@ C-level types with safer defaults, defined in packages wherever possible.
 compile and pass tests, and type errors point at the source like other
 errors.
 
-## Phase 2: other language features
+## Phase 2: other language features ✓
+
+Done; [examples/upcase.pkg](../examples/upcase.pkg) is the "done when"
+program. Changes from the plan below:
+
+- **Library names are not prefixed automatically.** Libraries and the
+  program share one namespace and a clash is an error; library authors
+  prefix their names. This keeps calls plain (`str_len(s)`) without a
+  namespace syntax.
+- **`while` gained a `next` block**, so `for` can stay an expansion while
+  `continue` still advances its variable.
+- **Section fallback**: a package without a `jfalse` section is branched on
+  by `bintables/jfalse`, so `if`/`while` need one variant.
+- **Field names may be keywords**, so `next` stays usable for linked lists.
+- **Strings end with a zero byte**, so `cstr` can pass them to the kernel.
+
+The original plan:
 
 ### Core changes (in both compilers)
 

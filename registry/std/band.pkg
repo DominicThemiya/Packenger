@@ -1,0 +1,10 @@
+doc & : bitwise and
+  ```
+  print 12 & 10    // 8
+  ```
+
+  Infix, precedence 60, left-associative. Both operands must be `int`;
+  the result is `int`.
+
+syntax infix 60 left
+  {left: expr int} & {right: expr int} -> int

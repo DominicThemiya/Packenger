@@ -1,0 +1,10 @@
+doc ^ : bitwise exclusive or
+  ```
+  print 12 ^ 10    // 6
+  ```
+
+  Infix, precedence 50, left-associative. Both operands must be `int`;
+  the result is `int`.
+
+syntax infix 50 left
+  {left: expr int} ^ {right: expr int} -> int

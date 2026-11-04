@@ -1,0 +1,34 @@
+use std
+
+const LIMIT = 10
+global total: int = 0
+global hits: int
+
+fn add(n: int)
+  total = total + n
+  hits = hits + 1
+end
+
+for i = 1 to LIMIT * 2
+  if i % 2 == 0
+    continue
+  elif i > LIMIT
+    break
+  end
+  add(i)
+end
+print total
+print hits
+
+let j = 0
+while true
+  if j == 3
+    break
+  end
+next
+  j = j + 1
+end
+print j
+print (12 & 10) | (1 << 4) ^ -16 >> 2
+syscall(1, 1, cstr("raw\n"), 4)
+print len(argv)

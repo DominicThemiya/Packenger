@@ -7,7 +7,8 @@
 truck [bintables](../bintables.md) · [source](../../../registry/bintables/str.pkg)
 
 Each literal gets its own entry in the data section: a `qword` with the
-length in bytes, followed by the UTF-8 bytes (no terminating zero).
+length in bytes, then the UTF-8 bytes, then a zero byte (so `cstr` can
+hand it to the operating system).
 
 ## Emit variants
 
@@ -23,5 +24,5 @@ lea rax, [rel {D.s}]
 
 ```nasm
 {D.s}: dq {len}
-db {bytes}
+db {bytes}, 0
 ```

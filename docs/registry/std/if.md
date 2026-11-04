@@ -2,37 +2,40 @@
 
 # std/if
 
-> Conditional: if cond ... [else ...] end
+> Conditional: if cond ... [elif cond ...]* [else ...] end
 
 truck [std](../std.md) · [source](../../../registry/std/if.pkg) · translated by [bintables/if](../bintables/if.md)
 
-Runs the first block if the condition is `true`, otherwise the `else`
-block, if there is one. The condition must be a `bool`.
+Runs the block of the first condition that is `true`, otherwise the
+`else` block, if there is one. Conditions must be `bool`.
 
 ```
 if n % 15 == 0
   print "FizzBuzz"
+elif n % 3 == 0
+  print "Fizz"
+elif n % 5 == 0
+  print "Buzz"
 else
-  if n % 3 == 0
-    print "Fizz"
-  else
-    print n
-  end
+  print n
 end
 ```
 
-There is no `else if` chain yet; nest `if` inside `else` instead.
+The `elif` part is a repeated pattern group (`[ ... ]*`): it can occur
+any number of times.
 
 ## Syntax
 
 Kind: `statement`
 
 ```
-if {cond: expr bool} {then: block} [ else {else: block} ] end
+if {cond: expr bool} {then: block} [ elif {cond: expr bool} {then: block} ]* [ else {else: block} ] end
 ```
 
 | slot | takes | type |
 |---|---|---|
 | `cond` | expression | `bool` |
 | `then` | block of statements | — |
+| `cond` (optional) | expression | `bool` |
+| `then` (optional) | block of statements | — |
 | `else` (optional) | block of statements | — |

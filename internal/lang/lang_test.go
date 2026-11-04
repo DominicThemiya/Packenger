@@ -70,6 +70,13 @@ func TestPrograms(t *testing.T) {
 		{"pointers", "fn bump(c: ptr int)\n  *c = *c + 1\nend\nlet n = 1\nbump(&n)\nbump(&n)\nprint n\nlet a = make([int], 2)\nlet p = &a[1]\n*p = 9\nprint a[1]", "3\n9\n", 0},
 		{"void-return", "fn log(s: str)\n  if len(s) == 0\n    return\n  end\n  print s\nend\nlog(\"\")\nlog(\"x\")", "x\n", 0},
 		{"mutual", "fn even(n: int) -> bool\n  if n == 0\n    return true\n  end\n  return odd(n - 1)\nend\nfn odd(n: int) -> bool\n  if n == 0\n    return false\n  end\n  return even(n - 1)\nend\nprint even(10)\nprint odd(7)", "true\ntrue\n", 0},
+		{"elif", "for i = 1 to 15\n  if i % 15 == 0\n    print \"FB\"\n  elif i % 5 == 0\n    print \"B\"\n  elif i % 3 == 0\n    print \"F\"\n  end\nend", "F\nB\nF\nF\nB\nF\nFB\n", 0},
+		{"break-continue", "let s = 0\nfor i = 1 to 100\n  if i % 2 == 0\n    continue\n  end\n  if i > 9\n    break\n  end\n  s = s + i\nend\nprint s\nlet j = 0\nwhile j < 5\n  if j == 2\n    continue\n  end\n  print j\nnext\n  j = j + 1\nend", "25\n0\n1\n3\n4\n", 0},
+		{"nested-loops", "for i = 1 to 3\n  for j = 1 to 3\n    if j == 2\n      break\n    end\n    print i * 10 + j\n  end\nend", "11\n21\n31\n", 0},
+		{"globals", "fn bump()\n  count = count + 1\nend\nglobal count: int = 5\nbump()\nbump()\nprint count\nglobal name: str = \"g\"\nprint name\nglobal p: ptr int\nprint p == null", "7\ng\ntrue\n", 0},
+		{"consts", "print AREA\nconst W = 3\nconst H = W + 1\nconst AREA = W * H\nconst S = \"hi\"\nprint S\nfn f() -> int\n  return W\nend\nprint f()", "12\nhi\n3\n", 0},
+		{"bits", "print 12 & 10\nprint 12 | 3\nprint 12 ^ 10\nprint 1 << 62\nprint -16 >> 2\nlet k = 3\nprint 1 << k", "8\n15\n6\n4611686018427387904\n-4\n8\n", 0},
+		{"syscall", "let n = syscall(1, 1, cstr(\"raw\\n\"), 4)\nprint n\nprint len(argv)", "raw\n4\n1\n", 0},
 		{"index-panic", "let a = make([int], 2)\nprint a[2]", "", 2},
 		{"extremes", "print 9223372036854775807\nprint -9223372036854775807 - 1", "9223372036854775807\n-9223372036854775808\n", 0},
 	}
@@ -110,6 +117,13 @@ func TestErrors(t *testing.T) {
 		{"print 1 == true", "right side of '==' must be int, but it is bool"},
 		{"let s = \"x\"\ns[0] = 'y'", "can't be assigned to"},
 		{"print &3", "can't have its address taken"},
+		{"break", "can only be used inside a loop"},
+		{"fn f()\n  continue\nend", "can only be used inside a loop"},
+		{"let x = 1\nconst C = x + 1", "must not use variables or calls"},
+		{"global g: int\nglobal g: int", "g is already declared"},
+		{"const C = 1\nC = 2", "can't be assigned to"},
+		{"fn f()\n  global g: int\nend", "may only be used at the top level"},
+		{"print syscall()", "has no 'emit' section that applies"},
 	}
 	for _, c := range cases {
 		_, err := compiler("file://"+registryDir).Compile(context.Background(), "e.pkg", "use std\n"+c.src+"\n")
@@ -141,6 +155,36 @@ func TestLanguageIsExtendedByPackages(t *testing.T) {
 	out, _ := run(t, "file://"+dir, "use std\nuse unless\nuse std/max\nunless 1 > 2\n  print 3 max 9 max 4\nend\n")
 	if out != "9\n" {
 		t.Errorf("got %q", out)
+	}
+
+	// private names: two expansions in one block don't collide
+	write("swap.pkg", "doc swap\nneeds std\nsyntax statement\n  swap {a: var} {b: var}\nexpand\n  let {$t} = {a}\n  {a} = {b}\n  {b} = {$t}\n")
+	out, _ = run(t, "file://"+dir, "use std\nuse swap\nlet x = 1\nlet y = 2\nswap x y\nswap x y\nswap x y\nprint x\nprint y\n")
+	if out != "2\n1\n" {
+		t.Errorf("swap: got %q", out)
+	}
+}
+
+// A library package ships functions, structs, globals and constants as code.
+func TestLibraryPackages(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.CopyFS(dir, os.DirFS(registryDir)); err != nil {
+		t.Fatal(err)
+	}
+	lib := "doc A test library.\nneeds std\ncode\n  const LIB_BASE = 100\n  global lib_calls: int = 0\n\n  struct LibBox\n    v: int\n  end\n\n  fn lib_box(v: int) -> ptr LibBox\n    lib_calls = lib_calls + 1\n    let b = new LibBox\n    b.v = v + LIB_BASE\n    return b\n  end\n"
+	if err := os.WriteFile(filepath.Join(dir, "mylib.pkg"), []byte(lib), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, _ := run(t, "file://"+dir, "use std\nuse mylib\nprint lib_box(5).v\nprint lib_box(1).v\nprint lib_calls\nprint LIB_BASE\n")
+	if out != "105\n101\n2\n100\n" {
+		t.Errorf("got %q", out)
+	}
+
+	bad := "doc Bad.\nneeds std\ncode\n  fn ok()\n  end\n  print 1\n"
+	os.WriteFile(filepath.Join(dir, "badlib.pkg"), []byte(bad), 0o644)
+	_, err := compiler("file://"+dir).Compile(context.Background(), "x.pkg", "use std\nuse badlib\n")
+	if err == nil || !strings.Contains(err.Error(), "badlib.pkg:6:3: library code (badlib) may only contain") {
+		t.Errorf("got %v", err)
 	}
 }
 
@@ -178,6 +222,7 @@ func TestExamples(t *testing.T) {
 		"primes.pkg":   "primes below 100000:\n9592\n",
 		"linked.pkg":   "5050\n",
 		"words.pkg":    "5\n8\n",
+		"upcase.pkg":   "",
 		"fizzbuzz.pkg": "1\n2\nFizz\n4\nBuzz\nFizz\n7\n8\nFizz\nBuzz\n11\nFizz\n13\n14\nFizzBuzz\n",
 	}
 	files, _ := filepath.Glob("../../examples/*.pkg")

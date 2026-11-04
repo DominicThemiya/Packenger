@@ -187,7 +187,12 @@ func (c *Compiler) Compile(ctx context.Context, file, src string) (*Result, erro
 
 	// 2. parse with the grammar those packages define
 	t0 := time.Now()
-	prog, err := Parse(L, toks)
+	units, err := libraryUnits(front, L)
+	if err != nil {
+		return nil, err
+	}
+	units = append(units, Unit{Name: file, Toks: toks})
+	prog, err := Parse(L, units)
 	if err != nil {
 		return nil, err
 	}
@@ -247,6 +252,28 @@ func (c *Compiler) Compile(ctx context.Context, file, src string) (*Result, erro
 	})
 	c.report().Emitted(strings.Count(asm, "\n"), time.Since(t0), variants)
 	return &Result{Asm: asm, Uses: uses, Front: front, Back: back, Program: prog, Tokens: toks, File: file}, nil
+}
+
+// libraryUnits lexes the code sections of the loaded packages, in package
+// name order. Positions point into the package files.
+func libraryUnits(front map[string]*pkgfile.File, L *Lang) ([]Unit, error) {
+	var units []Unit
+	for _, name := range sortedKeys(front) {
+		f := front[name]
+		if f.Code == nil {
+			continue
+		}
+		toks, err := Lex(strings.Join(f.Code, "\n"), f.Name+".pkg", L.Puncts, false)
+		if err != nil {
+			return nil, err
+		}
+		for i := range toks {
+			toks[i].Pos.Line += f.CodeAt - 1
+			toks[i].Pos.Col += 2 // the code section is indented
+		}
+		units = append(units, Unit{Name: f.Name, Toks: toks, Lib: true})
+	}
+	return units, nil
 }
 
 func sortedKeys[V any](m map[string]V) []string {

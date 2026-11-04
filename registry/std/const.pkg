@@ -1,0 +1,14 @@
+doc Constant: const NAME = value
+  ```
+  const WIDTH = 80
+  const GREETING = "hello"
+
+  print WIDTH * 2
+  ```
+
+  The value is copied to every use, so it must not depend on variables or
+  function calls; it may use other constants and literals. Constants are
+  top-level declarations and can be used before they are declared.
+
+syntax statement top
+  const {name: newconst} = {value: expr}

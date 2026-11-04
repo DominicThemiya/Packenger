@@ -1,0 +1,4 @@
+doc break: jump to the end of the enclosing loop.
+
+emit
+  jmp {loop.L.end}

@@ -1,0 +1,8 @@
+doc & : `and`.
+
+emit when right simple
+  {left}
+  and rax, {right.operand}
+emit
+  @binop
+  and rax, rbx

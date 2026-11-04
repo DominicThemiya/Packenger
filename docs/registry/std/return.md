@@ -29,7 +29,7 @@ bare `return` exits with 0.
 
 ## Syntax
 
-Kind: `statement`
+Kind: `statement`; flags `return`
 
 ```
 return {value: expr}

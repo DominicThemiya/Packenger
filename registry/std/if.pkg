@@ -1,20 +1,21 @@
-doc Conditional: if cond ... [else ...] end
-  Runs the first block if the condition is `true`, otherwise the `else`
-  block, if there is one. The condition must be a `bool`.
+doc Conditional: if cond ... [elif cond ...]* [else ...] end
+  Runs the block of the first condition that is `true`, otherwise the
+  `else` block, if there is one. Conditions must be `bool`.
 
   ```
   if n % 15 == 0
     print "FizzBuzz"
+  elif n % 3 == 0
+    print "Fizz"
+  elif n % 5 == 0
+    print "Buzz"
   else
-    if n % 3 == 0
-      print "Fizz"
-    else
-      print n
-    end
+    print n
   end
   ```
 
-  There is no `else if` chain yet; nest `if` inside `else` instead.
+  The `elif` part is a repeated pattern group (`[ ... ]*`): it can occur
+  any number of times.
 
 syntax statement
-  if {cond: expr bool} {then: block} [else {else: block}] end
+  if {cond: expr bool} {then: block} [elif {cond: expr bool} {then: block}]* [else {else: block}] end

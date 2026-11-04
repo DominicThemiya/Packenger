@@ -53,7 +53,7 @@ func Kinds(prog *Program) map[string]bool {
 
 // notCode are node kinds that are only data for their parent's template.
 var notCode = map[string]bool{"block": true, "ident": true, "func": true, "newfunc": true, "args": true, "params": true,
-	"type": true, "field": true, "fields": true, "fielddecl": true, "newtype": true}
+	"type": true, "field": true, "fields": true, "fielddecl": true, "newtype": true, "newconst": true, "group": true, "groups": true}
 
 // Includes lists the packages a backend package pulls in with "@name".
 func Includes(f *pkgfile.File) []string {
@@ -73,6 +73,9 @@ func Includes(f *pkgfile.File) []string {
 }
 
 func (g *Gen) Program(prog *Program) (string, error) {
+	for _, v := range prog.Globals {
+		g.data = append(g.data, "pk_g_"+v.Name+": dq 0")
+	}
 	main, err := g.gen(prog.Main, "", nil)
 	if err != nil {
 		return "", err
@@ -150,12 +153,21 @@ func (g *Gen) gen(n *Node, section string, params map[string][]string) ([]string
 			out = append(out, code...)
 		}
 		return out, nil
-	case "ident", "func", "newfunc", "args", "params", "type", "field", "fields", "fielddecl", "newtype":
+	case "ident", "func", "newfunc", "args", "params", "type", "field", "fields", "fielddecl", "newtype", "newconst", "group", "groups":
 		return nil, fmt.Errorf("%s: a %s slot is not code; use an attribute like {name.label}", n.Pos, n.Kind)
 	}
 	pkg, err := g.backend(n.Kind, n)
 	if err != nil {
 		return nil, err
+	}
+	if section != "" && !hasSection(pkg, section) {
+		// The package has no such section: the target's package named after
+		// the section renders it generically, with this node as {x}. For
+		// example bintables/jfalse branches on any bool.
+		if fb := g.Back[section]; fb != nil {
+			wrap := &Node{ID: n.ID, Kind: section, Pos: n.Pos, Type: n.Type, Slots: map[string]*Node{"x": n}, Order: []string{"x"}}
+			return g.gen(wrap, "", params)
+		}
 	}
 	em, err := g.choose(pkg, section, n)
 	if err != nil {
@@ -175,6 +187,15 @@ func (g *Gen) gen(n *Node, section string, params map[string][]string) ([]string
 		g.data = append(g.data, d...)
 	}
 	return out, nil
+}
+
+func hasSection(pkg *pkgfile.File, section string) bool {
+	for _, e := range pkg.Emits {
+		if e.Section == section {
+			return true
+		}
+	}
+	return false
 }
 
 func (g *Gen) choose(pkg *pkgfile.File, section string, n *Node) (*pkgfile.Emit, error) {
@@ -240,6 +261,8 @@ func (g *Gen) cond(c *pkgfile.Cond, n *Node) (bool, error) {
 		return simple(s), nil
 	case "empty":
 		return len(s.Items) == 0, nil
+	case "count":
+		return strconv.Itoa(len(s.Items)) == c.Arg, nil
 	case "size":
 		size, err := g.Types.Size(s.Type)
 		return err == nil && strconv.Itoa(size) == c.Arg, nil
@@ -375,12 +398,6 @@ func (g *Gen) render(pkg *pkgfile.File, lines []string, n *Node, params map[stri
 func (g *Gen) value(expr string, n *Node, params map[string][]string, it *Node) (string, []string, bool, error) {
 	expr = strings.TrimSpace(expr)
 	path, call, hasCall := strings.Cut(expr, "!")
-	switch {
-	case strings.HasPrefix(path, "L."):
-		return fmt.Sprintf("_L%d_%s", n.ID, path[2:]), nil, false, nil
-	case strings.HasPrefix(path, "D."):
-		return fmt.Sprintf("_D%d_%s", n.ID, path[2:]), nil, false, nil
-	}
 	if v, ok := params[path]; ok {
 		if len(v) == 1 && !hasCall {
 			return v[0], nil, false, nil
@@ -396,6 +413,18 @@ func (g *Gen) value(expr string, n *Node, params map[string][]string, it *Node) 
 		segs = segs[1:]
 	}
 	for len(segs) > 0 {
+		switch {
+		case segs[0] == "loop":
+			// the enclosing loop, for break and continue
+			if cur.Loop == nil {
+				return "", nil, false, fmt.Errorf("%s: no enclosing loop", cur.Pos)
+			}
+			cur, segs = cur.Loop, segs[1:]
+			continue
+		case (segs[0] == "L" || segs[0] == "D") && len(segs) == 2:
+			// a label unique to cur: {L.end}, {it.L.next}, {loop.L.end}
+			return fmt.Sprintf("_%s%d_%s", segs[0], cur.ID, segs[1]), nil, false, nil
+		}
 		c, ok := cur.Slots[segs[0]]
 		if !ok {
 			if cur.Rule != nil && hasSlot(cur.Rule.Pat.Elems, segs[0]) {
@@ -435,6 +464,9 @@ func (g *Gen) attr(n *Node, a string) (string, error) {
 	case "addr":
 		if n.Var == nil {
 			break
+		}
+		if n.Var.Global {
+			return "qword [rel pk_g_" + n.Var.Name + "]", nil
 		}
 		if n.Var.Param {
 			return fmt.Sprintf("qword [rbp+%d]", 16+8*n.Var.Index), nil

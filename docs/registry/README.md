@@ -18,8 +18,8 @@ format.
   - [std/let](std/let.md) — Declare a variable: let name [: type] = value
   - [std/assign](std/assign.md) — Assign to a variable, a field, a slice element or a dereferenced pointer.
   - [std/print](std/print.md) — Print an int, u8, bool or str, followed by a newline.
-  - [std/if](std/if.md) — Conditional: if cond ... [else ...] end
-  - [std/while](std/while.md) — Loop: while cond ... end
+  - [std/if](std/if.md) — Conditional: if cond ... [elif cond ...]* [else ...] end
+  - [std/while](std/while.md) — Loop: while cond ... [next ...] end
   - [std/for](std/for.md) — Counting loop over an inclusive range: for i = a to b ... end
   - [std/exprstmt](std/exprstmt.md) — An expression used as a statement.
   - [std/true](std/true.md) — The boolean true.
@@ -48,15 +48,35 @@ format.
   - [std/mod](std/mod.md) — % : remainder (sign follows the left operand, like C)
   - [std/not](std/not.md) — ! : logical not
   - [std/neg](std/neg.md) — - : negation
+  - [std/break](std/break.md) — Leave the innermost loop: break
+  - [std/continue](std/continue.md) — Skip to the next iteration of the innermost loop: continue
+  - [std/global](std/global.md) — Global variable: global name: type [= value]
+  - [std/const](std/const.md) — Constant: const NAME = value
+  - [std/syscall](std/syscall.md) — Linux system call: syscall(number, args...) -> int
+  - [std/argv](std/argv.md) — The program's command-line arguments: argv -> [str]
+  - [std/cstr](std/cstr.md) — The address of a string's bytes, for system calls: cstr(s) -> ptr u8
+  - [std/band](std/band.md) — & : bitwise and
+  - [std/bor](std/bor.md) — | : bitwise or
+  - [std/bxor](std/bxor.md) — ^ : bitwise exclusive or
+  - [std/shl](std/shl.md) — << : shift left
+  - [std/shr](std/shr.md) — >> : arithmetic shift right (keeps the sign)
 - **[bintables](bintables.md)** (truck) — Backend truck: translates Packenger packages to NASM for x86-64 Linux.
   - [bintables/add](bintables/add.md) — + : `add`.
   - [bintables/addr](bintables/addr.md) — Address of: renders the operand's addr section.
   - [bintables/alloc](bintables/alloc.md) — Helper: the heap. `__pk_alloc` returns rdi bytes of zeroed memory in rax.
   - [bintables/and](bintables/and.md) — && : short-circuit with a conditional jump; produces 0 or 1.
+  - [bintables/argv](bintables/argv.md) — argv: `__pk_argv` builds a [str] from the arguments the kernel passed to the program.
   - [bintables/as](bintables/as.md) — Conversions: u8 keeps the low byte, bool tests for non-zero, others keep the bits.
   - [bintables/assign](bintables/assign.md) — Assign: store rax into a variable's slot, or through the target's address.
+  - [bintables/band](bintables/band.md) — & : `and`.
   - [bintables/binop](bintables/binop.md) — Helper for binary operators: left operand in rax, right operand in rbx.
+  - [bintables/bor](bintables/bor.md) — | : `or`.
+  - [bintables/break](bintables/break.md) — break: jump to the end of the enclosing loop.
+  - [bintables/bxor](bintables/bxor.md) — ^ : `xor`.
   - [bintables/call](bintables/call.md) — Call: push arguments right to left, call, then pop them.
+  - [bintables/const](bintables/const.md) — Constant declaration: no code; the value is copied to every use.
+  - [bintables/continue](bintables/continue.md) — continue: jump to the enclosing loop's next label.
+  - [bintables/cstr](bintables/cstr.md) — cstr: a string's bytes start 8 bytes after its address.
   - [bintables/deref](bintables/deref.md) — Dereference: load 1 or 8 bytes from the address in rax.
   - [bintables/div](bintables/div.md) — / : signed division with `idiv` (quotient in rax).
   - [bintables/dot](bintables/dot.md) — Field access: the struct pointer plus the field's offset; 1- or 8-byte load.
@@ -65,10 +85,12 @@ format.
   - [bintables/false](bintables/false.md) — false: 0 in rax.
   - [bintables/fn](bintables/fn.md) — Function: label, standard stack frame, body, default return 0.
   - [bintables/ge](bintables/ge.md) — >= : `cmp`, then `setge` for a value or `jl` for a branch.
+  - [bintables/global](bintables/global.md) — Global: stored in the data section as pk_g_<name>; the initializer is a store.
   - [bintables/gt](bintables/gt.md) — > : `cmp`, then `setg` for a value or `jle` for a branch.
-  - [bintables/if](bintables/if.md) — Conditional jump around the then/else blocks.
+  - [bintables/if](bintables/if.md) — Conditional: one conditional jump per condition, through each condition's jfalse.
   - [bintables/index](bintables/index.md) — Indexing with a bounds check; loads 1 or 8 bytes depending on the element type.
   - [bintables/int](bintables/int.md) — Integer literal: loads the value into rax.
+  - [bintables/jfalse](bintables/jfalse.md) — Fallback branch: jump to {target} if the value in {x} is false (zero).
   - [bintables/le](bintables/le.md) — <= : `cmp`, then `setle` for a value or `jg` for a branch.
   - [bintables/len](bintables/len.md) — len: a string's length is its first qword; a slice's is at offset 8 of its header.
   - [bintables/let](bintables/let.md) — Declare: compute the value, store it in the variable's slot.
@@ -86,12 +108,15 @@ format.
   - [bintables/print](bintables/print.md) — print: write the value and a newline to stdout with the write syscall.
   - [bintables/program](bintables/program.md) — Program skeleton: entry point, top-level code, functions, support code and data.
   - [bintables/return](bintables/return.md) — Return: value in rax (zero for a bare return), tear down the frame, ret.
+  - [bintables/shl](bintables/shl.md) — << : `shl`, by a constant or by cl.
+  - [bintables/shr](bintables/shr.md) — >> : `sar`, by a constant or by cl.
   - [bintables/str](bintables/str.md) — String literal: rax points at a length-prefixed byte string.
   - [bintables/streq](bintables/streq.md) — Helper: `__pk_streq` compares the strings in rax and rbx; rax is 1 if equal.
   - [bintables/sub](bintables/sub.md) — - : `sub`.
+  - [bintables/syscall](bintables/syscall.md) — syscall: evaluate the arguments, then load them into rax, rdi, rsi, rdx, r10, r8, r9.
   - [bintables/true](bintables/true.md) — true: 1 in rax.
   - [bintables/var](bintables/var.md) — Variable read: loads the variable's stack slot into rax.
-  - [bintables/while](bintables/while.md) — Loop with the condition tested at the top.
+  - [bintables/while](bintables/while.md) — Loop with the condition tested at the top; break and continue jump to its labels.
 
 ## How front end and back end pair up
 
@@ -100,9 +125,17 @@ format.
 | [std/add](std/add.md) | [bintables/add](bintables/add.md) |
 | [std/addr](std/addr.md) | [bintables/addr](bintables/addr.md) |
 | [std/and](std/and.md) | [bintables/and](bintables/and.md) |
+| [std/argv](std/argv.md) | [bintables/argv](bintables/argv.md) |
 | [std/as](std/as.md) | [bintables/as](bintables/as.md) |
 | [std/assign](std/assign.md) | [bintables/assign](bintables/assign.md) |
+| [std/band](std/band.md) | [bintables/band](bintables/band.md) |
+| [std/bor](std/bor.md) | [bintables/bor](bintables/bor.md) |
+| [std/break](std/break.md) | [bintables/break](bintables/break.md) |
+| [std/bxor](std/bxor.md) | [bintables/bxor](bintables/bxor.md) |
 | [std/call](std/call.md) | [bintables/call](bintables/call.md) |
+| [std/const](std/const.md) | [bintables/const](bintables/const.md) |
+| [std/continue](std/continue.md) | [bintables/continue](bintables/continue.md) |
+| [std/cstr](std/cstr.md) | [bintables/cstr](bintables/cstr.md) |
 | [std/deref](std/deref.md) | [bintables/deref](bintables/deref.md) |
 | [std/div](std/div.md) | [bintables/div](bintables/div.md) |
 | [std/dot](std/dot.md) | [bintables/dot](bintables/dot.md) |
@@ -112,6 +145,7 @@ format.
 | [std/fn](std/fn.md) | [bintables/fn](bintables/fn.md) |
 | [std/for](std/for.md) | expands into [std/let](std/let.md), [std/while](std/while.md), [std/le](std/le.md), [std/assign](std/assign.md), [std/add](std/add.md) |
 | [std/ge](std/ge.md) | [bintables/ge](bintables/ge.md) |
+| [std/global](std/global.md) | [bintables/global](bintables/global.md) |
 | [std/gt](std/gt.md) | [bintables/gt](bintables/gt.md) |
 | [std/if](std/if.md) | [bintables/if](bintables/if.md) |
 | [std/index](std/index.md) | [bintables/index](bintables/index.md) |
@@ -130,7 +164,10 @@ format.
 | [std/or](std/or.md) | [bintables/or](bintables/or.md) |
 | [std/print](std/print.md) | [bintables/print](bintables/print.md) |
 | [std/return](std/return.md) | [bintables/return](bintables/return.md) |
+| [std/shl](std/shl.md) | [bintables/shl](bintables/shl.md) |
+| [std/shr](std/shr.md) | [bintables/shr](bintables/shr.md) |
 | [std/struct](std/struct.md) | *(no backend package)* |
 | [std/sub](std/sub.md) | [bintables/sub](bintables/sub.md) |
+| [std/syscall](std/syscall.md) | [bintables/syscall](bintables/syscall.md) |
 | [std/true](std/true.md) | [bintables/true](bintables/true.md) |
 | [std/while](std/while.md) | [bintables/while](bintables/while.md) |

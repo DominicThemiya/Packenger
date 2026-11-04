@@ -26,4 +26,4 @@ pop rax
 
 ## Used by
 
-[bintables/add](add.md), [bintables/div](div.md), [bintables/eq](eq.md), [bintables/ge](ge.md), [bintables/gt](gt.md), [bintables/le](le.md), [bintables/lt](lt.md), [bintables/mod](mod.md), [bintables/mul](mul.md), [bintables/ne](ne.md), [bintables/sub](sub.md)
+[bintables/add](add.md), [bintables/band](band.md), [bintables/bor](bor.md), [bintables/bxor](bxor.md), [bintables/div](div.md), [bintables/eq](eq.md), [bintables/ge](ge.md), [bintables/gt](gt.md), [bintables/le](le.md), [bintables/lt](lt.md), [bintables/mod](mod.md), [bintables/mul](mul.md), [bintables/ne](ne.md), [bintables/shl](shl.md), [bintables/shr](shr.md), [bintables/sub](sub.md)
