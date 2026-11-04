@@ -1,0 +1,783 @@
+doc pkc: rendering the tree through a backend truck into NASM (port of codegen.go).
+  `cg_program(gen, prog)` renders every node with the emit section of its
+  backend package, filling placeholders, conditions, `@includes` and
+  `{each}` loops exactly like the Go compiler. Only functions reachable
+  from the top level are rendered.
+
+needs std rt pkc/util pkc/pkgfile pkc/types pkc/parser
+code
+  struct Gen
+    target: str
+    back: ptr Map
+    types: ptr Types
+    funcs: ptr Map
+    data: ptr Vec
+    support: ptr Vec
+    used: ptr Map
+    data_done: ptr Map
+    chosen: ptr Map
+  end
+
+  // a placeholder's value: one line of text, or generated code
+  struct CgVal
+    val: str
+    code: ptr Vec
+    is_code: bool
+  end
+
+  fn cg_new(target: str, back: ptr Map, prog: ptr PProg) -> ptr Gen
+    let g = new Gen
+    g.target = target
+    g.back = back
+    g.types = prog.types
+    g.funcs = map_new()
+    g.data = vec_new()
+    g.support = vec_new()
+    g.used = map_new()
+    g.data_done = map_new()
+    g.chosen = map_new()
+    for i = 0 to vec_len(prog.funcs) - 1
+      let f = ps_nd(prog.funcs, i)
+      for k = 0 to ps_nslots(f) - 1
+        let c = ps_nd(f.svals, k)
+        if c.kind == "newfunc"
+          map_set(g.funcs, c.ident, f as int)
+        end
+      end
+    end
+    return g
+  end
+
+  fn cg_not_code(k: str) -> bool
+    return k == "block" || k == "ident" || k == "func" || k == "newfunc" || k == "args" || k == "params" || k == "type" || k == "field" || k == "fields" || k == "fielddecl" || k == "newtype" || k == "newconst" || k == "group" || k == "groups"
+  end
+
+  // ---------------------------------------------------------------- reachability
+
+  fn cg_visit(n: ptr PNode, by_name: ptr Map, seen: ptr Map)
+    if n.kind == "func" && !map_has(seen, n.ident)
+      map_set(seen, n.ident, 1)
+      let f = map_get(by_name, n.ident) as ptr PNode
+      if f != null
+        cg_visit(f, by_name, seen)
+      end
+    end
+    for i = 0 to ps_nslots(n) - 1
+      cg_visit(ps_nd(n.svals, i), by_name, seen)
+    end
+    for i = 0 to ps_nitems(n) - 1
+      cg_visit(ps_nd(n.items, i), by_name, seen)
+    end
+  end
+
+  // cg_reachable: functions called from the top level, transitively, in
+  // definition order
+  fn cg_reachable(prog: ptr PProg) -> ptr Vec
+    let by_name = map_new()
+    for i = 0 to vec_len(prog.funcs) - 1
+      let f = ps_nd(prog.funcs, i)
+      map_set(by_name, f.frame.name, f as int)
+    end
+    let seen = map_new()
+    cg_visit(prog.main, by_name, seen)
+    let out = vec_new()
+    for i = 0 to vec_len(prog.funcs) - 1
+      let f = ps_nd(prog.funcs, i)
+      if map_has(seen, f.frame.name)
+        vec_push(out, f as int)
+      end
+    end
+    return out
+  end
+
+  fn cg_kinds_walk(n: ptr PNode, kinds: ptr Map)
+    if !cg_not_code(n.kind)
+      map_set(kinds, n.kind, 1)
+    end
+    for i = 0 to ps_nslots(n) - 1
+      cg_kinds_walk(ps_nd(n.svals, i), kinds)
+    end
+    for i = 0 to ps_nitems(n) - 1
+      cg_kinds_walk(ps_nd(n.items, i), kinds)
+    end
+  end
+
+  // cg_kinds lists the backend packages a program needs.
+  fn cg_kinds(prog: ptr PProg) -> ptr Vec
+    let kinds = map_new()
+    map_set(kinds, "program", 1)
+    cg_kinds_walk(prog.main, kinds)
+    let funcs = cg_reachable(prog)
+    for i = 0 to vec_len(funcs) - 1
+      cg_kinds_walk(ps_nd(funcs, i), kinds)
+    end
+    let out = vec_new()
+    for i = 0 to map_len(kinds) - 1
+      u_push(out, map_key(kinds, i))
+    end
+    u_sort_strs(out)
+    return out
+  end
+
+  // cg_includes lists the packages a backend package pulls in with @name.
+  fn cg_includes(f: ptr PfFile) -> ptr Vec
+    let out = vec_new()
+    for i = 0 to vec_len(f.emits) - 1
+      let e = vec_get(f.emits, i) as ptr PfEmit
+      for k = 0 to vec_len(e.lines) - 1
+        let l = u_get(e.lines, k)
+        if str_starts(l, "@")
+          let name = u_get(u_fields(str_slice(l, 1, len(l))), 0)
+          if !u_in(out, name)
+            u_push(out, name)
+          end
+        end
+      end
+    end
+    return out
+  end
+
+  // ---------------------------------------------------------------- program
+
+  fn cg_append(out: ptr Vec, more: ptr Vec)
+    for i = 0 to vec_len(more) - 1
+      vec_push(out, vec_get(more, i))
+    end
+  end
+
+  fn cg_program(g: ptr Gen, prog: ptr PProg) -> str
+    for i = 0 to vec_len(prog.globals) - 1
+      let v = vec_get(prog.globals, i) as ptr PVar
+      u_push(g.data, u_cat3("pk_g_", v.name, ": dq 0"))
+    end
+    let main_ = cg_gen(g, prog.main, "", null)
+    if main_ == null
+      return ""
+    end
+    let funcs = vec_new()
+    let reach = cg_reachable(prog)
+    for i = 0 to vec_len(reach) - 1
+      let code = cg_gen(g, ps_nd(reach, i), "", null)
+      if code == null
+        return ""
+      end
+      cg_append(funcs, code)
+    end
+    let root = new PNode
+    root.kind = "program"
+    root.ty = ""
+    root.ident = ""
+    root.sval = ""
+    root.frame = prog.frame
+    let pkg = map_get(g.back, "program") as ptr PfFile
+    let em = cg_choose(g, pkg, "", root)
+    if em == null
+      return ""
+    end
+    let params = map_new()
+    map_set(params, "main", main_ as int)
+    map_set(params, "functions", funcs as int)
+    cg_use(g, pkg)
+    map_set(params, "data", g.data as int)
+    map_set(params, "support", g.support as int)
+    let lines = cg_render(g, pkg, em.lines, root, params, null)
+    if lines == null
+      return ""
+    end
+    pk_err = ""
+    return cg_format(lines)
+  end
+
+  fn cg_format(lines: ptr Vec) -> str
+    let b = sb_new()
+    for i = 0 to vec_len(lines) - 1
+      let l = u_trim(u_get(lines, i))
+      if l == ""
+        continue
+      end
+      let first = u_get(u_fields(l), 0)
+      let flush = str_ends(first, ":") && !u_has(l, " ") || first == "section" || first == "global" || first == "bits" || first == "default" || first == "extern"
+      if !flush
+        sb_add(b, "    ")
+      end
+      sb_add(b, l)
+      sb_byte(b, '\n')
+    end
+    return sb_str(b)
+  end
+
+  fn cg_use(g: ptr Gen, pkg: ptr PfFile)
+    if map_has(g.used, pkg.name)
+      return
+    end
+    map_set(g.used, pkg.name, 1)
+    cg_append(g.support, pkg.support)
+  end
+
+  fn cg_err(msg: str) -> ptr Vec
+    pk_err = msg
+    return null
+  end
+
+  fn cg_has_section(pkg: ptr PfFile, section: str) -> bool
+    for i = 0 to vec_len(pkg.emits) - 1
+      if (vec_get(pkg.emits, i) as ptr PfEmit).section == section
+        return true
+      end
+    end
+    return false
+  end
+
+  // cg_gen renders one node with the given section ("" for emit).
+  fn cg_gen(g: ptr Gen, n: ptr PNode, section: str, params: ptr Map) -> ptr Vec
+    if n.kind == "block"
+      let out = vec_new()
+      for i = 0 to ps_nitems(n) - 1
+        let code = cg_gen(g, ps_nd(n.items, i), "", null)
+        if code == null
+          return null
+        end
+        cg_append(out, code)
+      end
+      return out
+    end
+    if cg_not_code(n.kind)
+      return cg_err(u_cat4(ps_pos(n), ": a ", n.kind, " slot is not code; use an attribute like {name.label}"))
+    end
+    let pkg = map_get(g.back, n.kind) as ptr PfFile
+    if pkg == null
+      return cg_err(u_cat4(ps_pos(n), ": target ", g.target, u_cat4(" has no package for ", u_quote(n.kind), " (expected ", u_cat4(g.target, "/", n.kind, ".pkg)"))))
+    end
+    if section != "" && !cg_has_section(pkg, section)
+      // the target's package named after the section renders it, with this
+      // node as {x}
+      let fb = map_get(g.back, section) as ptr PfFile
+      if fb != null
+        let wrap = new PNode
+        wrap.id = n.id
+        wrap.kind = section
+        wrap.file = n.file
+        wrap.line = n.line
+        wrap.col = n.col
+        wrap.ty = n.ty
+        wrap.ident = ""
+        wrap.sval = ""
+        ps_set_slot(wrap, "x", n)
+        return cg_gen(g, wrap, "", params)
+      end
+    end
+    let em = cg_choose(g, pkg, section, n)
+    if em == null
+      return null
+    end
+    cg_use(g, pkg)
+    let out = cg_render(g, pkg, em.lines, n, params, null)
+    if out == null
+      return null
+    end
+    let key = str_from_int(n.id)
+    if vec_len(pkg.data) > 0 && !map_has(g.data_done, key)
+      map_set(g.data_done, key, 1)
+      let d = cg_render(g, pkg, pkg.data, n, null, null)
+      if d == null
+        return null
+      end
+      cg_append(g.data, d)
+    end
+    return out
+  end
+
+  fn cg_choose(g: ptr Gen, pkg: ptr PfFile, section: str, n: ptr PNode) -> ptr PfEmit
+    for i = 0 to vec_len(pkg.emits) - 1
+      let e = vec_get(pkg.emits, i) as ptr PfEmit
+      if e.section != section
+        continue
+      end
+      let bad = false
+      let ok = cg_cond(g, e.cond, n, &bad)
+      if bad
+        pk_err = u_cat4(pkg.origin, ":", str_from_int(e.line), u_cat(": ", pk_err))
+        return null
+      end
+      if ok
+        let when = ""
+        if e.cond != null
+          let c = e.cond
+          if c.op == "type"
+            when = u_cat3(c.slot, " ", c.arg)
+          elif c.op == "simple" || c.op == "empty"
+            when = u_cat3(c.slot, " ", c.op)
+          else
+            when = u_cat4(c.slot, " ", c.op, u_cat(" ", c.arg))
+          end
+        end
+        let key = u_cat4(pkg.name, "\x00", e.section, u_cat("\x00", when))
+        map_set(g.chosen, key, map_get(g.chosen, key) + 1)
+        return e
+      end
+    end
+    let name = "emit"
+    if section != ""
+      name = u_cat3(name, " ", section)
+    end
+    pk_err = u_cat4(ps_pos(n), ": ", pkg.name, u_cat3(" has no '", name, "' section that applies here"))
+    return null
+  end
+
+  fn cg_path_node(n: ptr PNode, path: str) -> ptr PNode
+    let segs = u_split(path, '.')
+    let cur = n
+    for i = 0 to vec_len(segs) - 1
+      let seg = u_get(segs, i)
+      if seg == "self"
+        continue
+      end
+      let c = ps_slot(cur, seg)
+      if c == null
+        return null
+      end
+      cur = c
+    end
+    return cur
+  end
+
+  // cg_simple: can the node be an instruction operand directly
+  fn cg_simple(n: ptr PNode) -> bool
+    if n.kind == "int"
+      return n.ival >= -2147483648 && n.ival < 2147483648
+    end
+    return n.kind == "var"
+  end
+
+  fn cg_cond(g: ptr Gen, c: ptr PfCond, n: ptr PNode, bad: ptr bool) -> bool
+    *bad = false
+    if c == null
+      return true
+    end
+    let s = cg_path_node(n, c.slot)
+    if c.op == "missing"
+      return s == null
+    end
+    if s == null
+      return false
+    end
+    if c.op == "type"
+      return s.ty == c.arg
+    elif c.op == "is"
+      return s.kind == c.arg
+    elif c.op == "has"
+      let pkg = map_get(g.back, s.kind) as ptr PfFile
+      if pkg == null
+        return false
+      end
+      return cg_has_section(pkg, c.arg)
+    elif c.op == "simple"
+      return cg_simple(s)
+    elif c.op == "empty"
+      return ps_nitems(s) == 0
+    elif c.op == "count"
+      return str_from_int(ps_nitems(s)) == c.arg
+    elif c.op == "size"
+      let size = ty_size(g.types, s.ty)
+      return size >= 0 && str_from_int(size) == c.arg
+    end
+    *bad = true
+    pk_err = u_cat("unknown condition ", u_quote(c.op))
+    return false
+  end
+
+  // ---------------------------------------------------------------- rendering
+
+  // cg_hole finds the next placeholder {...} (no braces inside) at or
+  // after from; *stop is just past it. -1 if there is none.
+  fn cg_hole(line: str, from: int, stop: ptr int) -> int
+    let i = from
+    while i < len(line)
+      if line[i] == '{'
+        let j = i + 1
+        while j < len(line) && line[j] != '{' && line[j] != '}'
+          j = j + 1
+        end
+        if j < len(line) && line[j] == '}' && j > i + 1
+          *stop = j + 1
+          return i
+        end
+      end
+      i = i + 1
+    end
+    return -1
+  end
+
+  fn cg_render_err(pkg: ptr PfFile, line: str, msg: str) -> ptr Vec
+    pk_err = u_cat4(pkg.origin, ": ", msg, u_cat3(" (in ", u_quote(line), ")"))
+    return null
+  end
+
+  fn cg_render(g: ptr Gen, pkg: ptr PfFile, lines: ptr Vec, n: ptr PNode, params: ptr Map, it: ptr PNode) -> ptr Vec
+    let out = vec_new()
+    let i = 0
+    while i < vec_len(lines)
+      let line = u_get(lines, i)
+      if str_starts(line, "{each ")
+        // like strings.Trim(line, "{}")
+        let a0 = 0
+        let b0 = len(line)
+        while a0 < b0 && (line[a0] == '{' || line[a0] == '}')
+          a0 = a0 + 1
+        end
+        while b0 > a0 && (line[b0 - 1] == '{' || line[b0 - 1] == '}')
+          b0 = b0 - 1
+        end
+        let f = u_fields(str_slice(line, a0, b0))
+        if vec_len(f) < 2 || vec_len(f) > 3 || vec_len(f) == 3 && u_get(f, 2) != "reverse"
+          return cg_render_err(pkg, line, "use {each <slot>} or {each <slot> reverse}")
+        end
+        let depth = 1
+        let j = i + 1
+        while j < vec_len(lines)
+          if str_starts(u_get(lines, j), "{each ")
+            depth = depth + 1
+          elif u_get(lines, j) == "{end}"
+            depth = depth - 1
+            if depth == 0
+              break
+            end
+          end
+          j = j + 1
+        end
+        if j >= vec_len(lines)
+          return cg_render_err(pkg, line, "{each} without {end}")
+        end
+        let list = cg_path_node(n, u_get(f, 1))
+        if list == null
+          return cg_render_err(pkg, line, u_cat("unknown slot ", u_get(f, 1)))
+        end
+        let inner = vec_new()
+        for k = i + 1 to j - 1
+          vec_push(inner, vec_get(lines, k))
+        end
+        let count = ps_nitems(list)
+        for k = 0 to count - 1
+          let item = ps_nd(list.items, k)
+          if vec_len(f) == 3
+            item = ps_nd(list.items, count - 1 - k)
+          end
+          let code = cg_render(g, pkg, inner, n, params, item)
+          if code == null
+            return null
+          end
+          cg_append(out, code)
+        end
+        i = j + 1
+        continue
+      end
+      if str_starts(line, "@")
+        let f = u_fields(str_slice(line, 1, len(line)))
+        let inc = map_get(g.back, u_get(f, 0)) as ptr PfFile
+        if inc == null
+          return cg_render_err(pkg, line, u_cat4("included package ", g.target, "/", u_cat(u_get(f, 0), " was not loaded")))
+        end
+        let section = ""
+        if vec_len(f) > 1
+          section = u_get(f, 1)
+        end
+        let em = cg_choose(g, inc, section, n)
+        if em == null
+          return null
+        end
+        cg_use(g, inc)
+        let code = cg_render(g, inc, em.lines, n, params, it)
+        if code == null
+          return null
+        end
+        cg_append(out, code)
+        i = i + 1
+        continue
+      end
+      let stop = 0
+      let at = cg_hole(line, 0, &stop)
+      if at == 0 && stop == len(line)
+        // the whole line is one placeholder: it may be code
+        let v = cg_value(g, str_slice(line, 1, len(line) - 1), n, params, it)
+        if v == null
+          return cg_render_err(pkg, line, pk_err)
+        end
+        if v.is_code
+          cg_append(out, v.code)
+        else
+          u_push(out, v.val)
+        end
+        i = i + 1
+        continue
+      end
+      let b = sb_new()
+      let pos = 0
+      let failed = ""
+      let has_failed = false
+      while at >= 0
+        sb_add(b, str_slice(line, pos, at))
+        let hole = str_slice(line, at + 1, stop - 1)
+        let v = cg_value(g, hole, n, params, it)
+        if v == null
+          if !has_failed
+            failed = pk_err
+            has_failed = true
+          end
+        else
+          if v.is_code && !has_failed
+            failed = u_cat3("{", hole, "} is code; put it on a line of its own")
+            has_failed = true
+          end
+          sb_add(b, v.val)
+        end
+        pos = stop
+        at = cg_hole(line, pos, &stop)
+      end
+      sb_add(b, str_slice(line, pos, len(line)))
+      if has_failed
+        return cg_render_err(pkg, line, failed)
+      end
+      u_push(out, sb_str(b))
+      i = i + 1
+    end
+    return out
+  end
+
+  fn cg_val(val: str) -> ptr CgVal
+    let v = new CgVal
+    v.val = val
+    return v
+  end
+
+  fn cg_code(code: ptr Vec) -> ptr CgVal
+    let v = new CgVal
+    v.val = ""
+    v.code = code
+    v.is_code = true
+    return v
+  end
+
+  fn cg_fail(msg: str) -> ptr CgVal
+    pk_err = msg
+    return null
+  end
+
+  // cg_value resolves a placeholder to a value or to a node's code.
+  fn cg_value(g: ptr Gen, expr0: str, n: ptr PNode, params: ptr Map, it: ptr PNode) -> ptr CgVal
+    let expr = u_trim(expr0)
+    let path = expr
+    let call = ""
+    let has_call = false
+    let bang = str_find_byte(expr, '!', 0)
+    if bang >= 0
+      path = str_slice(expr, 0, bang)
+      call = str_slice(expr, bang + 1, len(expr))
+      has_call = true
+    end
+    if params != null && map_has(params, path)
+      let v = map_get(params, path) as ptr Vec
+      if vec_len(v) == 1 && !has_call
+        return cg_val(u_get(v, 0))
+      end
+      return cg_code(v)
+    end
+    let segs = u_split(path, '.')
+    let cur = n
+    let si = 0
+    if u_get(segs, 0) == "it" && it != null
+      cur = it
+      si = 1
+    elif u_get(segs, 0) == "self"
+      si = 1
+    end
+    while si < vec_len(segs)
+      let seg = u_get(segs, si)
+      if seg == "loop"
+        if cur.loop == null
+          return cg_fail(u_cat(ps_pos(cur), ": no enclosing loop"))
+        end
+        cur = cur.loop
+        si = si + 1
+        continue
+      end
+      if (seg == "L" || seg == "D") && vec_len(segs) - si == 2
+        return cg_val(u_cat4("_", seg, str_from_int(cur.id), u_cat("_", u_get(segs, si + 1))))
+      end
+      let c = ps_slot(cur, seg)
+      if c == null
+        if cur.rule != null && ps_has_slot(cur.rule.pat.elems, seg)
+          return cg_code(vec_new())
+        end
+        if vec_len(segs) - si > 1
+          return cg_fail(u_cat("unknown slot ", u_quote(seg)))
+        end
+        let a = ""
+        if !cg_attr(g, cur, seg, &a)
+          return null
+        end
+        return cg_val(a)
+      end
+      cur = c
+      si = si + 1
+    end
+    let section = ""
+    let args: ptr Map = null
+    if has_call
+      let f = u_fields(call)
+      if vec_len(f) == 0
+        return cg_fail("{slot!section} needs a section name")
+      end
+      section = u_get(f, 0)
+      args = map_new()
+      let names = vec_new()
+      u_push(names, "target")
+      u_push(names, "arg2")
+      u_push(names, "arg3")
+      for k = 1 to vec_len(f) - 1
+        let v = cg_value(g, u_get(f, k), n, params, it)
+        if v == null
+          return null
+        end
+        let idx = k - 1
+        if idx > 2
+          idx = 2
+        end
+        let one = vec_new()
+        u_push(one, v.val)
+        map_set(args, u_get(names, idx), one as int)
+      end
+    end
+    let code = cg_gen(g, cur, section, args)
+    if code == null
+      return null
+    end
+    return cg_code(code)
+  end
+
+  fn cg_attr_fail(n: ptr PNode, a: str) -> bool
+    pk_err = u_cat4(n.kind, " has no attribute or slot ", u_quote(a), "")
+    return false
+  end
+
+  fn cg_attr(g: ptr Gen, n: ptr PNode, a: str, out: ptr str) -> bool
+    if a == "addr"
+      if n.vr == null
+        return cg_attr_fail(n, a)
+      end
+      if n.vr.global
+        *out = u_cat3("qword [rel pk_g_", n.vr.name, "]")
+      elif n.vr.param
+        *out = u_cat3("qword [rbp+", str_from_int(16 + 8 * n.vr.index), "]")
+      else
+        *out = u_cat3("qword [rbp-", str_from_int(8 * (n.vr.index + 1)), "]")
+      end
+      return true
+    elif a == "label"
+      if n.kind == "func"
+        if !map_has(g.funcs, n.ident)
+          return u_fail(u_cat3(ps_pos(n), ": unknown function ", n.ident))
+        end
+        *out = u_cat("pk_", n.ident)
+        return true
+      elif n.kind == "newfunc" || n.kind == "ident"
+        *out = u_cat("pk_", n.ident)
+        return true
+      end
+    elif a == "name"
+      if n.vr != null
+        *out = n.vr.name
+        return true
+      end
+      if n.ident != ""
+        *out = n.ident
+        return true
+      end
+    elif a == "value"
+      if n.kind == "int"
+        *out = str_from_int(n.ival)
+        return true
+      end
+    elif a == "operand"
+      if cg_simple(n)
+        if n.kind == "int"
+          *out = str_from_int(n.ival)
+          return true
+        end
+        return cg_attr(g, n, "addr", out)
+      end
+    elif a == "len"
+      if n.kind == "str"
+        *out = str_from_int(len(n.sval))
+        return true
+      end
+    elif a == "bytes"
+      if n.kind == "str"
+        if n.sval == ""
+          *out = "0"
+          return true
+        end
+        let b = sb_new()
+        for i = 0 to len(n.sval) - 1
+          if i > 0
+            sb_byte(b, ',')
+          end
+          sb_int(b, n.sval[i] as int)
+        end
+        *out = sb_str(b)
+        return true
+      end
+    elif a == "count"
+      *out = str_from_int(ps_nitems(n))
+      return true
+    elif a == "stack"
+      *out = str_from_int(8 * ps_nitems(n))
+      return true
+    elif a == "size"
+      let size = ty_size(g.types, n.ty)
+      if size < 0
+        return u_fail(u_cat3(ps_pos(n), ": ", pk_err))
+      end
+      *out = str_from_int(size)
+      return true
+    elif a == "alloc"
+      let st = ty_struct(g.types, n.ty)
+      if st != null
+        *out = str_from_int(st.size)
+        return true
+      end
+      let size = ty_size(g.types, n.ty)
+      if size < 0
+        return u_fail(u_cat3(ps_pos(n), ": ", pk_err))
+      end
+      *out = str_from_int(size)
+      return true
+    elif a == "elemsize"
+      let size = ty_size(g.types, ty_elem(n.ty))
+      if size < 0
+        return u_fail(u_cat3(ps_pos(n), ": ", pk_err))
+      end
+      *out = str_from_int(size)
+      return true
+    elif a == "offset"
+      if n.field != null
+        *out = str_from_int(n.field.offset)
+        return true
+      end
+    elif a == "mem"
+      if n.vr != null
+        let full = ""
+        cg_attr(g, n, "addr", &full)
+        *out = u_after(full, "qword ")
+        return true
+      end
+    elif a == "frame"
+      if n.frame != null
+        *out = str_from_int(ps_frame_size(n.frame))
+        return true
+      end
+    elif a == "type"
+      *out = n.ty
+      return true
+    end
+    return cg_attr_fail(n, a)
+  end

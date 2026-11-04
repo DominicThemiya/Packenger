@@ -15,6 +15,8 @@ doc The process: environment variables, finding and running programs, exiting.
   | `os_environ() -> ptr Vec` | every `NAME=value` string (`str`s), read once from `/proc/self/environ` |
   | `os_find(cmd: str) -> str` | the path of an executable, searching `PATH` unless `cmd` contains `/`; `""` if not found |
   | `os_run(cmd: str, args: ptr Vec) -> int` | run `cmd` with the arguments (`str`s, not including the program name), wait, and return its exit status: 0–255, `128 + n` if killed by signal `n`, or -1 if it can't be started |
+  | `os_run_output(cmd: str, args: ptr Vec, output: ptr str) -> int` | like `os_run`, but the program's stdout and stderr are captured into `*output` |
+  | `os_run_in(dir: str, cmd: str, args: ptr Vec, output: ptr str) -> int` | like `os_run_output`, with `dir` as the program's working directory |
   | `os_exit(code: int)` | flush `io_out`'s buffer and exit |
 
   `os_run` uses `fork`, `execve` and `wait4`. The child inherits the
@@ -93,6 +95,34 @@ code
   end
 
   fn os_run(cmd: str, args: ptr Vec) -> int
+    return os_spawn("", cmd, args, "")
+  end
+
+  fn os_run_in(dir: str, cmd: str, args: ptr Vec, output: ptr str) -> int
+    os_capture_count = os_capture_count + 1
+    let file = str_concat(str_concat("/tmp/rt-os-", str_from_int(syscall(39))), str_concat("-", str_from_int(os_capture_count)))
+    let status = os_spawn(dir, cmd, args, file)
+    let ok = false
+    *output = io_read_file(file, &ok)
+    syscall(87, cstr(file))
+    return status
+  end
+
+  global os_capture_count: int
+
+  fn os_run_output(cmd: str, args: ptr Vec, output: ptr str) -> int
+    os_capture_count = os_capture_count + 1
+    let file = str_concat(str_concat("/tmp/rt-os-", str_from_int(syscall(39))), str_concat("-", str_from_int(os_capture_count)))
+    let status = os_spawn("", cmd, args, file)
+    let ok = false
+    *output = io_read_file(file, &ok)
+    syscall(87, cstr(file))
+    return status
+  end
+
+  // os_spawn runs cmd and waits. With a dir, the child runs there; with a
+  // capture file, its stdout and stderr go there.
+  fn os_spawn(dir: str, cmd: str, args: ptr Vec, capture: str) -> int
     let path = os_find(cmd)
     if path == ""
       return -1
@@ -107,6 +137,21 @@ code
     io_flush()
     let pid = syscall(57)
     if pid == 0
+      if dir != ""
+        // chdir(dir)
+        if syscall(80, cstr(dir)) != 0
+          syscall(60, 127)
+        end
+      end
+      if capture != ""
+        // open(capture, O_WRONLY | O_CREAT | O_TRUNC, 0600), then dup2 onto 1 and 2
+        let fd = syscall(2, cstr(capture), 577, 384)
+        if fd >= 0
+          syscall(33, fd, 1)
+          syscall(33, fd, 2)
+          syscall(3, fd)
+        end
+      end
       syscall(59, cstr(path), c_argv, c_envp)
       syscall(60, 127)
     end

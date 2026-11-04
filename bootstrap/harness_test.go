@@ -237,3 +237,41 @@ func TestPackageErrors(t *testing.T) {
 	agree(t, "dump", "pkg")
 	agree(t, "--help")
 }
+
+// The bootstrap: pkc built by the Go compiler (stage 1) builds itself
+// (stage 2), which builds itself again (stage 3). All three binaries must
+// be identical, byte for byte.
+func TestBootstrap(t *testing.T) {
+	if _, err := exec.LookPath("nasm"); err != nil {
+		t.Skip("nasm not installed")
+	}
+	if testing.Short() {
+		t.Skip("the bootstrap takes about 20 seconds")
+	}
+	dir := t.TempDir()
+	stage := func(compiler, out string) []byte {
+		t.Helper()
+		o := run(t, compiler, "build", "pkc.pkg", "-o", out)
+		if o.exit != 0 {
+			t.Fatalf("%s build pkc.pkg failed:\n%s", compiler, o)
+		}
+		b, err := os.ReadFile(out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	s1 := stage(compilers[0].bin, filepath.Join(dir, "stage1"))
+	s2 := stage(filepath.Join(dir, "stage1"), filepath.Join(dir, "stage2"))
+	s3 := stage(filepath.Join(dir, "stage2"), filepath.Join(dir, "stage3"))
+	if !bytes.Equal(s1, s2) {
+		t.Errorf("stage 2 (pkc built by pkc) differs from stage 1 (pkc built by Go)")
+	}
+	if !bytes.Equal(s2, s3) {
+		t.Errorf("stage 3 differs from stage 2: no fixed point")
+	}
+	o := run(t, filepath.Join(dir, "stage3"), "run", "../examples/fib.pkg")
+	if o.stdout != "9227465\n" {
+		t.Errorf("stage 3 can't run fib:\n%s", o)
+	}
+}

@@ -54,4 +54,4 @@ Each package's tests are in [tests/rt](../../tests/rt).
 
 ## Used by
 
-[pkc/driver](pkc/driver.md), [pkc/fetch](pkc/fetch.md), [pkc/lang](pkc/lang.md), [pkc/lexer](pkc/lexer.md), [pkc/main](pkc/main.md), [pkc/parser](pkc/parser.md), [pkc/pkgfile](pkc/pkgfile.md), [pkc/types](pkc/types.md), [pkc/ui](pkc/ui.md), [pkc/util](pkc/util.md)
+[pkc/codegen](pkc/codegen.md), [pkc/driver](pkc/driver.md), [pkc/fetch](pkc/fetch.md), [pkc/lang](pkc/lang.md), [pkc/lexer](pkc/lexer.md), [pkc/main](pkc/main.md), [pkc/parser](pkc/parser.md), [pkc/pkgfile](pkc/pkgfile.md), [pkc/types](pkc/types.md), [pkc/ui](pkc/ui.md), [pkc/util](pkc/util.md)

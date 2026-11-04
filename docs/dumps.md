@@ -169,6 +169,10 @@ differing line:
 | `bootstrap/testdata/badreg/*.pkg` | `dump pkg` of broken packages: the error messages |
 | a few command lines | `--help`, a bad `dump` stage, a missing argument |
 
+`TestBootstrap` then builds `pkc` with the Go compiler, builds it again with
+that `pkc`, and once more with the result, and requires all three
+executables to be byte-identical (skipped with `go test -short`).
+
 The output of each run includes stdout, stderr and the exit status, with
 `NO_COLOR=1` and a `file://` registry. Running each compiler more than once
 catches nondeterminism even with only the Go compiler. Add a file to

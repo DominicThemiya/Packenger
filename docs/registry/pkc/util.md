@@ -219,4 +219,4 @@ end
 
 ## Used by
 
-[pkc/driver](driver.md), [pkc/fetch](fetch.md), [pkc/lang](lang.md), [pkc/lexer](lexer.md), [pkc/main](main.md), [pkc/parser](parser.md), [pkc/pkgfile](pkgfile.md), [pkc/types](types.md), [pkc/ui](ui.md)
+[pkc/codegen](codegen.md), [pkc/driver](driver.md), [pkc/fetch](fetch.md), [pkc/lang](lang.md), [pkc/lexer](lexer.md), [pkc/main](main.md), [pkc/parser](parser.md), [pkc/pkgfile](pkgfile.md), [pkc/types](types.md), [pkc/ui](ui.md)

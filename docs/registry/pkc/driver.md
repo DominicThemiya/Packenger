@@ -7,8 +7,9 @@
 truck [pkc](../pkc.md) · [source](../../../registry/pkc/driver.pkg)
 
 So far: reading `use` lines, fetching packages in rounds, building the
-grammar and tokenizing (`dr_lex`), then lexing library code and parsing
-(`dr_parse`).
+grammar and tokenizing (`dr_lex`), lexing library code and parsing
+(`dr_parse`), then fetching the backend packages and rendering NASM
+(`dr_compile`).
 
 ## Needs
 
@@ -20,6 +21,7 @@ grammar and tokenizing (`dr_lex`), then lexing library code and parsing
 - [pkc/lexer](lexer.md)
 - [pkc/lang](lang.md)
 - [pkc/parser](parser.md)
+- [pkc/codegen](codegen.md)
 
 ## Library code
 
@@ -130,6 +132,12 @@ fn dr_next(f: ptr PfFile, mode: str) -> ptr Vec
       vec_push(out, dr_dep(u_cat3(f.name, "/", u_get(f.truck, i)), u_cat("member of truck ", f.name)) as int)
     end
   end
+  if mode != "syntax"
+    let incs = cg_includes(f)
+    for i = 0 to vec_len(incs) - 1
+      vec_push(out, dr_dep(u_cat3(mode, "/", u_get(incs, i)), u_cat("included by ", f.name)) as int)
+    end
+  end
   for i = 0 to vec_len(f.needs) - 1
     vec_push(out, dr_dep(u_get(f.needs, i), u_cat("needed by ", f.name)) as int)
   end
@@ -222,6 +230,135 @@ fn dr_parse(fr: ptr DrFront, file: str) -> ptr PProg
   u.toks = fr.toks
   vec_push(units, u as int)
   return ps_parse(fr.lang, units)
+end
+
+struct DrResult
+  asm: str
+  prog: ptr PProg
+  front: ptr DrFront
+  back: ptr Map
+  gen: ptr Gen
+end
+
+// dr_compile runs the whole pipeline up to the NASM source.
+fn dr_compile(reg: str, target: str, file: str, src: str) -> ptr DrResult
+  let fr = dr_lex(reg, file, src)
+  if fr == null
+    return null
+  end
+  let prog = dr_parse(fr, file)
+  if prog == null
+    return null
+  end
+  let kinds = cg_kinds(prog)
+  let need = vec_new()
+  for i = 0 to vec_len(kinds) - 1
+    let k = u_get(kinds, i)
+    vec_push(need, dr_dep(u_cat3(target, "/", k), u_cat("translates ", k)) as int)
+  end
+  let by_name = dr_fetch_all(reg, target, need)
+  if by_name == null
+    return null
+  end
+  let back = map_new()
+  for i = 0 to map_len(by_name) - 1
+    let f = map_value(by_name, i) as ptr PfFile
+    map_set(back, pf_kind(f.name), f as int)
+  end
+  let g = cg_new(target, back, prog)
+  let asm = cg_program(g, prog)
+  if asm == ""
+    return null
+  end
+  let r = new DrResult
+  r.asm = asm
+  r.prog = prog
+  r.front = fr
+  r.back = back
+  r.gen = g
+  return r
+end
+
+global dr_tmp_count: int
+
+// dr_tmpdir makes a new private directory under /tmp.
+fn dr_tmpdir(prefix: str) -> str
+  while true
+    dr_tmp_count = dr_tmp_count + 1
+    let dir = u_cat4("/tmp/", prefix, str_from_int(syscall(39)), u_cat("-", str_from_int(dr_tmp_count)))
+    // mkdir(dir, 0700)
+    let r = syscall(83, cstr(dir), 448)
+    if r == 0
+      return dir
+    end
+    if r != -17
+      return ""
+    end
+  end
+  return ""
+end
+
+fn dr_rm(path: str)
+  syscall(87, cstr(path))
+end
+
+fn dr_rmdir(dir: str)
+  syscall(84, cstr(dir))
+end
+
+// dr_assemble turns NASM source into an executable with nasm and ld.
+fn dr_assemble(asm: str, out: str) -> bool
+  let dir = dr_tmpdir("packenger-")
+  if dir == ""
+    return u_fail("can't create a temporary directory in /tmp")
+  end
+  let asm_path = u_cat(dir, "/prog.asm")
+  let obj_path = u_cat(dir, "/prog.o")
+  let ok = dr_assemble_in(asm, out, asm_path, obj_path)
+  dr_rm(asm_path)
+  dr_rm(obj_path)
+  dr_rmdir(dir)
+  return ok
+end
+
+fn dr_assemble_in(asm: str, out: str, asm_path: str, obj_path: str) -> bool
+  if !io_write_file(asm_path, asm)
+    return u_fail(u_cat3("open ", asm_path, ": can't write the file"))
+  end
+  // nasm runs inside the temporary directory with relative names, so the
+  // source name it records is always prog.asm: builds are reproducible
+  let nasm = vec_new()
+  u_push(nasm, "-f")
+  u_push(nasm, "elf64")
+  u_push(nasm, "-o")
+  u_push(nasm, "prog.o")
+  u_push(nasm, "prog.asm")
+  let dir = str_slice(asm_path, 0, len(asm_path) - 9)
+  if !dr_tool(dir, "nasm", nasm)
+    return false
+  end
+  let ld = vec_new()
+  u_push(ld, "-o")
+  u_push(ld, out)
+  u_push(ld, obj_path)
+  return dr_tool("", "ld", ld)
+end
+
+fn dr_tool(dir: str, name: str, args: ptr Vec) -> bool
+  if os_find(name) == ""
+    return u_fail(u_cat(name, " is not installed (packenger needs nasm and ld)"))
+  end
+  let output = ""
+  let status = 0
+  if dir != ""
+    status = os_run_in(dir, name, args, &output)
+  else
+    status = os_run_output(name, args, &output)
+  end
+  if status != 0
+    return u_fail(u_cat4(name, " failed: exit status ", str_from_int(status), u_cat("\n", output)))
+  end
+  return true
 end
 ```
 

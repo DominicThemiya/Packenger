@@ -17,6 +17,7 @@ format.
   - [pkc/lang](pkc/lang.md) — pkc: the grammar assembled from the loaded syntax packages (port of NewLang).
   - [pkc/types](pkc/types.md) — pkc: type expressions, constraints with type variables, struct layout (port of types.go).
   - [pkc/parser](pkc/parser.md) — pkc: the parser (port of internal/lang/parser.go) and the dump ast format.
+  - [pkc/codegen](pkc/codegen.md) — pkc: rendering the tree through a backend truck into NASM (port of codegen.go).
   - [pkc/driver](pkc/driver.md) — pkc: the compile pipeline (port of internal/lang/driver.go).
   - [pkc/ui](pkc/ui.md) — pkc: errors and the -vb report on stderr (port of internal/ui).
   - [pkc/main](pkc/main.md) — pkc: the command line — the same commands, flags and messages as the Go compiler.

@@ -202,7 +202,7 @@ is [bootstrap/pkc.pkg](../bootstrap/pkc.pkg). Build and check it with:
 
 ```sh
 packenger build bootstrap/pkc.pkg -o bin/pkc
-PKC=$PWD/bin/pkc PKC_STAGES=pkg,tokens,ast go test ./bootstrap/
+PKC=$PWD/bin/pkc PKC_STAGES=pkg,tokens,ast,asm,run go test ./bootstrap/
 ```
 
 | stage | modules | status |
@@ -210,9 +210,15 @@ PKC=$PWD/bin/pkc PKC_STAGES=pkg,tokens,ast go test ./bootstrap/
 | `pkg` | `pkc/util`, `pkc/fetch`, `pkc/pkgfile`, `pkc/ui` (errors), `pkc/main` | ✓ matches on every registry package, a corpus of broken packages, and command-line errors |
 | `tokens` | `pkc/lexer`, `pkc/lang`, `pkc/driver` (use lines, fetch rounds) | ✓ matches on every program, example, `rt` test and error case |
 | `ast` | `pkc/types`, `pkc/parser`, library units in `pkc/driver` | ✓ matches on the whole corpus and 29 parser error cases; `pkc` parses its own 5,600 lines into the same 29,000-line tree, 7.6× faster than the Go compiler (0.30 s against 2.25 s) |
-| `asm` | codegen | next |
-| `run` | build, run, assembling | |
-| `-vb`, `tree` | report, tree | |
+| `asm` | `pkc/codegen`, backend fetching in `pkc/driver` | ✓ byte-identical NASM on the whole corpus |
+| `run` | `build`, `run` and `asm` in `pkc/main`, assembling in `pkc/driver` | ✓ same program output and exit codes |
+| `-vb`, `tree` | report, tree | next |
+
+**The bootstrap reaches a fixed point.** `pkc` built by the Go compiler
+(stage 1) builds itself (stage 2), which builds itself again (stage 3); all
+three are the same 296 KB binary, byte for byte, and the NASM all four
+compilers produce for `pkc` is identical. `go test ./bootstrap/` checks
+this on every run (`TestBootstrap`).
 
 Notes from the port so far:
 
@@ -231,6 +237,10 @@ Notes from the port so far:
   in the second pass and report it.
 - Go closures and map deletion have no Packenger equivalent: the undo log
   is a list of records, and maps treat a value of 0 as absent.
+- Builds are reproducible: both compilers run `nasm` inside the temporary
+  directory, so the source name recorded in the binary is always
+  `prog.asm`. Before, the temporary path made every build differ. `rt/os`
+  gained `os_run_output` and `os_run_in` for this.
 - Keywords are global (`to`, `next`, `argv`), so the port avoids them as
   names; this is the main friction of writing real code in Packenger.
 

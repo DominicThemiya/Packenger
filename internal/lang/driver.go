@@ -298,18 +298,27 @@ func Assemble(asm, out string, r Reporter) error {
 	if err := os.WriteFile(asmPath, []byte(asm), 0o644); err != nil {
 		return err
 	}
-	for _, tool := range [][]string{
-		{"nasm", "-f", "elf64", "-o", objPath, asmPath},
-		{"ld", "-o", out, objPath},
+	// nasm runs inside the temporary directory with relative names, so the
+	// source file name it records is always "prog.asm": builds are
+	// reproducible.
+	for _, tool := range []struct {
+		dir  string
+		args []string
+	}{
+		{dir, []string{"nasm", "-f", "elf64", "-o", "prog.o", "prog.asm"}},
+		{"", []string{"ld", "-o", out, objPath}},
 	} {
-		if _, err := exec.LookPath(tool[0]); err != nil {
-			return fmt.Errorf("%s is not installed (packenger needs nasm and ld)", tool[0])
+		name := tool.args[0]
+		if _, err := exec.LookPath(name); err != nil {
+			return fmt.Errorf("%s is not installed (packenger needs nasm and ld)", name)
 		}
 		t0 := time.Now()
-		if b, err := exec.Command(tool[0], tool[1:]...).CombinedOutput(); err != nil {
-			return fmt.Errorf("%s failed: %v\n%s", tool[0], err, b)
+		cmd := exec.Command(name, tool.args[1:]...)
+		cmd.Dir = tool.dir
+		if b, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("%s failed: %v\n%s", name, err, b)
 		}
-		r.Tool(tool[0], time.Since(t0))
+		r.Tool(name, time.Since(t0))
 	}
 	if st, err := os.Stat(out); err == nil {
 		r.Built(out, st.Size())

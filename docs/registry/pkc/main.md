@@ -21,6 +21,7 @@ see [the self-hosting plan](../../self-hosting.md).
 - [pkc/lexer](lexer.md)
 - [pkc/driver](driver.md)
 - [pkc/parser](parser.md)
+- [pkc/codegen](codegen.md)
 
 ## Library code
 
@@ -198,6 +199,62 @@ fn pkc_run(args: [str], a: ptr PkcArgs, src: ptr str) -> int
     end
     io_out(lx_dump(r.toks))
     return 0
+  end
+  if a.cmd == "dump" && stage == "asm" || a.cmd == "asm"
+    let text = ""
+    if !pkc_read(*src, &text)
+      return -1
+    end
+    let r = dr_compile(a.registry, a.target, ui_base(*src), text)
+    if r == null
+      return -1
+    end
+    if a.cmd == "asm" && a.out != ""
+      if !io_write_file(a.out, r.asm)
+        u_fail(u_cat3("open ", a.out, ": can't write the file"))
+        return -1
+      end
+      return 0
+    end
+    io_out(r.asm)
+    return 0
+  end
+  if a.cmd == "build" || a.cmd == "run"
+    let text = ""
+    if !pkc_read(*src, &text)
+      return -1
+    end
+    let r = dr_compile(a.registry, a.target, ui_base(*src), text)
+    if r == null
+      return -1
+    end
+    if a.cmd == "build"
+      let exe = a.out
+      if exe == ""
+        exe = ui_base(*src)
+        if str_ends(exe, ".pkg")
+          exe = str_slice(exe, 0, len(exe) - 4)
+        end
+      end
+      if !dr_assemble(r.asm, exe)
+        return -1
+      end
+      return 0
+    end
+    let dir = dr_tmpdir("packenger-run-")
+    if dir == ""
+      u_fail("can't create a temporary directory in /tmp")
+      return -1
+    end
+    let exe = u_cat(dir, "/prog")
+    if !dr_assemble(r.asm, exe)
+      dr_rmdir(dir)
+      return -1
+    end
+    let status = os_run(exe, a.prog_args)
+    dr_rm(exe)
+    dr_rmdir(dir)
+    return status
   end
   if a.cmd == "dump" && stage == "ast"
     let text = ""
