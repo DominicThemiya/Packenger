@@ -58,9 +58,10 @@ instruction comes from a package.
 4. **Backend packages** are downloaded only for the node kinds present in
    the AST, plus anything they include with `@`.
 5. **Rendering** picks, for each node, the first `emit` section whose
-   condition holds and fills its placeholders, recursing into slots. Data
-   and support sections are collected and placed by the
-   `bintables/program` template.
+   condition holds and fills its placeholders, recursing into slots. Only
+   functions reachable from the top-level code are rendered, in definition
+   order, so unused library functions cost nothing. Data and support
+   sections are collected and placed by the `bintables/program` template.
 6. **Assembling** runs `nasm -f elf64` and `ld` in a temporary directory.
 
 ## Code map

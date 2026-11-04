@@ -1,0 +1,52 @@
+use std
+use rt
+// output: varies (timings)
+
+// Runs the external tools the compiler depends on and reports how long
+// each took: nasm, and curl downloading two files in parallel.
+
+global color: bool
+
+fn run(title: str, cmd: str, args: ptr Vec) -> bool
+  let start = time_now()
+  let status = os_run(cmd, args)
+  let took = time_fmt(time_now() - start)
+  let mark = term_paint("✓", TERM_GREEN, color)
+  if status != 0
+    mark = term_paint("✗", TERM_RED, color)
+  end
+  let b = sb_new()
+  sb_add(b, "  ")
+  sb_add(b, mark)
+  sb_add(b, " ")
+  sb_add(b, str_pad(title, 28))
+  sb_add(b, str_lpad(took, 8))
+  sb_add(b, term_paint(str_concat("  exit ", str_from_int(status)), TERM_DIM, color))
+  sb_byte(b, '\n')
+  io_out(sb_str(b))
+  io_flush()
+  return status == 0
+end
+
+color = term_colors(1)
+let ok = true
+
+let nasm = vec_new()
+vec_push(nasm, "-v" as int)
+ok = run("nasm -v", "nasm", nasm) && ok
+
+// curl --parallel: fetch two local files at once, discarding the output
+let curl = vec_new()
+vec_push(curl, "--parallel" as int)
+vec_push(curl, "--silent" as int)
+vec_push(curl, "--output" as int)
+vec_push(curl, "/dev/null" as int)
+vec_push(curl, "--output" as int)
+vec_push(curl, "/dev/null" as int)
+vec_push(curl, "file:///etc/passwd" as int)
+vec_push(curl, "file:///etc/os-release" as int)
+ok = run("curl --parallel (2 files)", "curl", curl) && ok
+
+if !ok
+  return 1
+end

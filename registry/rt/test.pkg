@@ -1,0 +1,60 @@
+doc A tiny test library: checks that print FAIL lines, and a final PASS or FAILED.
+  ```
+  use std
+  use rt/test
+
+  test_int(1 + 1, 2, "addition")
+  test_str("a", "a", "strings")
+  test_true(3 > 2, "comparison")
+  return test_done()
+  ```
+
+  `test_done()` prints `PASS` (and returns 0) if every check passed,
+  otherwise `FAILED` (and returns 1), so `return test_done()` sets the exit
+  status. The tests of the `rt` truck are written with it, in
+  [tests/rt](../../../tests/rt).
+
+needs std
+code
+  global test_checks: int = 0
+  global test_failures: int = 0
+
+  fn test_true(ok: bool, what: str)
+    test_checks = test_checks + 1
+    if !ok
+      test_failures = test_failures + 1
+      print "FAIL"
+      print what
+    end
+  end
+
+  fn test_int(got: int, want: int, what: str)
+    test_checks = test_checks + 1
+    if got != want
+      test_failures = test_failures + 1
+      print "FAIL"
+      print what
+      print got
+      print want
+    end
+  end
+
+  fn test_str(got: str, want: str, what: str)
+    test_checks = test_checks + 1
+    if got != want
+      test_failures = test_failures + 1
+      print "FAIL"
+      print what
+      print got
+      print want
+    end
+  end
+
+  fn test_done() -> int
+    if test_failures == 0
+      print "PASS"
+      return 0
+    end
+    print "FAILED"
+    return 1
+  end

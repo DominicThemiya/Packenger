@@ -237,3 +237,21 @@ func TestExamples(t *testing.T) {
 		}
 	}
 }
+
+// The rt truck's tests are Packenger programs that end by printing PASS.
+func TestRuntimeTruck(t *testing.T) {
+	files, _ := filepath.Glob("../../tests/rt/*.pkg")
+	if len(files) == 0 {
+		t.Fatal("no rt tests found")
+	}
+	for _, f := range files {
+		t.Run(filepath.Base(f), func(t *testing.T) {
+			src, _ := os.ReadFile(f)
+			out, code := run(t, "file://"+registryDir, string(src))
+			lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+			if code != 0 || lines[len(lines)-1] != "PASS" {
+				t.Errorf("exit %d:\n%s", code, out)
+			}
+		})
+	}
+}

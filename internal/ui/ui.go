@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -289,7 +290,7 @@ func Error(w io.Writer, color bool, err error, srcPath string) {
 			fmt.Fprintf(w, "    %s\n", l)
 		}
 	}
-	if m := posRe.FindStringSubmatch(first); m != nil && srcPath != "" && strings.HasSuffix(srcPath, m[1]) {
+	if m := posRe.FindStringSubmatch(first); m != nil && srcPath != "" && filepath.Base(srcPath) == m[1] {
 		if src, rerr := os.ReadFile(srcPath); rerr == nil {
 			ln, _ := strconv.Atoi(m[2])
 			col, _ := strconv.Atoi(m[3])

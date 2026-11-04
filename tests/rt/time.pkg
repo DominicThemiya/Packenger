@@ -1,0 +1,12 @@
+use std
+use rt/time
+use rt/test
+
+let a = time_now()
+let b = time_now()
+test_true(a > 0 && b >= a, "monotonic")
+test_str(time_fmt(1500), "1 µs", "microseconds")
+test_str(time_fmt(27000000), "27 ms", "milliseconds")
+test_str(time_fmt(3400000000), "3400 ms", "under ten seconds")
+test_str(time_fmt(12345000000), "12.3 s", "seconds")
+return test_done()

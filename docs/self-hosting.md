@@ -4,8 +4,8 @@ Goal: a Packenger compiler written in Packenger (**`pkc`**) that compiles
 itself, developed alongside the Go compiler, with both producing identical
 output.
 
-Status: **phases 0–2 done** (parity infrastructure, type system, core
-language features). Phases 3–5 are planned.
+Status: **phases 0–3 done** (parity infrastructure, type system, core
+language features, runtime library). Phases 4–5 are planned.
 
 ## Where we start
 
@@ -163,7 +163,22 @@ The original plan:
 arguments, transform it and write it out, using only packages plus the
 changes above.
 
-## Phase 3: runtime libraries (`rt` truck, written in Packenger)
+## Phase 3: runtime libraries (`rt` truck, written in Packenger) ✓
+
+Done: the [rt truck](registry/rt.md), with tests in
+[tests/rt](../tests/rt) and [examples/tools.pkg](../examples/tools.pkg) as
+the "done when" program. Changes from the plan below:
+
+- `rt/mem` has its own `mmap` bump allocator (`mem_alloc`), written in
+  Packenger, next to the backend heap `new` and `make` use.
+- Environment variables are read from `/proc/self/environ`, so no new
+  backend support was needed.
+- Added `rt/test`, for tests written in Packenger.
+- Two compiler changes came with it: `do ... end` blocks (so `for` scopes
+  its variable to the loop) and rendering only reachable functions (so
+  programs using `rt` don't carry all of it).
+
+The original plan:
 
 | package | provides |
 |---|---|

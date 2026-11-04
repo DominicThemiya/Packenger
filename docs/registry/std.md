@@ -41,7 +41,7 @@ print sum(a)      // 42
 | functions | `fn`, `call`, `return` |
 | variables | `let`, `assign`, `global`, `const` |
 | memory | `new`, `make`, `len`, `index` `a[i]`, `dot` `p.x`, `deref` `*p`, `addr` `&x` |
-| control flow | `if`/`elif`/`else`, `while`/`next`, `for`, `break`, `continue` |
+| control flow | `if`/`elif`/`else`, `while`/`next`, `for`, `do`, `break`, `continue` |
 | system | `print`, `syscall`, `argv`, `cstr` |
 | statements | `exprstmt` |
 | arithmetic | `add` `+`, `sub` `-`, `mul` `*`, `div` `/`, `mod` `%`, `neg` `-x` |
@@ -73,6 +73,7 @@ same name (`types` and `struct` only declare types and need no code);
 | [std/print](std/print.md) | Print an int, u8, bool or str, followed by a newline. |
 | [std/if](std/if.md) | Conditional: if cond ... [elif cond ...]* [else ...] end |
 | [std/while](std/while.md) | Loop: while cond ... [next ...] end |
+| [std/do](std/do.md) | A block with its own scope: do ... end |
 | [std/for](std/for.md) | Counting loop over an inclusive range: for i = a to b ... end |
 | [std/exprstmt](std/exprstmt.md) | An expression used as a statement. |
 | [std/true](std/true.md) | The boolean true. |
@@ -113,3 +114,7 @@ same name (`types` and `struct` only declare types and need no code);
 | [std/bxor](std/bxor.md) | ^ : bitwise exclusive or |
 | [std/shl](std/shl.md) | << : shift left |
 | [std/shr](std/shr.md) | >> : arithmetic shift right (keeps the sign) |
+
+## Used by
+
+[rt/io](rt/io.md), [rt/map](rt/map.md), [rt/mem](rt/mem.md), [rt/os](rt/os.md), [rt/str](rt/str.md), [rt/term](rt/term.md), [rt/test](rt/test.md), [rt/time](rt/time.md), [rt/vec](rt/vec.md)

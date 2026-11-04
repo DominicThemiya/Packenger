@@ -44,6 +44,11 @@ export PACKENGER_REGISTRY=file://$PWD/registry
 A new truck is the same: a `<truck>.pkg` file with a `doc` and a `truck`
 section, plus a folder for its members.
 
+A library package (a `code` section) needs no backend. Give it tests as
+Packenger programs using [rt/test](registry/rt/test.md) in `tests/<truck>/`,
+ending with `return test_done()`; `go test ./...` runs `tests/rt` and
+requires each to print `PASS`.
+
 ## Documentation
 
 The [package reference](registry/README.md) in `docs/registry/` is

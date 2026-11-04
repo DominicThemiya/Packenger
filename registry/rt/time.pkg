@@ -1,0 +1,30 @@
+doc Time: a monotonic clock in nanoseconds, and durations as text.
+  ```
+  let start = time_now()
+  work()
+  print time_fmt(time_now() - start)      // e.g. "27 ms"
+  ```
+
+  | function | does |
+  |---|---|
+  | `time_now() -> int` | nanoseconds on the monotonic clock (`clock_gettime(CLOCK_MONOTONIC)`) |
+  | `time_fmt(ns: int) -> str` | `"412 µs"` below 1 ms, `"27 ms"` below 10 s, else `"12.3 s"` (truncated) |
+
+needs std rt/str
+code
+  fn time_now() -> int
+    let ts = make([int], 2)
+    syscall(228, 1, &ts[0])
+    return ts[0] * 1000000000 + ts[1]
+  end
+
+  fn time_fmt(ns: int) -> str
+    if ns < 1000000
+      return str_concat(str_from_int(ns / 1000), " µs")
+    elif ns < 10000000000
+      return str_concat(str_from_int(ns / 1000000), " ms")
+    end
+    let tenths = ns / 100000000
+    let s = str_concat(str_from_int(tenths / 10), ".")
+    return str_concat(str_concat(s, str_from_int(tenths % 10)), " s")
+  end

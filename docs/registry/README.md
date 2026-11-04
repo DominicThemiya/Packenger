@@ -9,6 +9,16 @@ format.
 
 ## The package tree
 
+- **[rt](rt.md)** (truck) — The runtime truck: memory, vectors, strings, maps, files, processes, time and terminals.
+  - [rt/mem](rt/mem.md) — Raw memory: an allocator on mmap, plus copy, fill, compare and pointer arithmetic.
+  - [rt/vec](rt/vec.md) — Growable arrays of 64-bit words (ints, or pointers and strings with as).
+  - [rt/str](rt/str.md) — Strings: slicing, searching, joining, numbers, and a string builder.
+  - [rt/map](rt/map.md) — Hash map from strings to 64-bit words, iterated in insertion order.
+  - [rt/io](rt/io.md) — Files and output: whole-file reads and writes, buffered stdout, stderr.
+  - [rt/os](rt/os.md) — The process: environment variables, finding and running programs, exiting.
+  - [rt/time](rt/time.md) — Time: a monotonic clock in nanoseconds, and durations as text.
+  - [rt/term](rt/term.md) — Terminals: detecting one, and ANSI colors that respect NO_COLOR.
+  - [rt/test](rt/test.md) — A tiny test library: checks that print FAIL lines, and a final PASS or FAILED.
 - **[std](std.md)** (truck) — The standard language: typed, C-style statements, closed with end instead of braces.
   - [std/types](std/types.md) — The primitive types: int, u8, bool and str.
   - [std/struct](std/struct.md) — Struct declaration: struct Name ... end, one name: type field per line.
@@ -20,6 +30,7 @@ format.
   - [std/print](std/print.md) — Print an int, u8, bool or str, followed by a newline.
   - [std/if](std/if.md) — Conditional: if cond ... [elif cond ...]* [else ...] end
   - [std/while](std/while.md) — Loop: while cond ... [next ...] end
+  - [std/do](std/do.md) — A block with its own scope: do ... end
   - [std/for](std/for.md) — Counting loop over an inclusive range: for i = a to b ... end
   - [std/exprstmt](std/exprstmt.md) — An expression used as a statement.
   - [std/true](std/true.md) — The boolean true.
@@ -79,6 +90,7 @@ format.
   - [bintables/cstr](bintables/cstr.md) — cstr: a string's bytes start 8 bytes after its address.
   - [bintables/deref](bintables/deref.md) — Dereference: load 1 or 8 bytes from the address in rax.
   - [bintables/div](bintables/div.md) — / : signed division with `idiv` (quotient in rax).
+  - [bintables/do](bintables/do.md) — do: just the block; scoping is a compile-time matter.
   - [bintables/dot](bintables/dot.md) — Field access: the struct pointer plus the field's offset; 1- or 8-byte load.
   - [bintables/eq](bintables/eq.md) — == : `cmp` and `sete`/`jne`; strings are compared by content.
   - [bintables/exprstmt](bintables/exprstmt.md) — Expression statement: compute the expression and ignore rax.
@@ -138,12 +150,13 @@ format.
 | [std/cstr](std/cstr.md) | [bintables/cstr](bintables/cstr.md) |
 | [std/deref](std/deref.md) | [bintables/deref](bintables/deref.md) |
 | [std/div](std/div.md) | [bintables/div](bintables/div.md) |
+| [std/do](std/do.md) | [bintables/do](bintables/do.md) |
 | [std/dot](std/dot.md) | [bintables/dot](bintables/dot.md) |
 | [std/eq](std/eq.md) | [bintables/eq](bintables/eq.md) |
 | [std/exprstmt](std/exprstmt.md) | [bintables/exprstmt](bintables/exprstmt.md) |
 | [std/false](std/false.md) | [bintables/false](bintables/false.md) |
 | [std/fn](std/fn.md) | [bintables/fn](bintables/fn.md) |
-| [std/for](std/for.md) | expands into [std/let](std/let.md), [std/while](std/while.md), [std/le](std/le.md), [std/assign](std/assign.md), [std/add](std/add.md) |
+| [std/for](std/for.md) | expands into [std/do](std/do.md), [std/let](std/let.md), [std/while](std/while.md), [std/le](std/le.md), [std/assign](std/assign.md), [std/add](std/add.md) |
 | [std/ge](std/ge.md) | [bintables/ge](bintables/ge.md) |
 | [std/global](std/global.md) | [bintables/global](bintables/global.md) |
 | [std/gt](std/gt.md) | [bintables/gt](bintables/gt.md) |

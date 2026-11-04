@@ -12,11 +12,13 @@ doc Counting loop over an inclusive range: for i = a to b ... end
   packages, which is why it `needs` them:
 
   ```
-  let i = a
-  while i <= b
-    ...
-  next
-    i = i + 1
+  do
+    let i = a
+    while i <= b
+      ...
+    next
+      i = i + 1
+    end
   end
   ```
 
@@ -25,18 +27,20 @@ doc Counting loop over an inclusive range: for i = a to b ... end
   syntax lets `break` and `continue` appear in the body before it is
   expanded. As an expansion:
 
-  - the loop variable is an `int` declared in the surrounding block, and
-    stays visible after the loop;
+  - the loop variable is an `int` that only exists inside the loop (the
+    `do` block), so several loops in one block can all use `i`;
   - the upper bound is re-evaluated on every iteration;
   - `to` is a keyword and cannot be used as a variable name.
 
-needs std/let std/while std/le std/assign std/add
+needs std/do std/let std/while std/le std/assign std/add
 syntax statement loop
   for {i: newvar of from} = {from: expr int} to {to: expr int} {body: block} end
 expand
-  let {i} = {from}
-  while {i} <= {to}
-    {body}
-  next
-    {i} = {i} + 1
+  do
+    let {i} = {from}
+    while {i} <= {to}
+      {body}
+    next
+      {i} = {i} + 1
+    end
   end

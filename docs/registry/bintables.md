@@ -77,6 +77,7 @@ names and pass `--target <truck>`.
 | [bintables/cstr](bintables/cstr.md) | cstr: a string's bytes start 8 bytes after its address. |
 | [bintables/deref](bintables/deref.md) | Dereference: load 1 or 8 bytes from the address in rax. |
 | [bintables/div](bintables/div.md) | / : signed division with `idiv` (quotient in rax). |
+| [bintables/do](bintables/do.md) | do: just the block; scoping is a compile-time matter. |
 | [bintables/dot](bintables/dot.md) | Field access: the struct pointer plus the field's offset; 1- or 8-byte load. |
 | [bintables/eq](bintables/eq.md) | == : `cmp` and `sete`/`jne`; strings are compared by content. |
 | [bintables/exprstmt](bintables/exprstmt.md) | Expression statement: compute the expression and ignore rax. |

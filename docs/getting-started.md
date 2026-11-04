@@ -75,6 +75,7 @@ The [`examples/`](../examples) folder has:
 | `linked.pkg` | structs, pointers, `new`, `null` |
 | `words.pkg` | strings, `u8`, slices, `make`, `len` |
 | `upcase.pkg` | `argv`, system calls, constants, `elif`, `break`: copies a file in upper case |
+| `tools.pkg` | the `rt` truck: runs `nasm` and `curl --parallel` and times them |
 | `exitcode.pkg` | the top-level `return` becomes the exit code |
 
 ## Working offline
@@ -92,4 +93,6 @@ PACKENGER_REGISTRY=file://$PWD/registry ./bin/packenger run examples/fib.pkg
 go test ./...
 ```
 
-The tests compile and run real programs, so they need `nasm` and `ld`.
+The tests compile and run real programs, so they need `nasm` and `ld`. The
+`rt` truck's own tests are Packenger programs in [`tests/rt`](../tests/rt);
+run one with `packenger run tests/rt/str.pkg`.

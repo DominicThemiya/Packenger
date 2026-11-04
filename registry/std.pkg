@@ -34,7 +34,7 @@ doc The standard language: typed, C-style statements, closed with end instead of
   | functions | `fn`, `call`, `return` |
   | variables | `let`, `assign`, `global`, `const` |
   | memory | `new`, `make`, `len`, `index` `a[i]`, `dot` `p.x`, `deref` `*p`, `addr` `&x` |
-  | control flow | `if`/`elif`/`else`, `while`/`next`, `for`, `break`, `continue` |
+  | control flow | `if`/`elif`/`else`, `while`/`next`, `for`, `do`, `break`, `continue` |
   | system | `print`, `syscall`, `argv`, `cstr` |
   | statements | `exprstmt` |
   | arithmetic | `add` `+`, `sub` `-`, `mul` `*`, `div` `/`, `mod` `%`, `neg` `-x` |
@@ -63,6 +63,7 @@ truck
   print
   if
   while
+  do
   for
   exprstmt
   true

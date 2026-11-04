@@ -209,9 +209,16 @@ end
 ```
 
 `break` and `continue` apply to the innermost loop. In `for`, `continue`
-still advances the loop variable. The loop variable of a `for` stays
-declared after the loop, so a second `for i` in the same block needs a
-different name.
+still advances the loop variable, which only exists inside the loop.
+
+`do ... end` is a block with its own scope:
+
+```
+do
+  let tmp = compute()
+  print tmp
+end
+```
 
 ## Operators
 
@@ -261,17 +268,50 @@ bytes as a zero-terminated C string. See
 ## Libraries
 
 A package can ship code: functions, structs, globals and constants that are
-merged into every program that uses it.
+merged into every program that uses it. Only the functions a program
+actually calls end up in its executable.
+
+The [`rt` truck](registry/rt.md) is the runtime library, written in
+Packenger:
 
 ```
 use std
-use mylib          // a package with a code section
+use rt
 
-print lib_box(5).v
+let counts = map_new()
+let ok = false
+let text = io_read_file("notes.txt", &ok)
+let start = 0
+for i = 0 to len(text) - 1
+  if text[i] == ' ' || text[i] == '\n'
+    let word = str_slice(text, start, i)
+    map_set(counts, word, map_get(counts, word) + 1)
+    start = i + 1
+  end
+end
+for i = 0 to map_len(counts) - 1
+  io_outln(str_concat(map_key(counts, i), str_concat(": ", str_from_int(map_value(counts, i)))))
+end
+io_flush()
 ```
 
-Library names share one namespace with the program's, so libraries should
-prefix their names. See [packages and trucks](packages.md#library-code).
+| package | provides |
+|---|---|
+| [rt/mem](registry/rt/mem.md) | raw memory: allocate, copy, fill, compare |
+| [rt/vec](registry/rt/vec.md) | growable arrays (`Vec`) |
+| [rt/str](registry/rt/str.md) | slicing, searching, joining, numbers, a string builder (`StrBuf`) |
+| [rt/map](registry/rt/map.md) | hash maps from strings (`Map`), in insertion order |
+| [rt/io](registry/rt/io.md) | files, buffered stdout, stderr |
+| [rt/os](registry/rt/os.md) | environment, finding and running programs, exit |
+| [rt/time](registry/rt/time.md) | a monotonic clock |
+| [rt/term](registry/rt/term.md) | terminal detection and colors |
+| [rt/test](registry/rt/test.md) | checks for tests written in Packenger |
+
+Library names share one namespace with the program's, so libraries prefix
+their names (`vec_push`, `str_find`). Containers hold one-word values:
+store pointers and strings with `x as int` and load them with
+`x as ptr T` or `x as str`. To write your own, see
+[packages and trucks](packages.md#library-code).
 
 ## Errors
 
@@ -288,8 +328,8 @@ Compile errors point at the source:
 
 - Memory is never freed.
 - No generic functions; slices and pointers are the only parameterized types.
-- No standard library beyond `print` and system calls yet (it's the next
-  phase of the [self-hosting plan](self-hosting.md)).
+- `print` writes immediately, while `rt/io`'s `io_out` is buffered; call
+  `io_flush()` before mixing them or exiting.
 
 For each construct's exact syntax and edge cases, see its page in the
 [package reference](registry/README.md).

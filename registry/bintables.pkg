@@ -67,6 +67,7 @@ truck
   cstr
   deref
   div
+  do
   dot
   eq
   exprstmt

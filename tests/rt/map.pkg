@@ -1,0 +1,25 @@
+use std
+use rt/map
+use rt/str
+use rt/test
+
+let m = map_new()
+test_int(map_len(m), 0, "empty")
+test_true(!map_has(m, "a"), "missing")
+test_int(map_get(m, "a"), 0, "missing is zero")
+map_set(m, "one", 1)
+map_set(m, "two", 2)
+map_set(m, "one", 11)
+test_int(map_get(m, "one"), 11, "replace")
+test_int(map_len(m), 2, "replace doesn't add")
+for i = 0 to 999
+  map_set(m, str_concat("k", str_from_int(i)), i * 2)
+end
+test_int(map_len(m), 1002, "after growing")
+test_int(map_get(m, "k500"), 1000, "lookup after growing")
+test_true(map_has(m, "k999"), "has")
+test_str(map_key(m, 0), "one", "insertion order: first")
+test_str(map_key(m, 1), "two", "insertion order: second")
+test_str(map_key(m, 1001), "k999", "insertion order: last")
+test_int(map_value(m, 1001), 1998, "value by index")
+return test_done()

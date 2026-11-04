@@ -10,6 +10,7 @@
 | [How the compiler works](architecture.md) | the pipeline, and where each part lives in the code |
 | [Self-hosting plan](self-hosting.md) | roadmap for a Packenger compiler written in Packenger |
 | [Dump formats](dumps.md) | `packenger dump` output and the comparison harness |
+| [Runtime library](registry/rt.md) | the `rt` truck: memory, vectors, strings, maps, files, processes |
 | [Package reference](registry/README.md) | generated: every truck and package in the registry |
 
 The package reference is generated from the packages themselves. Don't

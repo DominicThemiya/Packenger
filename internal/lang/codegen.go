@@ -36,6 +36,36 @@ func NewGen(target string, back map[string]*pkgfile.File, prog *Program) *Gen {
 	return g
 }
 
+// Reachable lists the functions the program can call, in definition order:
+// those called from top-level code (including global initializers), and
+// from those, transitively. Unused library functions are left out.
+func Reachable(prog *Program) []*Node {
+	byName := map[string]*Node{}
+	for _, f := range prog.Funcs {
+		byName[f.Frame.Name] = f
+	}
+	seen := map[string]bool{}
+	var visit func(n *Node)
+	visit = func(n *Node) {
+		Walk(n, func(c *Node) {
+			if c.Kind == "func" && !seen[c.Ident] {
+				seen[c.Ident] = true
+				if f := byName[c.Ident]; f != nil {
+					visit(f)
+				}
+			}
+		})
+	}
+	visit(prog.Main)
+	var out []*Node
+	for _, f := range prog.Funcs {
+		if seen[f.Frame.Name] {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 // Kinds lists the backend packages a program needs.
 func Kinds(prog *Program) map[string]bool {
 	kinds := map[string]bool{"program": true}
@@ -45,7 +75,7 @@ func Kinds(prog *Program) map[string]bool {
 		}
 	}
 	Walk(prog.Main, add)
-	for _, f := range prog.Funcs {
+	for _, f := range Reachable(prog) {
 		Walk(f, add)
 	}
 	return kinds
@@ -81,7 +111,7 @@ func (g *Gen) Program(prog *Program) (string, error) {
 		return "", err
 	}
 	var funcs []string
-	for _, f := range prog.Funcs {
+	for _, f := range Reachable(prog) {
 		code, err := g.gen(f, "", nil)
 		if err != nil {
 			return "", err

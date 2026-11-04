@@ -1,0 +1,4 @@
+doc do: just the block; scoping is a compile-time matter.
+
+emit
+  {body}

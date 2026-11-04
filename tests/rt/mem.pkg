@@ -1,0 +1,27 @@
+use std
+use rt/mem
+use rt/test
+
+let p = mem_alloc(20)
+let q = mem_alloc(20)
+test_int(((q as int) - (p as int)) % 8, 0, "allocations are 8-byte aligned")
+test_true(*mem_add(p, 19) == 0 as u8, "fresh memory is zero")
+
+for i = 0 to 19
+  *mem_add(p, i) = (65 + i) as u8
+end
+mem_copy(q, p, 20)
+test_true(mem_eq(p, q, 20), "copy then compare")
+test_true(*mem_add(q, 19) == 'T', "last byte copied")
+*mem_add(q, 13) = 'z'
+test_true(!mem_eq(p, q, 20), "a changed byte is noticed")
+test_true(mem_eq(p, q, 13), "a prefix still matches")
+
+mem_set(p, '-', 5)
+test_true(*mem_add(p, 4) == '-' && *mem_add(p, 5) == 'F', "fill")
+
+let big = mem_alloc(100000000)
+*mem_add(big, 99999999) = 1 as u8
+test_true(*mem_add(big, 99999999) == 1 as u8, "an allocation larger than a chunk")
+
+return test_done()

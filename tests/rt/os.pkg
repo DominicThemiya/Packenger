@@ -1,0 +1,26 @@
+use std
+use rt/os
+use rt/str
+use rt/vec
+use rt/test
+
+test_true(os_getenv("PATH") != "", "PATH is set")
+test_str(os_getenv("PACKENGER_SURELY_UNSET_VARIABLE"), "", "an unset variable")
+test_true(vec_len(os_environ()) > 0, "the environment")
+test_true(str_ends(os_find("sh"), "/sh"), "find sh on PATH")
+test_str(os_find("./x/y"), "./x/y", "a path is used as is")
+test_str(os_find("packenger-no-such-command"), "", "unknown command")
+
+let none = vec_new()
+test_int(os_run("true", none), 0, "true exits 0")
+test_int(os_run("false", none), 1, "false exits 1")
+let args = vec_new()
+vec_push(args, "-c" as int)
+vec_push(args, "exit 7" as int)
+test_int(os_run("sh", args), 7, "an exit status")
+let kill = vec_new()
+vec_push(kill, "-c" as int)
+vec_push(kill, "kill -9 $$" as int)
+test_int(os_run("sh", kill), 137, "killed by a signal")
+test_int(os_run("packenger-no-such-command", none), -1, "a command that can't start")
+return test_done()

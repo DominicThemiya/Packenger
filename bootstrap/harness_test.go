@@ -7,6 +7,10 @@
 //   - the Go compiler, built from this repository;
 //   - pkc, if the PKC environment variable names its executable.
 //
+// The corpus is the test programs here, the examples and the rt truck's
+// tests. A program containing the line "// output: varies" is compiled but
+// its run is not compared.
+//
 // Every compiler is run several times per input, so nondeterminism (for
 // example from Go map iteration) fails the harness even with one compiler.
 package bootstrap
@@ -140,14 +144,18 @@ func TestPrograms(t *testing.T) {
 	if _, err := exec.LookPath("nasm"); err != nil {
 		t.Skip("nasm not installed")
 	}
-	for _, f := range corpus(t, "testdata/programs/*.pkg", "../examples/*.pkg") {
+	for _, f := range corpus(t, "testdata/programs/*.pkg", "../examples/*.pkg", "../tests/rt/*.pkg") {
 		t.Run(filepath.Base(f), func(t *testing.T) {
 			for _, stage := range []string{"tokens", "ast", "asm"} {
 				if o := agree(t, "dump", stage, f); o.exit != 0 {
 					t.Fatalf("dump %s failed:\n%s", stage, o)
 				}
 			}
-			agree(t, "run", f)
+			// programs whose output can't repeat (timings) are marked
+			src, _ := os.ReadFile(f)
+			if !strings.Contains(string(src), "// output: varies") {
+				agree(t, "run", f)
+			}
 		})
 	}
 }

@@ -1,0 +1,123 @@
+doc The process: environment variables, finding and running programs, exiting.
+  ```
+  let args = vec_new()
+  vec_push(args, "-v" as int)
+  let status = os_run("nasm", args)     // runs nasm -v and waits
+  if status != 0
+    io_err("nasm failed\n")
+  end
+  print os_getenv("HOME")
+  ```
+
+  | function | does |
+  |---|---|
+  | `os_getenv(name: str) -> str` | the variable's value, or `""` if it isn't set |
+  | `os_environ() -> ptr Vec` | every `NAME=value` string (`str`s), read once from `/proc/self/environ` |
+  | `os_find(cmd: str) -> str` | the path of an executable, searching `PATH` unless `cmd` contains `/`; `""` if not found |
+  | `os_run(cmd: str, args: ptr Vec) -> int` | run `cmd` with the arguments (`str`s, not including the program name), wait, and return its exit status: 0–255, `128 + n` if killed by signal `n`, or -1 if it can't be started |
+  | `os_exit(code: int)` | flush `io_out`'s buffer and exit |
+
+  `os_run` uses `fork`, `execve` and `wait4`. The child inherits the
+  environment and the standard input, output and error.
+
+needs std rt/mem rt/str rt/vec rt/io
+code
+  global os_env: ptr Vec
+
+  fn os_exit(code: int)
+    io_flush()
+    syscall(60, code)
+  end
+
+  fn os_environ() -> ptr Vec
+    if os_env != null
+      return os_env
+    end
+    os_env = vec_new()
+    let ok = false
+    let data = io_read_file("/proc/self/environ", &ok)
+    let start = 0
+    for i = 0 to len(data) - 1
+      if data[i] == 0 as u8
+        vec_push(os_env, str_slice(data, start, i) as int)
+        start = i + 1
+      end
+    end
+    return os_env
+  end
+
+  fn os_getenv(name: str) -> str
+    let env = os_environ()
+    let prefix = str_concat(name, "=")
+    for i = 0 to vec_len(env) - 1
+      let entry = vec_get(env, i) as str
+      if str_starts(entry, prefix)
+        return str_slice(entry, len(prefix), len(entry))
+      end
+    end
+    return ""
+  end
+
+  fn os_find(cmd: str) -> str
+    if str_find_byte(cmd, '/', 0) >= 0
+      return cmd
+    end
+    let path = os_getenv("PATH")
+    let start = 0
+    while start <= len(path)
+      let stop = str_find_byte(path, ':', start)
+      if stop < 0
+        stop = len(path)
+      end
+      let dir = str_slice(path, start, stop)
+      if dir == ""
+        dir = "."
+      end
+      let candidate = str_concat(str_concat(dir, "/"), cmd)
+      // access(candidate, X_OK)
+      if syscall(21, cstr(candidate), 1) == 0
+        return candidate
+      end
+      start = stop + 1
+    end
+    return ""
+  end
+
+  // os_cstrs makes a zero-terminated array of C string pointers.
+  fn os_cstrs(items: ptr Vec) -> ptr u8
+    let arr = mem_alloc((vec_len(items) + 1) * 8)
+    for i = 0 to vec_len(items) - 1
+      *(mem_add(arr, i * 8) as ptr int) = cstr(vec_get(items, i) as str) as int
+    end
+    return arr
+  end
+
+  fn os_run(cmd: str, args: ptr Vec) -> int
+    let path = os_find(cmd)
+    if path == ""
+      return -1
+    end
+    let argv_ = vec_new()
+    vec_push(argv_, cmd as int)
+    for i = 0 to vec_len(args) - 1
+      vec_push(argv_, vec_get(args, i))
+    end
+    let c_argv = os_cstrs(argv_)
+    let c_envp = os_cstrs(os_environ())
+    io_flush()
+    let pid = syscall(57)
+    if pid == 0
+      syscall(59, cstr(path), c_argv, c_envp)
+      syscall(60, 127)
+    end
+    if pid < 0
+      return -1
+    end
+    let status = 0
+    syscall(61, pid, &status, 0, 0)
+    let sig = status & 127
+    if sig != 0
+      return 128 + sig
+    end
+    return (status >> 8) & 255
+  end

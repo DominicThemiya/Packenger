@@ -61,13 +61,16 @@ func NewLang(pkgs []*pkgfile.File) (*Lang, error) {
 	punct := map[string]bool{}
 	for _, f := range pkgs {
 		kind := f.Kind()
-		if coreKinds[kind] {
-			return nil, fmt.Errorf("%s: package name %q is reserved by the compiler", f.Origin, kind)
+		if len(f.Syntax) > 0 {
+			// a syntax package's name is the kind of node it makes
+			if coreKinds[kind] {
+				return nil, fmt.Errorf("%s: package name %q is reserved by the compiler", f.Origin, kind)
+			}
+			if other, ok := L.Pkgs[kind]; ok {
+				return nil, fmt.Errorf("two loaded packages both define %q: %s and %s", kind, other.Name, f.Name)
+			}
+			L.Pkgs[kind] = f
 		}
-		if other, ok := L.Pkgs[kind]; ok {
-			return nil, fmt.Errorf("two loaded packages both define %q: %s and %s", kind, other.Name, f.Name)
-		}
-		L.Pkgs[kind] = f
 		for _, t := range f.Types {
 			if o, ok := typeOwner[t.Name]; ok {
 				return nil, fmt.Errorf("type %s is declared by both %s and %s", t.Name, o, f.Name)

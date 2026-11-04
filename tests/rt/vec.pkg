@@ -1,0 +1,25 @@
+use std
+use rt/vec
+use rt/test
+
+let v = vec_new()
+test_int(vec_len(v), 0, "new vector is empty")
+for i = 1 to 1000
+  vec_push(v, i * i)
+end
+test_int(vec_len(v), 1000, "length after pushes")
+test_int(vec_get(v, 0), 1, "first")
+test_int(vec_get(v, 999), 1000000, "last after growing")
+vec_set(v, 10, -1)
+test_int(vec_get(v, 10), -1, "set")
+test_int(vec_pop(v), 1000000, "pop")
+test_int(vec_last(v), 998001, "last")
+test_int(vec_len(v), 999, "length after pop")
+
+let words = vec_new()
+vec_push(words, "alpha" as int)
+vec_push(words, "beta" as int)
+test_str(vec_get(words, 1) as str, "beta", "strings through as")
+vec_clear(words)
+test_int(vec_len(words), 0, "clear")
+return test_done()

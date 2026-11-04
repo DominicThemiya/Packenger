@@ -1,0 +1,15 @@
+doc A block with its own scope: do ... end
+  Variables declared inside are only visible until `end`.
+
+  ```
+  do
+    let tmp = 1
+    print tmp
+  end
+  // tmp is not visible here
+  ```
+
+  `for` uses it so that its loop variable stays inside the loop.
+
+syntax statement
+  do {body: block} end

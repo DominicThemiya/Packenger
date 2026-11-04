@@ -19,11 +19,13 @@ end
 packages, which is why it `needs` them:
 
 ```
-let i = a
-while i <= b
-  ...
-next
-  i = i + 1
+do
+  let i = a
+  while i <= b
+    ...
+  next
+    i = i + 1
+  end
 end
 ```
 
@@ -32,8 +34,8 @@ the loop variable, and `break` leaves the loop. The `loop` flag on the
 syntax lets `break` and `continue` appear in the body before it is
 expanded. As an expansion:
 
-- the loop variable is an `int` declared in the surrounding block, and
-  stays visible after the loop;
+- the loop variable is an `int` that only exists inside the loop (the
+  `do` block), so several loops in one block can all use `i`;
 - the upper bound is re-evaluated on every iteration;
 - `to` is a keyword and cannot be used as a variable name.
 
@@ -54,6 +56,7 @@ for {i: newvar of from} = {from: expr int} to {to: expr int} {body: block} end
 
 ## Needs
 
+- [std/do](do.md)
 - [std/let](let.md)
 - [std/while](while.md)
 - [std/le](le.md)
@@ -66,10 +69,12 @@ This package has no backend: each use is rewritten to the following
 source, with `{slot}` replaced by what was written there, and compiled again.
 
 ```
+do
 let {i} = {from}
 while {i} <= {to}
 {body}
 next
 {i} = {i} + 1
+end
 end
 ```

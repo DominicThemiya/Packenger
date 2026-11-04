@@ -1,0 +1,29 @@
+use std
+use rt/io
+use rt/str
+use rt/test
+
+// a file name unique to this process: /tmp/packenger-rt-io-<pid>
+let path = str_concat("/tmp/packenger-rt-io-", str_from_int(syscall(39)))
+let b = sb_new()
+for i = 1 to 20000
+  sb_int(b, i)
+  sb_byte(b, '\n')
+end
+let data = sb_str(b)
+test_true(io_write_file(path, data), "write a file")
+test_true(io_exists(path), "it exists")
+let ok = false
+let back = io_read_file(path, &ok)
+test_true(ok, "read it back")
+test_int(len(back), len(data), "same length (more than one read chunk)")
+test_true(back == data, "same contents")
+syscall(87, cstr(path))
+test_true(!io_exists(path), "deleted")
+io_read_file("/nonexistent/file", &ok)
+test_true(!ok, "a missing file is reported")
+
+io_out("buffered ")
+io_outln("line")
+io_flush()
+return test_done()

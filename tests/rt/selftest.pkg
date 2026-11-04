@@ -1,0 +1,8 @@
+use std
+use rt/test
+
+// rt/test itself: these checks pass
+test_true(true, "true")
+test_int(2 + 2, 4, "int")
+test_str("ab", "ab", "str")
+return test_done()

@@ -9,7 +9,8 @@ this.
 ```
 packenger dump tokens <file.pkg>    the token stream
 packenger dump ast    <file.pkg>    the syntax tree after parsing and expansion
-packenger dump asm    <file.pkg>    the generated NASM (same as `packenger asm`)
+packenger dump asm    <file.pkg>    the generated NASM (same as `packenger asm`); only
+                                    functions reachable from the top level, in definition order
 packenger dump pkg    <package>     a registry package as parsed, e.g. std/if
 ```
 
@@ -160,7 +161,7 @@ differing line:
 
 | input | compared |
 |---|---|
-| `bootstrap/testdata/programs/*.pkg` and `examples/*.pkg` | `dump tokens`, `dump ast`, `dump asm`, then running the program |
+| `bootstrap/testdata/programs/*.pkg`, `examples/*.pkg` and `tests/rt/*.pkg` | `dump tokens`, `dump ast`, `dump asm`, then running the program (skipped for files containing `// output: varies`) |
 | `bootstrap/testdata/errors/*.pkg` | the same dumps, which must include a failure: error text and exit code |
 | every package in `registry/` | `dump pkg` |
 

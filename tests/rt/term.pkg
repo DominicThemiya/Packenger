@@ -1,0 +1,9 @@
+use std
+use rt/term
+use rt/test
+
+test_true(!term_is_tty(-1), "not a terminal")
+test_str(term_paint("x", TERM_BOLD, false), "x", "colors off")
+test_str(term_paint("x", TERM_RED, true), "\x1b[31mx\x1b[0m", "colors on")
+test_str(term_paint("", TERM_RED, true), "", "nothing to paint")
+return test_done()

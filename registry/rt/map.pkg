@@ -1,0 +1,107 @@
+doc Hash map from strings to 64-bit words, iterated in insertion order.
+  ```
+  let m = map_new()
+  map_set(m, "one", 1)
+  map_set(m, "two", 2)
+  print map_get(m, "two")          // 2
+  print map_has(m, "three")        // false
+  for i = 0 to map_len(m) - 1
+    print map_key(m, i)            // one, then two: insertion order
+  end
+  ```
+
+  Values are words, like `rt/vec`: store pointers with `as int` and load
+  them with `as ptr T`. Iteration order is the order keys were first
+  inserted, so programs that walk a map behave the same on every run.
+
+  | function | does |
+  |---|---|
+  | `map_new() -> ptr Map` | an empty map |
+  | `map_len(m: ptr Map) -> int` | number of keys |
+  | `map_set(m: ptr Map, k: str, v: int)` | add a key, or replace its value |
+  | `map_get(m: ptr Map, k: str) -> int` | the value, or 0 if `k` is missing |
+  | `map_has(m: ptr Map, k: str) -> bool` | is `k` present |
+  | `map_key(m: ptr Map, i: int) -> str` | the `i`-th key in insertion order |
+  | `map_value(m: ptr Map, i: int) -> int` | the `i`-th value in insertion order |
+
+  It is an open-addressing table (linear probing, FNV-1a hashes, kept at
+  most half full) over two `Vec`s that hold the keys and values in order.
+  Keys can't be removed.
+
+needs std rt/str rt/vec
+code
+  struct Map
+    keys: ptr Vec
+    vals: ptr Vec
+    slots: [int]
+  end
+
+  fn map_new() -> ptr Map
+    let m = new Map
+    m.keys = vec_new()
+    m.vals = vec_new()
+    m.slots = make([int], 16)
+    return m
+  end
+
+  fn map_len(m: ptr Map) -> int
+    return vec_len(m.keys)
+  end
+
+  fn map_slot(m: ptr Map, k: str) -> int
+    let mask = len(m.slots) - 1
+    let i = str_hash(k) & mask
+    while true
+      let e = m.slots[i]
+      if e == 0
+        return i
+      end
+      if (vec_get(m.keys, e - 1) as str) == k
+        return i
+      end
+      i = (i + 1) & mask
+    end
+    return 0
+  end
+
+  fn map_grow(m: ptr Map)
+    m.slots = make([int], len(m.slots) * 2)
+    for e = 1 to vec_len(m.keys)
+      m.slots[map_slot(m, vec_get(m.keys, e - 1) as str)] = e
+    end
+  end
+
+  fn map_set(m: ptr Map, k: str, v: int)
+    let i = map_slot(m, k)
+    let e = m.slots[i]
+    if e != 0
+      vec_set(m.vals, e - 1, v)
+      return
+    end
+    vec_push(m.keys, k as int)
+    vec_push(m.vals, v)
+    m.slots[i] = vec_len(m.keys)
+    if vec_len(m.keys) * 2 > len(m.slots)
+      map_grow(m)
+    end
+  end
+
+  fn map_get(m: ptr Map, k: str) -> int
+    let e = m.slots[map_slot(m, k)]
+    if e == 0
+      return 0
+    end
+    return vec_get(m.vals, e - 1)
+  end
+
+  fn map_has(m: ptr Map, k: str) -> bool
+    return m.slots[map_slot(m, k)] != 0
+  end
+
+  fn map_key(m: ptr Map, i: int) -> str
+    return vec_get(m.keys, i) as str
+  end
+
+  fn map_value(m: ptr Map, i: int) -> int
+    return vec_get(m.vals, i)
+  end
