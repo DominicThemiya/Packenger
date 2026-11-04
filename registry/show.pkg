@@ -1,0 +1,3 @@
+# decimal string of a number
+digit := \d. add 48 d
+Y (\self n. if (lt n 10) (cons (digit n) nil) (append (self (div n 10)) (cons (digit (mod n 10)) nil)))

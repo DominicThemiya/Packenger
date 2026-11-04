@@ -1,0 +1,8 @@
+# output: nat
+# fact is a file-local package; recursion goes through the hosted Y package.
+fact := Y (\self n.
+  if (is-zero n)
+    1
+    (mul n (self (pred n))))
+
+fact 5

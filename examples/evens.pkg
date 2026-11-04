@@ -1,0 +1,4 @@
+# output: list
+even := \n. is-zero (mod n 2)
+
+filter even (upto 20)

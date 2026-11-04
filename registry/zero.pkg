@@ -1,0 +1,2 @@
+# Church numeral 0. Number literals are built from zero, succ and dbl.
+\f x. x

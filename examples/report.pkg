@@ -1,0 +1,4 @@
+# output: string
+fact := Y (\self n. if (is-zero n) 1 (mul n (self (pred n))))
+
+append "5! = " (show (fact 5))

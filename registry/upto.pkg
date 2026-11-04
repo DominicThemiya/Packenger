@@ -1,0 +1,2 @@
+# upto n = [1, 2, ..., n]
+\n. snd (n (\p. pair (succ (fst p)) (append (snd p) (cons (succ (fst p)) nil))) (pair zero nil))
