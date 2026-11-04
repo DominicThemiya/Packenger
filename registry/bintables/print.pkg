@@ -1,0 +1,52 @@
+doc print: writes the value and a newline to stdout with the write syscall.
+emit when value str
+  {value}
+  call __pk_print_str
+emit
+  {value}
+  call __pk_print_int
+support
+  __pk_print_int:
+  sub rsp, 40
+  lea rsi, [rsp+32]
+  mov byte [rsi], 10
+  mov r8, rax
+  mov rcx, rax
+  neg rcx
+  cmovl rcx, rax
+  mov rax, rcx
+  mov r9, 10
+  .digit:
+  xor edx, edx
+  div r9
+  add dl, 48
+  dec rsi
+  mov [rsi], dl
+  test rax, rax
+  jnz .digit
+  test r8, r8
+  jns .write
+  dec rsi
+  mov byte [rsi], 45
+  .write:
+  lea rdx, [rsp+33]
+  sub rdx, rsi
+  mov eax, 1
+  mov edi, 1
+  syscall
+  add rsp, 40
+  ret
+  __pk_print_str:
+  mov rdx, [rax]
+  lea rsi, [rax+8]
+  mov eax, 1
+  mov edi, 1
+  syscall
+  push 10
+  mov eax, 1
+  mov edi, 1
+  mov rsi, rsp
+  mov edx, 1
+  syscall
+  add rsp, 8
+  ret

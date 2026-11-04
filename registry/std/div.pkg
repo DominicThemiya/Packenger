@@ -1,0 +1,3 @@
+doc / : integer division
+syntax infix 60 left
+  {left: expr int} / {right: expr int} -> int

@@ -1,0 +1,23 @@
+doc Program skeleton for x86-64 Linux. _start runs the top-level code and exits with its result.
+emit
+  bits 64
+  default rel
+  global _start
+  section .text
+  _start:
+  call __pk_entry
+  mov rdi, rax
+  mov rax, 60
+  syscall
+  __pk_entry:
+  push rbp
+  mov rbp, rsp
+  sub rsp, {frame}
+  {main}
+  xor eax, eax
+  leave
+  ret
+  {functions}
+  {support}
+  section .data
+  {data}

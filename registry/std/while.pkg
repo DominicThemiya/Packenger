@@ -1,0 +1,3 @@
+doc Loop while the condition is non-zero.
+syntax statement
+  while {cond: expr int} {body: block} end

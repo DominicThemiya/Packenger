@@ -1,0 +1,14 @@
+emit when cond has jfalse
+  {L.top}:
+  {cond!jfalse L.end}
+  {body}
+  jmp {L.top}
+  {L.end}:
+emit
+  {L.top}:
+  {cond}
+  test rax, rax
+  jz {L.end}
+  {body}
+  jmp {L.top}
+  {L.end}:

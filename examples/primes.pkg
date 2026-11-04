@@ -1,0 +1,24 @@
+use std
+
+fn is_prime(n)
+  if n < 2
+    return 0
+  end
+  let d = 2
+  while d * d <= n
+    if n % d == 0
+      return 0
+    end
+    d = d + 1
+  end
+  return 1
+end
+
+let count = 0
+for n = 1 to 100000
+  if is_prime(n)
+    count = count + 1
+  end
+end
+print "primes below 100000:"
+print count

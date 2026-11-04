@@ -1,136 +1,244 @@
 # Packenger
 
-A programming language where **everything is a package**. A number is a
-package, `if` is a package, `true` is a package. Each package is a
-composition of other packages. The compiler downloads them from a hosted
-registry at compile time and unwraps the whole tree until only the two
-bootstrap packages remain: **`0`** and **`1`**.
+A compiled programming language where **everything is a package**, including
+the syntax. `if`, `while`, `+`, `print` and `fn` are not built into the
+compiler. Each is a package that declares its own syntax, inputs and output.
+Packages are downloaded from a hosted registry at compile time, and the
+**`bintables`** truck translates them to NASM, which becomes a native x86-64
+Linux executable.
 
 ```
-$ packenger run examples/factorial.pkg
-120
-$ packenger tree examples/factorial.pkg
-factorial.pkg  (1292 bits)
-├── factorial.pkg#fact  (959 bits)
-│   ├── Y  (200 bits)
-│   │   ├── S = 1 1 1 1 1 0 0 0  [bootstrap bits]
-│   │   ├── K = 1 1 1 0 0  [bootstrap bits]
-│   │   └── I  (20 bits)
-│   ├── if  (20 bits)
-│   ├── is-zero  (89 bits)
-│   ...
+use std
+
+fn fib(n)
+  if n < 2
+    return n
+  end
+  return fib(n - 1) + fib(n - 2)
+end
+
+print fib(35)
 ```
 
-## Why it bottoms out in `0` and `1`
-
-If every package unwraps to bits, the bits need a meaning. Packenger uses
-[Jot](https://en.wikipedia.org/wiki/Iota_and_Jot), a Turing-complete
-language in which *every* bit string is a program and each bit is an
-operator applied to the program built so far:
-
-| package | meaning                       |
-|---------|-------------------------------|
-| (empty) | `I`                           |
-| `w 0`   | `[w] S K`                     |
-| `w 1`   | `λx.λy.[w](x y)`              |
-
-With only those two rules, the registry defines the two classic combinators
-as plain bit sequences:
-
 ```
-# registry/K.pkg          # registry/S.pkg
-@11100                    @11111000
+$ packenger run examples/fib.pkg
+9227465
 ```
 
-From `S` and `K` you can build every other computation. They have one key
-property: appending such a string to any program *applies* that program to
-it (`[w·bits] = [w] T`). The compiler can therefore encode application
-`f x` as `1 ++ bits(f) ++ bits(x)`, and a whole program becomes one bit
-string. The machine that runs it knows nothing except the two rules above.
+## Speed
 
-## The language
+fib(35), measured on the development machine:
 
-A file is a body expression, optionally preceded by file-local helper
-packages (`name := expr`). Every top-level item starts in column 1.
+| | time |
+|---|---|
+| Packenger (bintables) | 0.15 s |
+| C, `gcc -O0` | 0.12 s |
+| C, `gcc -O2` | 0.035 s |
+| Python 3 | 2.1 s |
+
+The executable is about 5 KB and uses no libc: it makes Linux syscalls directly.
+
+## Packages and trucks
+
+A **truck** is a collection of packages. Two trucks make up the language:
+
+- **`std`** is the front end: what the language *looks like*.
+- **`bintables`** is the back end: what each package *becomes* in NASM.
+
+A program loads syntax with `use`:
 
 ```
-# output: string
-fact := Y (\self n. if (is-zero n) 1 (mul n (self (pred n))))
-
-append "5! = " (show (fact 5))
+use std          // the whole truck
+use std/print    // or individual packages
 ```
 
-| syntax       | meaning                                                         |
-|--------------|-----------------------------------------------------------------|
-| `if`, `mul`  | a reference to a hosted package (or a lambda-bound name)        |
-| `f x y`      | application                                                     |
-| `\x y. body` | abstraction; the compiler eliminates it into the `S`/`K`/`I` packages |
-| `42`         | number; built from the `zero`/`succ`/`dbl` packages via its binary digits |
-| `"hi"`       | string; a list of code points built from `cons`/`nil`          |
-| `@11100`     | raw bits: a sequence of the bootstrap packages `0` and `1`      |
-| `# output: K` | directive telling `run` how to read the result                 |
+### A syntax package declares syntax, inputs and output
 
-There are no keywords. `if`, `true`, `Y` and so on are ordinary packages in
-the [registry](registry/). A package can't depend on itself, because
-unwrapping inlines it forever, so recursion goes through the `Y` package.
-The compiler reports dependency cycles.
+```
+// registry/std/if.pkg
+doc Conditional. Any non-zero int is true.
+syntax statement
+  if {cond: expr int} {then: block} [else {else: block}] end
+```
 
-## The compiler
+```
+// registry/std/add.pkg
+syntax infix 50 left
+  {left: expr int} + {right: expr int} -> int
+```
 
-1. **Parse** the local file.
-2. **Traverse**: every name that isn't bound locally is fetched from the
-   registry as `<registry>/<name>.pkg`. Fetching runs level by level, in
-   parallel, and keeps everything in memory. Nothing is stored on disk.
-3. **Compile** each package once into a combinator tree whose leaves are
-   other packages (bracket abstraction with the K and η rules).
-4. **Unwrap** the tree down to `0`/`1`, memoizing each package's bits.
-5. **Validate** every raw-bit literal (`@...`) to be applicative.
+A pattern is made of literals (`if`, `end`, `+`), typed slots
+`{name: kind [type]}` and optional groups `[ ... ]`. The compiler builds
+its grammar entirely from the loaded patterns, including which symbols the
+lexer recognizes.
 
-The runtime decodes the bits into a combinator graph and reduces it lazily,
-with sharing. It reads the result by applying it to host markers. For
-example, a Church numeral is applied to a host `+1` and `0`.
+| slot kind | matches |
+|---|---|
+| `expr [type]` | an expression, optionally of a required type (`int`, `str`) |
+| `block` | statements up to the next literal (e.g. `end`) |
+| `newvar [of slot]` | a name that declares a variable (typed like `slot`) |
+| `var [type]` | an existing variable |
+| `ident`, `func`, `newfunc` | a name, a called function, a defined function |
+| `args`, `params` | comma-separated arguments / parameters |
+
+The syntax kinds are `statement`, `function` (top level, gets its own stack
+frame), `expr`, `infix <prec> [left|right]` and `prefix <prec>`.
+
+### A package can be made only of other packages
+
+`for` has no backend. It expands into `let`, `while`, `<=`, `=` and `+`:
+
+```
+// registry/std/for.pkg
+needs std/let std/while std/le std/assign std/add
+syntax statement
+  for {i: newvar} = {from: expr int} to {to: expr int} {body: block} end
+expand
+  let {i} = {from}
+  while {i} <= {to}
+    {body}
+    {i} = {i} + 1
+  end
+```
+
+### bintables: packages → NASM
+
+Every node kind is rendered by the `bintables` package of the same name.
+That includes integer literals, variables and the program skeleton
+(`bintables/program`):
+
+```
+// registry/bintables/add.pkg
+emit when right simple
+  {left}
+  add rax, {right.operand}
+emit
+  @binop
+  add rax, rbx
+```
+
+- `{slot}` inserts the slot's code, and its value ends up in `rax`.
+  `{slot.addr}`, `{slot.label}`, `{slot.value}`, `{slot.operand}`, `{frame}`
+  and similar placeholders insert attributes.
+- `{L.name}` inserts a label unique to this use. `{D.name}` does the same
+  for the data section.
+- `@pkg` inlines another bintables package. `{each args reverse}` ...
+  `{end}` loops over a list.
+- `emit when <slot> simple | is <kind> | has <section> | <type> | empty`
+  picks a variant. This is how the truck does its optimizations, all inside
+  packages. Comparisons provide an `emit jfalse` section, so `if` and `while`
+  branch on the CPU flags directly:
+
+```
+// registry/bintables/if.pkg
+emit when cond has jfalse
+  {cond!jfalse L.else}
+  {then}
+  jmp {L.end}
+  {L.else}:
+  {else}
+  {L.end}:
+```
+
+Further sections are `data` (per-use lines in `.data`) and `support` (code
+emitted once if the package is used, e.g. `print`'s integer formatting).
+Retargeting the language means writing another truck and passing
+`--target`.
+
+### Extending the language
+
+Adding syntax means adding packages, with no change to the compiler. From
+the test suite:
+
+```
+// unless.pkg: front end only
+needs std/if std/not
+syntax statement
+  unless {cond: expr int} {body: block} end
+expand
+  if !({cond})
+    {body}
+  end
+```
+
+```
+// std/max.pkg + bintables/max.pkg: a new operator
+syntax infix 45 left
+  {left: expr int} max {right: expr int} -> int
+
+emit
+  @binop
+  cmp rax, rbx
+  cmovl rax, rbx
+```
+
+## The `std` language
+
+```
+use std
+
+fn is_prime(n)              // functions: int parameters, int result
+  if n < 2
+    return 0
+  end
+  let d = 2                 // declare
+  while d * d <= n
+    if n % d == 0
+      return 0
+    end
+    d = d + 1               // assign
+  end
+  return 1
+end
+
+let count = 0
+for n = 1 to 100000
+  if is_prime(n)
+    count = count + 1
+  end
+end
+print "primes below 100000:"   // print ints and strings
+print count
+return 0                       // top-level return = exit code
+```
+
+Operators, from lowest to highest precedence: `||`, `&&`, `== !=`,
+`< <= > >=`, `+ -`, `* / %`, and the prefix operators `! -`. Comments start
+with `//`. Statements end at a newline, except inside parentheses.
 
 ## Usage
 
 ```
 go build -o bin/packenger ./cmd/packenger
 
-packenger run   examples/hello.pkg            # Hello, Packenger!
-packenger run   examples/squares.pkg          # [1, 4, 9, ..., 100]
-packenger build examples/factorial.pkg -o fact.jot
-packenger run   fact.jot --as nat             # run raw bits, no registry needed
-packenger tree  examples/report.pkg
-packenger eval  'eq (mul 6 7) 42' --as bool   # true
+packenger run   examples/primes.pkg
+packenger build examples/fib.pkg -o fib    # native executable
+packenger asm   examples/fib.pkg           # show the NASM
+packenger tree  examples/primes.pkg        # which packages built it
 ```
 
-Flags: `--registry URL`, `--as nat|bool|list|string|term`, `--max-steps N`,
-`-v` (log fetches and step counts).
+Flags: `--registry URL` (or `PACKENGER_REGISTRY`), `--target TRUCK`
+(default `bintables`), `-o FILE`, `-v` (log fetches).
+Building requires `nasm` and `ld`.
 
-### Registry
-
-By default packages are fetched from
-`https://raw.githubusercontent.com/DominicThemiya/Packenger/main/registry`,
-which is the [`registry/`](registry/) folder of this repo once it's pushed.
-Override it with `--registry` or `PACKENGER_REGISTRY`. A `file://` URL
-works for developing the registry itself:
+By default packages come from
+`https://raw.githubusercontent.com/DominicThemiya/Packenger/main/registry`.
+Fetches run level by level in parallel and are kept in memory only.
+Backend packages are fetched only for the constructs a program uses. For
+local work on the registry itself:
 
 ```
-PACKENGER_REGISTRY=file://$PWD/registry packenger run examples/report.pkg
+PACKENGER_REGISTRY=file://$PWD/registry packenger run examples/hello.pkg
 ```
-
-To publish a package, add `<name>.pkg` to the registry repo. Names can be
-namespaced with `/` (e.g. `list/zip` → `registry/list/zip.pkg`).
 
 ## Known limits / next steps
 
-- **Speed.** Church numerals are unary, so arithmetic is O(n), and `div`
-  and `show` are slow for numbers in the thousands. Avoid repeated
-  `sub`/`pred` chains: their results are closures that redo work each time
-  they are applied. See `registry/divmod.pkg` for the pattern that shares.
-- **Size.** Bits grow with how often packages are used, because every use
-  inlines a copy (`hello.pkg` is about 17 kbit).
-- **Versioning / integrity.** Packages are fetched from a moving branch.
-  A lockfile with content hashes, or `name@ref` pins, would make builds
-  reproducible.
-- **I/O.** Results are observed only at the end (`--as`). There are no
-  effects yet.
+- **Codegen** keeps every value on the stack, with expression results in
+  `rax` (roughly `gcc -O0`). Register allocation would close most of the
+  gap to `-O2`, and could live in bintables as more `when` variants.
+- **Types**: only `int` and `str`. Functions take and return `int`.
+- **Syntax**: no `else if` chain yet (nest `if`s). Expansions paste source
+  tokens, so `for`'s upper bound is re-evaluated every iteration.
+- **Reproducibility**: packages are fetched from a moving branch. A lockfile
+  or `use std@v1` pins would fix that.
+- **Platform**: x86-64 Linux only, which is what bintables targets.

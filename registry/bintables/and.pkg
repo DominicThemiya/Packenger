@@ -1,0 +1,9 @@
+emit
+  {left}
+  test rax, rax
+  jz {L.done}
+  {right}
+  test rax, rax
+  setnz al
+  movzx eax, al
+  {L.done}:

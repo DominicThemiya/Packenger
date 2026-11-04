@@ -1,4 +1,0 @@
-# output: list
-square := \n. mul n n
-
-map square (upto 10)

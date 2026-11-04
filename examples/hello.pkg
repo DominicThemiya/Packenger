@@ -1,2 +1,3 @@
-# output: string
-"Hello, Packenger!"
+use std
+
+print "Hello, Packenger!"

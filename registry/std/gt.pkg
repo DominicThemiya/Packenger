@@ -1,0 +1,3 @@
+doc > : greater than
+syntax infix 40 left
+  {left: expr int} > {right: expr int} -> int

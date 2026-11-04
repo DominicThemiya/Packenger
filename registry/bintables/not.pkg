@@ -1,0 +1,5 @@
+emit
+  {operand}
+  test rax, rax
+  sete al
+  movzx eax, al

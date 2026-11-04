@@ -1,0 +1,3 @@
+doc && : logical and (short-circuit)
+syntax infix 20 left
+  {left: expr int} && {right: expr int} -> int

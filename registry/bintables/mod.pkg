@@ -1,0 +1,11 @@
+emit when right simple
+  {left}
+  mov rbx, {right.operand}
+  cqo
+  idiv rbx
+  mov rax, rdx
+emit
+  @binop
+  cqo
+  idiv rbx
+  mov rax, rdx

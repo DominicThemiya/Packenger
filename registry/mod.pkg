@@ -1,2 +1,0 @@
-# remainder (mod m 0 = m)
-\m n. snd (divmod m n)

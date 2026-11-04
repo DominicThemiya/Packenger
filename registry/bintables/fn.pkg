@@ -1,0 +1,10 @@
+doc Function: arguments are on the stack above the return address, locals below rbp.
+emit
+  {name.label}:
+  push rbp
+  mov rbp, rsp
+  sub rsp, {frame}
+  {body}
+  xor eax, eax
+  leave
+  ret

@@ -1,0 +1,6 @@
+emit when right simple
+  {left}
+  sub rax, {right.operand}
+emit
+  @binop
+  sub rax, rbx

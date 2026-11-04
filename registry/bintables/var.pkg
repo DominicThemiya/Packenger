@@ -1,0 +1,3 @@
+doc Variable read.
+emit
+  mov rax, {addr}

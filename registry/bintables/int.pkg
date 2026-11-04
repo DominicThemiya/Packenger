@@ -1,0 +1,3 @@
+doc Integer literal: loaded into rax.
+emit
+  mov rax, {value}

@@ -1,0 +1,3 @@
+doc An expression used as a statement, e.g. a call whose result is ignored.
+syntax statement
+  {e: expr}

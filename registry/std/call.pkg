@@ -1,0 +1,3 @@
+doc Function call: name(arg, ...)
+syntax expr
+  {callee: func} ( {args: args} ) -> int

@@ -1,0 +1,3 @@
+doc != : not equal
+syntax infix 30 left
+  {left: expr int} != {right: expr int} -> int

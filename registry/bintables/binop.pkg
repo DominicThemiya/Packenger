@@ -1,0 +1,7 @@
+doc Helper for binary operators: left operand in rax, right operand in rbx.
+emit
+  {left}
+  push rax
+  {right}
+  mov rbx, rax
+  pop rax

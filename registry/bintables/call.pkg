@@ -1,0 +1,10 @@
+doc Call: push arguments right to left, call, then pop them.
+emit when args empty
+  call {callee.label}
+emit
+  {each args reverse}
+  {it}
+  push rax
+  {end}
+  call {callee.label}
+  add rsp, {args.size}

@@ -1,0 +1,16 @@
+emit when cond has jfalse
+  {cond!jfalse L.else}
+  {then}
+  jmp {L.end}
+  {L.else}:
+  {else}
+  {L.end}:
+emit
+  {cond}
+  test rax, rax
+  jz {L.else}
+  {then}
+  jmp {L.end}
+  {L.else}:
+  {else}
+  {L.end}:

@@ -1,0 +1,10 @@
+emit
+  {left}
+  test rax, rax
+  jnz {L.true}
+  {right}
+  test rax, rax
+  jz {L.done}
+  {L.true}:
+  mov eax, 1
+  {L.done}:

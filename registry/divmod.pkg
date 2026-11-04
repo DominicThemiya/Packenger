@@ -1,7 +1,0 @@
-# divmod m n = pair (m / n) (m % n)
-# One fold over m, counting the remainder up to n. Every intermediate value
-# is a plain succ-chain, so the graph reducer shares it (a recursive
-# subtract-and-retry definition is exponential with Church numerals).
-step := \n p. p (\q r. if (eq (succ r) n) (pair (succ q) zero) (pair q (succ r)))
-
-\m n. m (step n) (pair zero zero)

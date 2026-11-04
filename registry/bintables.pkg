@@ -1,0 +1,31 @@
+doc Backend truck: translates Packenger packages to NASM for x86-64 Linux.
+truck
+  add
+  and
+  assign
+  binop
+  call
+  div
+  eq
+  exprstmt
+  fn
+  ge
+  gt
+  if
+  int
+  le
+  let
+  lt
+  mod
+  mul
+  ne
+  neg
+  not
+  or
+  print
+  program
+  return
+  str
+  sub
+  var
+  while

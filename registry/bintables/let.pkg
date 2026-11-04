@@ -1,0 +1,3 @@
+emit
+  {value}
+  mov {name.addr}, rax

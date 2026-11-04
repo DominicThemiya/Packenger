@@ -1,0 +1,3 @@
+doc Return from a function. At the top level, exits the program with that code.
+syntax statement
+  return {value: expr int}

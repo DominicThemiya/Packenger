@@ -1,0 +1,27 @@
+doc The standard language: C-style statements, closed with end instead of braces.
+truck
+  fn
+  call
+  return
+  let
+  assign
+  print
+  if
+  while
+  for
+  exprstmt
+  or
+  and
+  eq
+  ne
+  lt
+  le
+  gt
+  ge
+  add
+  sub
+  mul
+  div
+  mod
+  not
+  neg

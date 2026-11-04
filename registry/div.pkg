@@ -1,2 +1,0 @@
-# integer division (div m 0 = 0)
-\m n. fst (divmod m n)

@@ -1,0 +1,6 @@
+doc String literal: rax points at a length-prefixed byte string.
+emit
+  lea rax, [rel {D.s}]
+data
+  {D.s}: dq {len}
+  db {bytes}

@@ -1,0 +1,13 @@
+use std
+
+// top-level return sets the process exit code
+fn gcd(a, b)
+  while b != 0
+    let t = b
+    b = a % b
+    a = t
+  end
+  return a
+end
+
+return gcd(84, 36)

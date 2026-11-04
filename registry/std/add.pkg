@@ -1,0 +1,3 @@
+doc + : addition
+syntax infix 50 left
+  {left: expr int} + {right: expr int} -> int

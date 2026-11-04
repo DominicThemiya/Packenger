@@ -1,0 +1,3 @@
+doc - : negation
+syntax prefix 70
+  - {operand: expr int} -> int

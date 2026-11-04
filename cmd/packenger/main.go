@@ -1,48 +1,52 @@
-// Command packenger compiles and runs Packenger programs.
+// Command packenger compiles Packenger programs to native executables.
 package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
-	"github.com/DominicThemiya/Packenger/internal/compiler"
-	"github.com/DominicThemiya/Packenger/internal/machine"
+	"github.com/DominicThemiya/Packenger/internal/lang"
 	"github.com/DominicThemiya/Packenger/internal/registry"
 )
 
 const usage = `packenger: a language where everything is a package.
 
 Usage:
-  packenger build  <file.pkg> [-o out.jot]   compile to a bit string
-  packenger run    <file.pkg|file.jot>       compile (if needed) and run
-  packenger tree   <file.pkg>                show the package tree down to 0 and 1
-  packenger eval   '<expression>'            compile and run an inline expression
+  packenger build <file.pkg> [-o exe]   compile to a native executable
+  packenger run   <file.pkg> [args]     compile and run
+  packenger asm   <file.pkg> [-o file]  print the generated NASM
+  packenger tree  <file.pkg>            show which packages built the program
 
 Flags:
   --registry URL   where packages are hosted (env PACKENGER_REGISTRY;
                    default ` + registry.DefaultBase + `)
-  --as KIND        how to read the result: nat, bool, list, string, term
-                   (default: the file's "# output:" directive, else term)
-  --max-steps N    reduction step limit (default 1000000000, 0 = none)
-  -o FILE          output file for build
+  --target TRUCK   backend truck that translates packages to assembly
+                   (default bintables)
+  -o FILE          output file
   -v               log every package fetched
+
+Requires nasm and ld for build and run.
 `
 
 func main() {
-	if err := run(os.Args[1:]); err != nil {
+	code, err := run(os.Args[1:])
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
+	os.Exit(code)
 }
 
-func run(args []string) error {
+func run(args []string) (int, error) {
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
 		fmt.Print(usage)
-		return nil
+		return 0, nil
 	}
 	cmd := args[0]
 	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
@@ -52,130 +56,79 @@ func run(args []string) error {
 		defReg = env
 	}
 	regURL := fs.String("registry", defReg, "")
-	as := fs.String("as", "", "")
-	maxSteps := fs.Uint64("max-steps", 1_000_000_000, "")
+	target := fs.String("target", "bintables", "")
 	out := fs.String("o", "", "")
 	verbose := fs.Bool("v", false, "")
-	if err := fs.Parse(flagsFirst(args[1:], map[string]bool{"v": true})); err != nil {
-		return err
+	rest := args[1:]
+	var progArgs []string
+	if cmd == "run" {
+		// everything after the source file goes to the program
+		for i, a := range rest {
+			if strings.HasSuffix(a, ".pkg") {
+				progArgs, rest = rest[i+1:], rest[:i+1]
+				break
+			}
+		}
+	}
+	if err := fs.Parse(flagsFirst(rest, map[string]bool{"v": true})); err != nil {
+		return 1, err
 	}
 	if fs.NArg() != 1 {
-		return fmt.Errorf("%s expects exactly one argument (see packenger --help)", cmd)
+		return 1, fmt.Errorf("%s expects one source file (see packenger --help)", cmd)
 	}
-	target := fs.Arg(0)
+	src := fs.Arg(0)
 
-	c := compiler.New(registry.New(*regURL))
+	c := &lang.Compiler{Registry: registry.New(*regURL), Target: *target}
 	if *verbose {
 		c.Log = func(f string, a ...any) { fmt.Fprintf(os.Stderr, f+"\n", a...) }
 	}
-	ctx := context.Background()
-	compile := func() (*compiler.Program, error) {
-		if cmd == "eval" {
-			return c.CompileSource(ctx, "<eval>", target)
-		}
-		return c.CompileFile(ctx, target)
+	res, err := c.CompileFile(context.Background(), src)
+	if err != nil {
+		return 1, err
 	}
 
 	switch cmd {
-	case "build":
-		p, err := compile()
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(os.Stderr, "unwrapped %d hosted packages into %d bits\n", p.Fetched, len(p.Bits))
+	case "asm":
 		if *out == "" {
-			fmt.Println(p.Bits)
-			return nil
+			fmt.Print(res.Asm)
+			return 0, nil
 		}
-		return os.WriteFile(*out, []byte(p.Bits+"\n"), 0o644)
+		return 0, os.WriteFile(*out, []byte(res.Asm), 0o644)
 	case "tree":
-		p, err := compile()
-		if err != nil {
-			return err
+		res.Tree(os.Stdout, *target)
+		return 0, nil
+	case "build":
+		exe := *out
+		if exe == "" {
+			exe = strings.TrimSuffix(filepath.Base(src), ".pkg")
 		}
-		p.Tree(os.Stdout)
-		return nil
-	case "run", "eval":
-		var bits, kind string
-		if cmd == "run" && strings.HasSuffix(target, ".jot") {
-			b, err := os.ReadFile(target)
-			if err != nil {
-				return err
+		return 0, lang.Assemble(res.Asm, exe)
+	case "run":
+		dir, err := os.MkdirTemp("", "packenger-run-*")
+		if err != nil {
+			return 1, err
+		}
+		defer os.RemoveAll(dir)
+		exe := filepath.Join(dir, "prog")
+		if err := lang.Assemble(res.Asm, exe); err != nil {
+			return 1, err
+		}
+		p := exec.Command(exe, progArgs...)
+		p.Stdin, p.Stdout, p.Stderr = os.Stdin, os.Stdout, os.Stderr
+		if err := p.Run(); err != nil {
+			var ee *exec.ExitError
+			if errors.As(err, &ee) && ee.Exited() {
+				return ee.ExitCode(), nil
 			}
-			bits = string(b)
-		} else {
-			p, err := compile()
-			if err != nil {
-				return err
-			}
-			bits, kind = p.Bits, p.Output
+			return 1, err
 		}
-		if *as != "" {
-			kind = *as
-		}
-		return execute(os.Stdout, bits, kind, *maxSteps, *verbose)
+		return 0, nil
 	}
-	return fmt.Errorf("unknown command %q (see packenger --help)", cmd)
-}
-
-func execute(w io.Writer, bits, kind string, maxSteps uint64, verbose bool) error {
-	prog, err := machine.Decode(strings.TrimSpace(bits), machine.I)
-	if err != nil {
-		return err
-	}
-	m := &machine.Machine{MaxSteps: maxSteps}
-	if verbose {
-		defer func() { fmt.Fprintf(os.Stderr, "%d reduction steps\n", m.Steps) }()
-	}
-	switch kind {
-	case "nat":
-		n, err := m.Nat(prog)
-		if err != nil {
-			return err
-		}
-		fmt.Fprintln(w, n)
-	case "bool":
-		b, err := m.Bool(prog)
-		if err != nil {
-			return err
-		}
-		fmt.Fprintln(w, b)
-	case "list":
-		var items []string
-		err := m.List(prog, func(e *machine.Node) error {
-			n, err := m.Nat(e)
-			items = append(items, fmt.Sprint(n))
-			return err
-		})
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(w, "[%s]\n", strings.Join(items, ", "))
-	case "string":
-		var sb strings.Builder
-		err := m.List(prog, func(e *machine.Node) error {
-			n, err := m.Nat(e)
-			sb.WriteRune(rune(n))
-			return err
-		})
-		if err != nil {
-			return err
-		}
-		fmt.Fprintln(w, sb.String())
-	case "", "term":
-		nf, err := m.Normalize(prog)
-		if err != nil {
-			return err
-		}
-		fmt.Fprintln(w, m.Show(nf, 200))
-	default:
-		return fmt.Errorf("unknown output kind %q (nat, bool, list, string, term)", kind)
-	}
-	return nil
+	return 1, fmt.Errorf("unknown command %q (see packenger --help)", cmd)
 }
 
 // flagsFirst moves flags ahead of positional arguments so that
-// "packenger run file.pkg --as nat" works with the standard flag package.
+// "packenger build file.pkg -o exe" works with the standard flag package.
 func flagsFirst(args []string, boolFlags map[string]bool) []string {
 	var flags, pos []string
 	for i := 0; i < len(args); i++ {

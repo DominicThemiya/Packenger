@@ -1,0 +1,3 @@
+doc Print an int or a string, followed by a newline.
+syntax statement
+  print {value: expr}

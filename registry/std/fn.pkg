@@ -1,0 +1,3 @@
+doc Function definition. Parameters and the result are 64-bit integers.
+syntax function
+  fn {name: newfunc} ( {params: params} ) {body: block} end

@@ -1,0 +1,19 @@
+doc Comparison. The jfalse section lets if/while branch on the flags directly.
+emit when right simple
+  {left}
+  cmp rax, {right.operand}
+  setl al
+  movzx eax, al
+emit
+  @binop
+  cmp rax, rbx
+  setl al
+  movzx eax, al
+emit jfalse when right simple
+  {left}
+  cmp rax, {right.operand}
+  jge {target}
+emit jfalse
+  @binop
+  cmp rax, rbx
+  jge {target}

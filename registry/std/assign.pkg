@@ -1,0 +1,3 @@
+doc Assign to an existing variable.
+syntax statement
+  {name: var} = {value: expr}

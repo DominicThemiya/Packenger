@@ -1,0 +1,3 @@
+doc Conditional. Any non-zero int is true.
+syntax statement
+  if {cond: expr int} {then: block} [else {else: block}] end

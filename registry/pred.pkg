@@ -1,2 +1,0 @@
-# n - 1 (pred 0 = 0)
-\n f x. n (\g h. h (g f)) (\u. x) (\u. u)

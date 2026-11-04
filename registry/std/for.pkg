@@ -1,0 +1,10 @@
+doc Counting loop over an inclusive range. It has no backend: it expands into let, while, <=, = and +.
+needs std/let std/while std/le std/assign std/add
+syntax statement
+  for {i: newvar} = {from: expr int} to {to: expr int} {body: block} end
+expand
+  let {i} = {from}
+  while {i} <= {to}
+    {body}
+    {i} = {i} + 1
+  end

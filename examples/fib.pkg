@@ -1,0 +1,11 @@
+use std
+
+// naive recursion: a good speed benchmark
+fn fib(n)
+  if n < 2
+    return n
+  end
+  return fib(n - 1) + fib(n - 2)
+end
+
+print fib(35)

@@ -1,0 +1,3 @@
+doc || : logical or (short-circuit)
+syntax infix 10 left
+  {left: expr int} || {right: expr int} -> int
