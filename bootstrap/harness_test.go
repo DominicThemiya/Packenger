@@ -7,7 +7,8 @@
 //   - the Go compiler, built from this repository;
 //   - pkc, if the PKC environment variable names its executable. While pkc
 //     is being ported, PKC_STAGES limits it to the stages it supports, as a
-//     comma-separated list of pkg, tokens, ast, asm and run.
+//     comma-separated list of pkg, tokens, ast, asm, run and report (-vb
+//     and tree).
 //
 // The corpus is the test programs here, the examples and the rt truck's
 // tests. A program containing the line "// output: varies" is compiled but
@@ -23,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -97,16 +99,39 @@ func run(t *testing.T, bin string, args ...string) outcome {
 // outcomes to be identical. It returns the agreed outcome.
 func agree(t *testing.T, args ...string) outcome {
 	t.Helper()
+	return agreeIn(t, "", func(s string) string { return s }, args...)
+}
+
+var (
+	timeRe  = regexp.MustCompile(`[0-9]+(\.[0-9]+)? (µs|ms|s)\b`)
+	barRe   = regexp.MustCompile(`[█▏▎▍▌▋▊▉]+`)
+	tmpRe   = regexp.MustCompile(`/tmp/packenger-[^ \n]*`)
+	spaceRe = regexp.MustCompile(` +`)
+)
+
+// unTimed masks what differs between two runs of a -vb report: timings,
+// the timing bars, temporary paths and the padding around them.
+func unTimed(s string) string {
+	s = timeRe.ReplaceAllString(s, "<time>")
+	s = barRe.ReplaceAllString(s, "")
+	s = tmpRe.ReplaceAllString(s, "<tmp>")
+	return spaceRe.ReplaceAllString(s, " ")
+}
+
+func agreeIn(t *testing.T, stage string, norm func(string) string, args ...string) outcome {
+	t.Helper()
 	var first outcome
 	var firstName string
-	stage := args[0]
-	if stage == "dump" && len(args) > 1 {
-		stage = args[1]
-	}
-	switch stage {
-	case "tokens", "ast", "asm", "run":
-	default:
-		stage = "pkg" // package files and command-line handling
+	if stage == "" {
+		stage = args[0]
+		if stage == "dump" && len(args) > 1 {
+			stage = args[1]
+		}
+		switch stage {
+		case "tokens", "ast", "asm", "run":
+		default:
+			stage = "pkg" // package files and command-line handling
+		}
 	}
 	for _, c := range compilers {
 		if c.stages != nil && !c.stages[stage] {
@@ -114,6 +139,7 @@ func agree(t *testing.T, args ...string) outcome {
 		}
 		for i := 1; i <= runs; i++ {
 			o := run(t, c.bin, args...)
+			o.stdout, o.stderr = norm(o.stdout), norm(o.stderr)
 			name := fmt.Sprintf("%s run %d", c.name, i)
 			if firstName == "" {
 				first, firstName = o, name
@@ -274,4 +300,23 @@ func TestBootstrap(t *testing.T) {
 	if o.stdout != "9227465\n" {
 		t.Errorf("stage 3 can't run fib:\n%s", o)
 	}
+}
+
+// The -vb report and tree must agree, apart from timings.
+func TestReport(t *testing.T) {
+	if _, err := exec.LookPath("nasm"); err != nil {
+		t.Skip("nasm not installed")
+	}
+	out := filepath.Join(t.TempDir(), "prog")
+	for _, f := range corpus(t, "../examples/*.pkg", "testdata/programs/phase2.pkg", "testdata/programs/types.pkg") {
+		t.Run(filepath.Base(f), func(t *testing.T) {
+			agreeIn(t, "report", unTimed, "tree", f)
+			agreeIn(t, "report", unTimed, "build", "-vb", "-o", out, f)
+			agreeIn(t, "report", unTimed, "asm", f, "-vb")
+		})
+	}
+	agreeIn(t, "report", unTimed, "run", "-vb", "../examples/exitcode.pkg")
+	agreeIn(t, "report", unTimed, "dump", "-vb", "tokens", "../examples/fib.pkg")
+	agreeIn(t, "report", unTimed, "run", "-vb", "testdata/errors/type.pkg")
+	agreeIn(t, "report", unTimed, "frobnicate", "../examples/fib.pkg")
 }

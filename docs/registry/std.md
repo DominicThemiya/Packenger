@@ -117,4 +117,4 @@ same name (`types` and `struct` only declare types and need no code);
 
 ## Used by
 
-[pkc/codegen](pkc/codegen.md), [pkc/driver](pkc/driver.md), [pkc/fetch](pkc/fetch.md), [pkc/lang](pkc/lang.md), [pkc/lexer](pkc/lexer.md), [pkc/main](pkc/main.md), [pkc/parser](pkc/parser.md), [pkc/pkgfile](pkc/pkgfile.md), [pkc/types](pkc/types.md), [pkc/ui](pkc/ui.md), [pkc/util](pkc/util.md), [rt/io](rt/io.md), [rt/map](rt/map.md), [rt/mem](rt/mem.md), [rt/os](rt/os.md), [rt/str](rt/str.md), [rt/term](rt/term.md), [rt/test](rt/test.md), [rt/time](rt/time.md), [rt/vec](rt/vec.md)
+[pkc/codegen](pkc/codegen.md), [pkc/driver](pkc/driver.md), [pkc/fetch](pkc/fetch.md), [pkc/lang](pkc/lang.md), [pkc/lexer](pkc/lexer.md), [pkc/main](pkc/main.md), [pkc/parser](pkc/parser.md), [pkc/pkgfile](pkc/pkgfile.md), [pkc/report](pkc/report.md), [pkc/tree](pkc/tree.md), [pkc/types](pkc/types.md), [pkc/ui](pkc/ui.md), [pkc/util](pkc/util.md), [rt/io](rt/io.md), [rt/map](rt/map.md), [rt/mem](rt/mem.md), [rt/os](rt/os.md), [rt/str](rt/str.md), [rt/term](rt/term.md), [rt/test](rt/test.md), [rt/time](rt/time.md), [rt/vec](rt/vec.md)

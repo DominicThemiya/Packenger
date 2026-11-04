@@ -11,8 +11,8 @@ doc pkc: the Packenger compiler, written in Packenger.
 
   Its packages use short prefixes, since library names share one
   namespace: `u_` (util), `fe_` (fetch), `pf_` (package files), `lx_`
-  (lexer), `lg_` (grammar), `ty_` (types), `ps_` (parser), `cg_` (codegen), `dr_` (driver), `ui_` (errors and the build
-  report) and `pkc_` (the command line).
+  (lexer), `lg_` (grammar), `ty_` (types), `ps_` (parser), `cg_` (codegen), `dr_` (driver), `ui_` (errors), `rp_` (the `-vb`
+  report), `tr_` (tree) and `pkc_` (the command line).
 
 truck
   util
@@ -25,4 +25,6 @@ truck
   codegen
   driver
   ui
+  report
+  tree
   main

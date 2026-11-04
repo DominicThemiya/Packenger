@@ -786,4 +786,4 @@ end
 
 ## Used by
 
-[pkc/codegen](codegen.md), [pkc/driver](driver.md), [pkc/lang](lang.md), [pkc/lexer](lexer.md), [pkc/main](main.md), [pkc/parser](parser.md)
+[pkc/codegen](codegen.md), [pkc/driver](driver.md), [pkc/lang](lang.md), [pkc/lexer](lexer.md), [pkc/main](main.md), [pkc/parser](parser.md), [pkc/tree](tree.md)

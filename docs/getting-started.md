@@ -87,12 +87,30 @@ your checkout instead, which you'll also want while editing packages:
 PACKENGER_REGISTRY=file://$PWD/registry ./bin/packenger run examples/fib.pkg
 ```
 
+## The self-hosted compiler
+
+`pkc` is the same compiler written in Packenger. Build it with the Go
+compiler, then use it exactly like `packenger`:
+
+```sh
+./bin/packenger build bootstrap/pkc.pkg -o bin/pkc
+./bin/pkc run examples/fib.pkg
+./bin/pkc build bootstrap/pkc.pkg -o pkc2     # it can build itself
+```
+
 ## Running the tests
 
 ```sh
 go test ./...
 ```
 
-The tests compile and run real programs, so they need `nasm` and `ld`. The
+The tests compile and run real programs, so they need `nasm` and `ld`.
+`go test ./bootstrap/` also builds `pkc` three times over and checks the
+binaries are identical (about 20 seconds; `go test -short` skips it). To
+compare `pkc` with the Go compiler on everything:
+
+```sh
+PKC=$PWD/bin/pkc go test ./bootstrap/
+``` The
 `rt` truck's own tests are Packenger programs in [`tests/rt`](../tests/rt);
 run one with `packenger run tests/rt/str.pkg`.

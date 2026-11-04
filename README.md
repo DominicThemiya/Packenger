@@ -30,6 +30,16 @@ fib(35) runs in 0.15 s, against 0.12 s for `gcc -O0`, 0.035 s for
 `gcc -O2` and 2.1 s for Python. The executables are about 5 KB and don't
 use libc.
 
+**The compiler is self-hosting.** `pkc`, a Packenger compiler written in
+Packenger (the [`pkc` truck](docs/registry/pkc.md)), does everything the Go
+compiler does and builds itself into a byte-identical binary:
+
+```sh
+./bin/packenger build bootstrap/pkc.pkg -o bin/pkc   # pkc built by Go
+./bin/pkc build bootstrap/pkc.pkg -o pkc2            # pkc built by pkc
+cmp bin/pkc pkc2                                     # identical
+```
+
 ## How it fits together
 
 ```
@@ -65,6 +75,7 @@ are defined by `std` packages too. Packages can also be built from other package
 | [Publishing packages](docs/publishing.md) | the registry and keeping docs current |
 | [Command line](docs/cli.md) | commands, flags and the `-vb` report |
 | [How the compiler works](docs/architecture.md) | pipeline and code map |
+| [Self-hosting](docs/self-hosting.md) | `pkc`, the compiler written in Packenger, and its bootstrap |
 | [Package reference](docs/registry/README.md) | every truck and package, generated from the registry |
 
 ## Requirements

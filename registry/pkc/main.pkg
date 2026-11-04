@@ -1,9 +1,10 @@
 doc pkc: the command line — the same commands, flags and messages as the Go compiler.
   `pkc_main()` is the whole program; [bootstrap/pkc.pkg](../../../bootstrap/pkc.pkg)
-  just calls it. The commands are implemented as their modules are ported:
-  see [the self-hosting plan](../../self-hosting.md).
+  just calls it. Every command of the Go tool is supported: `build`, `run`,
+  `asm`, `tree`, `dump` and `-vb`; see
+  [the self-hosting plan](../../self-hosting.md).
 
-needs std rt pkc/util pkc/fetch pkc/pkgfile pkc/ui pkc/lexer pkc/driver pkc/parser pkc/codegen
+needs std rt pkc/util pkc/fetch pkc/pkgfile pkc/ui pkc/lexer pkc/driver pkc/parser pkc/codegen pkc/report pkc/tree
 code
   const PKC_DEFAULT_REGISTRY = "https://raw.githubusercontent.com/DominicThemiya/Packenger/main/registry"
 
@@ -162,95 +163,95 @@ code
       return -1
     end
     *src = u_get(a.pos, vec_len(a.pos) - 1)
-    if a.cmd == "dump" && stage == "pkg"
-      return pkc_dump_pkg(a, *src)
+    let exe = a.out
+    if a.cmd == "build" && exe == ""
+      exe = ui_base(*src)
+      if str_ends(exe, ".pkg")
+        exe = str_slice(exe, 0, len(exe) - 4)
+      end
     end
-    if a.cmd == "dump" && stage == "tokens"
-      let text = ""
-      if !pkc_read(*src, &text)
-        return -1
-      end
-      let r = dr_lex(a.registry, ui_base(*src), text)
-      if r == null
-        return -1
-      end
-      io_out(lx_dump(r.toks))
-      return 0
+    if a.verbose
+      rp_header(a.cmd, *src, exe, a.registry, a.target)
     end
-    if a.cmd == "dump" && stage == "asm" || a.cmd == "asm"
-      let text = ""
-      if !pkc_read(*src, &text)
-        return -1
-      end
-      let r = dr_compile(a.registry, a.target, ui_base(*src), text)
-      if r == null
-        return -1
-      end
-      if a.cmd == "asm" && a.out != ""
-        if !io_write_file(a.out, r.asm)
-          u_fail(u_cat3("open ", a.out, ": can't write the file"))
-          return -1
-        end
+    if a.cmd == "dump"
+      return pkc_dump(a, stage, *src)
+    end
+    let text = ""
+    if !pkc_read(*src, &text)
+      return -1
+    end
+    let r = dr_compile(a.registry, a.target, ui_base(*src), text)
+    if r == null
+      return -1
+    end
+    if a.cmd == "asm"
+      rp_done("")
+      if a.out == ""
+        io_out(r.asm)
         return 0
       end
-      io_out(r.asm)
+      if !io_write_file(a.out, r.asm)
+        u_fail(u_cat3("open ", a.out, ": can't write the file"))
+        return -1
+      end
       return 0
-    end
-    if a.cmd == "build" || a.cmd == "run"
-      let text = ""
-      if !pkc_read(*src, &text)
+    elif a.cmd == "tree"
+      rp_done("")
+      io_out(tr_tree(r, ui_base(*src), a.target))
+      return 0
+    elif a.cmd == "build"
+      if !dr_assemble(r.asm, exe)
         return -1
       end
-      let r = dr_compile(a.registry, a.target, ui_base(*src), text)
-      if r == null
-        return -1
-      end
-      if a.cmd == "build"
-        let exe = a.out
-        if exe == ""
-          exe = ui_base(*src)
-          if str_ends(exe, ".pkg")
-            exe = str_slice(exe, 0, len(exe) - 4)
-          end
-        end
-        if !dr_assemble(r.asm, exe)
-          return -1
-        end
-        return 0
-      end
+      rp_done("")
+      return 0
+    elif a.cmd == "run"
       let dir = dr_tmpdir("packenger-run-")
       if dir == ""
         u_fail("can't create a temporary directory in /tmp")
         return -1
       end
-      let exe = u_cat(dir, "/prog")
-      if !dr_assemble(r.asm, exe)
+      let prog = u_cat(dir, "/prog")
+      if !dr_assemble(r.asm, prog)
         dr_rmdir(dir)
         return -1
       end
-      let status = os_run(exe, a.prog_args)
-      dr_rm(exe)
+      rp_done("running")
+      let status = os_run(prog, a.prog_args)
+      dr_rm(prog)
       dr_rmdir(dir)
       return status
     end
-    if a.cmd == "dump" && stage == "ast"
-      let text = ""
-      if !pkc_read(*src, &text)
+    u_fail(u_cat3("unknown command ", u_quote(a.cmd), " (see packenger --help)"))
+    return -1
+  end
+
+  fn pkc_dump(a: ptr PkcArgs, stage: str, src: str) -> int
+    if stage == "pkg"
+      return pkc_dump_pkg(a, src)
+    end
+    let text = ""
+    if !pkc_read(src, &text)
+      return -1
+    end
+    if stage == "tokens"
+      let fr = dr_lex(a.registry, ui_base(src), text)
+      if fr == null
         return -1
       end
-      let r = dr_lex(a.registry, ui_base(*src), text)
-      if r == null
-        return -1
-      end
-      let prog = dr_parse(r, ui_base(*src))
-      if prog == null
-        return -1
-      end
-      io_out(ps_dump(prog))
+      io_out(lx_dump(fr.toks))
       return 0
     end
-    u_fail(u_cat3("pkc: ", a.cmd, " is not implemented yet"))
-    return -1
+    let r = dr_compile(a.registry, a.target, ui_base(src), text)
+    if r == null
+      return -1
+    end
+    if stage == "ast"
+      io_out(ps_dump(r.prog))
+    else
+      io_out(r.asm)
+    end
+    return 0
   end
 
   // pkc_read reads a source file, with Go's error message if it's missing.

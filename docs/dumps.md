@@ -154,7 +154,8 @@ as ` -> type`.
 go test ./bootstrap/                  # Go compiler against itself
 PKC=/path/to/pkc go test ./bootstrap/ # Go compiler against pkc
 PKC=/path/to/pkc PKC_STAGES=pkg,tokens go test ./bootstrap/
-                                      # only the stages pkc supports so far
+                                      # only some stages: pkg, tokens, ast,
+                                      # asm, run, report
 ```
 
 It builds the Go compiler, then runs every compiler under test **three
@@ -168,6 +169,7 @@ differing line:
 | every package in `registry/` | `dump pkg` |
 | `bootstrap/testdata/badreg/*.pkg` | `dump pkg` of broken packages: the error messages |
 | a few command lines | `--help`, a bad `dump` stage, a missing argument |
+| the examples and two test programs | `tree`, and `build`/`asm`/`run`/`dump` with `-vb`, with timings, timing bars and temporary paths masked (stage `report`) |
 
 `TestBootstrap` then builds `pkc` with the Go compiler, builds it again with
 that `pkc`, and once more with the result, and requires all three

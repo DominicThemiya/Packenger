@@ -22,6 +22,7 @@ grammar and tokenizing (`dr_lex`), lexing library code and parsing
 - [pkc/lang](lang.md)
 - [pkc/parser](parser.md)
 - [pkc/codegen](codegen.md)
+- [pkc/report](report.md)
 
 ## Library code
 
@@ -96,13 +97,20 @@ fn dr_fetch_all(reg: str, mode: str, first: ptr Vec) -> ptr Map
       vec_push(pending, d as int)
     end
   end
+  let phase = mode
+  let start = time_now()
+  let bytes = 0
+  let round = 0
   while vec_len(pending) > 0
     let batch = pending
     pending = vec_new()
+    round = round + 1
+    let fetches = vec_new()
     for i = 0 to vec_len(batch) - 1
       let d = vec_get(batch, i) as ptr DrDep
       let origin = ""
       let ok = false
+      let t0 = time_now()
       let src = fe_fetch(reg, d.name, &origin, &ok)
       if !ok
         return null
@@ -111,6 +119,13 @@ fn dr_fetch_all(reg: str, mode: str, first: ptr Vec) -> ptr Map
       if f == null
         return null
       end
+      let rf = new RpFetch
+      rf.name = f.name
+      rf.why = d.why
+      rf.size = len(src)
+      rf.took = time_now() - t0
+      vec_push(fetches, rf as int)
+      bytes = bytes + len(src)
       map_set(got, f.name, f as int)
       let next_ = dr_next(f, mode)
       for k = 0 to vec_len(next_) - 1
@@ -121,7 +136,9 @@ fn dr_fetch_all(reg: str, mode: str, first: ptr Vec) -> ptr Map
         end
       end
     end
+    rp_round(phase, round, fetches)
   end
+  rp_phase_done(phase, map_len(got), bytes, time_now() - start)
   return got
 end
 
@@ -152,6 +169,7 @@ fn dr_lex(reg: str, file: str, src: str) -> ptr DrFront
     pk_err = u_cat3(file, ": ", pk_err)
     return null
   end
+  rp_uses(uses)
   let first = vec_new()
   for i = 0 to vec_len(uses) - 1
     vec_push(first, dr_dep(u_get(uses, i), u_cat("used by ", file)) as int)
@@ -175,6 +193,12 @@ fn dr_lex(reg: str, file: str, src: str) -> ptr DrFront
   if L == null
     return null
   end
+  let keywords = vec_new()
+  for i = 0 to map_len(L.keywords) - 1
+    u_push(keywords, map_key(L.keywords, i))
+  end
+  u_sort_strs(keywords)
+  rp_grammar(vec_len(pkgs), lg_forms(L), map_len(L.infix), map_len(L.prefix), keywords, L.puncts)
   let toks = lx_lex(body, file, L.puncts, false)
   if toks == null
     return null
@@ -240,15 +264,36 @@ struct DrResult
   gen: ptr Gen
 end
 
+fn dr_count(n: ptr PNode) -> int
+  let c = 1
+  for i = 0 to ps_nslots(n) - 1
+    c = c + dr_count(ps_nd(n.svals, i))
+  end
+  for i = 0 to ps_nitems(n) - 1
+    c = c + dr_count(ps_nd(n.items, i))
+  end
+  return c
+end
+
 // dr_compile runs the whole pipeline up to the NASM source.
 fn dr_compile(reg: str, target: str, file: str, src: str) -> ptr DrResult
   let fr = dr_lex(reg, file, src)
   if fr == null
     return null
   end
+  let t0 = time_now()
   let prog = dr_parse(fr, file)
   if prog == null
     return null
+  end
+  let nodes = dr_count(prog.main)
+  for i = 0 to vec_len(prog.funcs) - 1
+    nodes = nodes + dr_count(ps_nd(prog.funcs, i))
+  end
+  rp_parsed_file(file, vec_len(fr.toks), nodes, ps_nitems(prog.main), time_now() - t0)
+  for i = 0 to vec_len(prog.funcs) - 1
+    let f = ps_nd(prog.funcs, i).frame
+    rp_parsed_fn(f.name, f.params, f.slots, ps_frame_size(f))
   end
   let kinds = cg_kinds(prog)
   let need = vec_new()
@@ -265,11 +310,19 @@ fn dr_compile(reg: str, target: str, file: str, src: str) -> ptr DrResult
     let f = map_value(by_name, i) as ptr PfFile
     map_set(back, pf_kind(f.name), f as int)
   end
+  t0 = time_now()
   let g = cg_new(target, back, prog)
   let asm = cg_program(g, prog)
   if asm == ""
     return null
   end
+  let lines = 0
+  for i = 0 to len(asm) - 1
+    if asm[i] == '\n'
+      lines = lines + 1
+    end
+  end
+  rp_emitted(lines, time_now() - t0, g.chosen)
   let r = new DrResult
   r.asm = asm
   r.prog = prog
@@ -318,6 +371,13 @@ fn dr_assemble(asm: str, out: str) -> bool
   dr_rm(asm_path)
   dr_rm(obj_path)
   dr_rmdir(dir)
+  if ok
+    let read = false
+    let exe = io_read_file(out, &read)
+    if read
+      rp_built(out, len(exe))
+    end
+  end
   return ok
 end
 
@@ -350,6 +410,7 @@ fn dr_tool(dir: str, name: str, args: ptr Vec) -> bool
   end
   let output = ""
   let status = 0
+  let t0 = time_now()
   if dir != ""
     status = os_run_in(dir, name, args, &output)
   else
@@ -358,10 +419,11 @@ fn dr_tool(dir: str, name: str, args: ptr Vec) -> bool
   if status != 0
     return u_fail(u_cat4(name, " failed: exit status ", str_from_int(status), u_cat("\n", output)))
   end
+  rp_tool(name, time_now() - t0)
   return true
 end
 ```
 
 ## Used by
 
-[pkc/main](main.md)
+[pkc/main](main.md), [pkc/tree](tree.md)

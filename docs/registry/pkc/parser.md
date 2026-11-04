@@ -1889,4 +1889,4 @@ end
 
 ## Used by
 
-[pkc/codegen](codegen.md), [pkc/driver](driver.md), [pkc/main](main.md)
+[pkc/codegen](codegen.md), [pkc/driver](driver.md), [pkc/main](main.md), [pkc/tree](tree.md)

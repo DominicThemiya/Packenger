@@ -4,9 +4,9 @@ Goal: a Packenger compiler written in Packenger (**`pkc`**) that compiles
 itself, developed alongside the Go compiler, with both producing identical
 output.
 
-Status: **phases 0–3 done** (parity infrastructure, type system, core
-language features, runtime library); **phase 4 in progress**. Phase 5 is
-planned.
+Status: **phases 0–4 done**: `pkc`, the compiler written in Packenger,
+does everything the Go compiler does and compiles itself to a fixed point.
+Phase 5 (running the bootstrap in CI) remains.
 
 ## Where we start
 
@@ -195,14 +195,14 @@ The original plan:
 **Done when:** every package has tests written in Packenger, and a small
 program can run `curl --parallel` and `nasm` and report their timings.
 
-## Phase 4: the compiler in Packenger (`pkc` truck) — in progress
+## Phase 4: the compiler in Packenger (`pkc` truck) ✓
 
 `pkc` lives in the registry as the [pkc truck](registry/pkc.md); the program
 is [bootstrap/pkc.pkg](../bootstrap/pkc.pkg). Build and check it with:
 
 ```sh
 packenger build bootstrap/pkc.pkg -o bin/pkc
-PKC=$PWD/bin/pkc PKC_STAGES=pkg,tokens,ast,asm,run go test ./bootstrap/
+PKC=$PWD/bin/pkc go test ./bootstrap/
 ```
 
 | stage | modules | status |
@@ -212,7 +212,7 @@ PKC=$PWD/bin/pkc PKC_STAGES=pkg,tokens,ast,asm,run go test ./bootstrap/
 | `ast` | `pkc/types`, `pkc/parser`, library units in `pkc/driver` | ✓ matches on the whole corpus and 29 parser error cases; `pkc` parses its own 5,600 lines into the same 29,000-line tree, 7.6× faster than the Go compiler (0.30 s against 2.25 s) |
 | `asm` | `pkc/codegen`, backend fetching in `pkc/driver` | ✓ byte-identical NASM on the whole corpus |
 | `run` | `build`, `run` and `asm` in `pkc/main`, assembling in `pkc/driver` | ✓ same program output and exit codes |
-| `-vb`, `tree` | report, tree | next |
+| `report` | `pkc/report` (`-vb`), `pkc/tree` | ✓ the same report apart from timings, and the same tree |
 
 **The bootstrap reaches a fixed point.** `pkc` built by the Go compiler
 (stage 1) builds itself (stage 2), which builds itself again (stage 3); all

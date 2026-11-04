@@ -20,6 +20,8 @@ format.
   - [pkc/codegen](pkc/codegen.md) — pkc: rendering the tree through a backend truck into NASM (port of codegen.go).
   - [pkc/driver](pkc/driver.md) — pkc: the compile pipeline (port of internal/lang/driver.go).
   - [pkc/ui](pkc/ui.md) — pkc: errors and the -vb report on stderr (port of internal/ui).
+  - [pkc/report](pkc/report.md) — pkc: the -vb build report (port of internal/ui's Reporter).
+  - [pkc/tree](pkc/tree.md) — pkc: packenger tree — which packages built the program (port of Result.Tree).
   - [pkc/main](pkc/main.md) — pkc: the command line — the same commands, flags and messages as the Go compiler.
 - **[rt](rt.md)** (truck) — The runtime truck: memory, vectors, strings, maps, files, processes, time and terminals.
   - [rt/mem](rt/mem.md) — Raw memory: an allocator on mmap, plus copy, fill, compare and pointer arithmetic.
