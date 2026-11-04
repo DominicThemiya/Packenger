@@ -1,7 +1,7 @@
 # Packenger
 
-A compiled programming language where **everything is a package**, even
-the syntax. `if`, `while`, `+`, `print` and `fn` are not built into the
+A compiled, statically typed programming language where **everything is a
+package**, even the syntax. `if`, `while`, `+`, `print` and `fn` are not built into the
 compiler. Each is a package that declares its own syntax, inputs and
 output. Packages are downloaded from a hosted registry at compile time, and
 the **`bintables`** truck translates them to NASM, which becomes a native
@@ -10,7 +10,7 @@ x86-64 Linux executable.
 ```
 use std
 
-fn fib(n)
+fn fib(n: int) -> int
   if n < 2
     return n
   end
@@ -47,11 +47,12 @@ A syntax package (`registry/std/if.pkg`):
 ```
 doc Conditional: if cond ... [else ...] end
 syntax statement
-  if {cond: expr int} {then: block} [else {else: block}] end
+  if {cond: expr bool} {then: block} [else {else: block}] end
 ```
 
-Its backend package (`registry/bintables/if.pkg`) is a NASM template.
-Packages can also be built from other packages; `std/for` expands into
+Its backend package (`registry/bintables/if.pkg`) is a NASM template. The
+language's types (`int`, `u8`, `bool`, `str`, pointers, slices and structs)
+are defined by `std` packages too. Packages can also be built from other packages; `std/for` expands into
 `let`, `while`, `<=`, `=` and `+`.
 
 ## Documentation

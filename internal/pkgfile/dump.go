@@ -18,7 +18,7 @@ func (p *Pattern) String() string {
 			case e.Slot != nil:
 				s := e.Slot.Name + ": " + e.Slot.Kind
 				switch {
-				case e.Slot.Kind == "newvar" && e.Slot.Arg != "":
+				case (e.Slot.Kind == "newvar" || e.Slot.Kind == "field") && e.Slot.Arg != "":
 					s += " of " + e.Slot.Arg
 				case e.Slot.Arg != "":
 					s += " " + e.Slot.Arg
@@ -75,6 +75,9 @@ func Dump(f *File) string {
 	if len(f.Needs) > 0 {
 		line("needs %s", strings.Join(f.Needs, " "))
 	}
+	for _, t := range f.Types {
+		line("type %s %d", t.Name, t.Size)
+	}
 	if f.IsTruck {
 		line("truck %s", strings.Join(f.Truck, " "))
 	}
@@ -83,7 +86,14 @@ func Dump(f *File) string {
 		if s.Right {
 			assoc = "right"
 		}
-		line("syntax %s prec=%d assoc=%s", s.Kind, s.Prec, assoc)
+		flags := ""
+		if s.Place {
+			flags += " place"
+		}
+		if s.Return {
+			flags += " return"
+		}
+		line("syntax %s prec=%d assoc=%s%s", s.Kind, s.Prec, assoc, flags)
 		for _, p := range s.Patterns {
 			line("  pattern %s", p.String())
 		}

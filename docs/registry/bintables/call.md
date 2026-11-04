@@ -28,5 +28,5 @@ call {callee.label}
 push rax
 {end}
 call {callee.label}
-add rsp, {args.size}
+add rsp, {args.stack}
 ```

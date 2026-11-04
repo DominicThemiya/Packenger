@@ -2,22 +2,42 @@
 
 # bintables/ne
 
-> != : `cmp`, then `setne` for a value or `je` for a branch.
+> != : `cmp` and `setne`/`je`; strings are compared by content.
 
 truck [bintables](../bintables.md) · [source](../../../registry/bintables/ne.pkg) · translates [std/ne](../std/ne.md)
 
 Two kinds of sections:
 
-- `emit` produces the value 0 or 1 in `rax` with `setne`;
+- `emit` produces `true` or `false` (1 or 0) in `rax`;
 - `emit jfalse` is used by `if` and `while`: it jumps to `{target}` when
-  the comparison is false (`je`), so no 0/1 value is produced at all.
+  the comparison is false, so no value is produced at all.
 
-Each has a `when right simple` variant that compares against the right
-operand directly.
+Strings go through `__pk_streq`, which compares lengths and then bytes.
+Comparisons with `null` just test the pointer (`when right is null`).
+Other operands have a `when right simple` variant that compares against
+the right operand directly.
 
 ## Emit variants
 
 The first variant whose condition holds is used.
+
+### `emit when left str`
+
+```nasm
+@binop
+call __pk_streq
+xor eax, 1
+@streq
+```
+
+### `emit when right is null`
+
+```nasm
+{left}
+test rax, rax
+setne al
+movzx eax, al
+```
 
 ### `emit when right simple`
 
@@ -37,6 +57,24 @@ setne al
 movzx eax, al
 ```
 
+### `emit jfalse when left str`
+
+```nasm
+@binop
+call __pk_streq
+test rax, rax
+jnz {target}
+@streq
+```
+
+### `emit jfalse when right is null`
+
+```nasm
+{left}
+test rax, rax
+je {target}
+```
+
 ### `emit jfalse when right simple`
 
 ```nasm
@@ -53,4 +91,4 @@ cmp rax, rbx
 je {target}
 ```
 
-Includes: [bintables/binop](binop.md)
+Includes: [bintables/binop](binop.md), [bintables/streq](streq.md)

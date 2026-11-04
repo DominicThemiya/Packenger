@@ -1,0 +1,38 @@
+doc Helper: runtime errors. Prints a message to stderr and exits with status 2.
+  Included with `@panic` by packages that can fail at run time. Each entry
+  point is jumped to (not called), since the program ends there:
+
+  | label | message |
+  |---|---|
+  | `__pk_panic_index` | `panic: index out of range` |
+  | `__pk_panic_len` | `panic: negative length in make` |
+  | `__pk_panic_oom` | `panic: out of memory` |
+
+emit
+support
+  __pk_panic_index:
+  lea rsi, [rel __pk_msg_index]
+  mov edx, __pk_msg_index_len
+  jmp __pk_panic
+  __pk_panic_len:
+  lea rsi, [rel __pk_msg_len]
+  mov edx, __pk_msg_len_len
+  jmp __pk_panic
+  __pk_panic_oom:
+  lea rsi, [rel __pk_msg_oom]
+  mov edx, __pk_msg_oom_len
+  __pk_panic:
+  mov eax, 1
+  mov edi, 2
+  syscall
+  mov eax, 60
+  mov edi, 2
+  syscall
+  section .data
+  __pk_msg_index: db "panic: index out of range", 10
+  __pk_msg_index_len equ $ - __pk_msg_index
+  __pk_msg_len: db "panic: negative length in make", 10
+  __pk_msg_len_len equ $ - __pk_msg_len
+  __pk_msg_oom: db "panic: out of memory", 10
+  __pk_msg_oom_len equ $ - __pk_msg_oom
+  section .text

@@ -6,24 +6,21 @@
 
 truck [std](../std.md) · [source](../../../registry/std/call.pkg) · translated by [bintables/call](../bintables/call.md)
 
-Calls a function defined with `fn` and produces its result.
-
 ```
 print gcd(84, 36)
 ```
 
-- The number of arguments is checked at compile time.
-- Unknown function names are a compile-time error.
+- The number and types of the arguments are checked at compile time.
+- The call has the function's result type; calling a function that
+  returns nothing is only allowed as a statement (see `exprstmt`).
 - With `bintables`, arguments are evaluated from right to left.
-- A call whose result is not needed can stand alone as a statement (see
-  `exprstmt`).
 
 ## Syntax
 
 Kind: `expr`
 
 ```
-{callee: func} ( {args: args} ) -> int
+{callee: func} ( {args: args} ) -> {callee}
 ```
 
 | slot | takes | type |
@@ -31,4 +28,4 @@ Kind: `expr`
 | `callee` | function name (called) | — |
 | `args` | argument list | — |
 
-Produces: `int`
+Produces: the type of `callee`

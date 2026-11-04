@@ -1,12 +1,11 @@
-doc && : logical and, short-circuit
-  Logical and, short-circuit: the right side is evaluated only if the left side is non-zero.
+doc && : logical and
+  Logical and, short-circuit: the right side is evaluated only if the left side is true.
 
   ```
-  print 2 && 0    // 0
+  print true && false    // false
   ```
 
-  Infix, precedence 20, left-associative. Both operands must be `int`; the
-  result is `int`.
+  Infix, precedence 20, left-associative. Both operands must be `bool`; the result is `bool`.
 
 syntax infix 20 left
-  {left: expr int} && {right: expr int} -> int
+  {left: expr bool} && {right: expr bool} -> bool

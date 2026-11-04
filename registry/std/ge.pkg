@@ -1,12 +1,12 @@
 doc >= : greater than or equal
-  Greater than or equal: 1 or 0 (signed comparison).
+  Greater than or equal (signed for int).
 
   ```
-  print 2 >= 2    // 1
+  print 2 >= 2    // true
   ```
 
-  Infix, precedence 40, left-associative. Both operands must be `int`; the
-  result is `int`.
+  Infix, precedence 40, left-associative. Both operands must be `int`, or both `u8`; the result is `bool`.
 
 syntax infix 40 left
-  {left: expr int} >= {right: expr int} -> int
+  {left: expr int} >= {right: expr int} -> bool
+  {left: expr u8} >= {right: expr u8} -> bool

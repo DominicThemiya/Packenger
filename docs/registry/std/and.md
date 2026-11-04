@@ -2,30 +2,29 @@
 
 # std/and
 
-> && : logical and, short-circuit
+> && : logical and
 
 truck [std](../std.md) · [source](../../../registry/std/and.pkg) · translated by [bintables/and](../bintables/and.md)
 
-Logical and, short-circuit: the right side is evaluated only if the left side is non-zero.
+Logical and, short-circuit: the right side is evaluated only if the left side is true.
 
 ```
-print 2 && 0    // 0
+print true && false    // false
 ```
 
-Infix, precedence 20, left-associative. Both operands must be `int`; the
-result is `int`.
+Infix, precedence 20, left-associative. Both operands must be `bool`; the result is `bool`.
 
 ## Syntax
 
 Kind: `infix`, precedence 20, left-associative
 
 ```
-{left: expr int} && {right: expr int} -> int
+{left: expr bool} && {right: expr bool} -> bool
 ```
 
 | slot | takes | type |
 |---|---|---|
-| `left` | expression | `int` |
-| `right` | expression | `int` |
+| `left` | expression | `bool` |
+| `right` | expression | `bool` |
 
-Produces: `int`
+Produces: `bool`

@@ -6,8 +6,8 @@
 
 truck [std](../std.md) · [source](../../../registry/std/exprstmt.pkg) · translated by [bintables/exprstmt](../bintables/exprstmt.md)
 
-Lets an expression stand on its own line, which is useful for calls made
-only for their side effects:
+Lets an expression stand on its own line, which is how functions are
+called for their side effects, including functions that return nothing:
 
 ```
 fn shout()
@@ -25,9 +25,9 @@ It is tried after every statement that starts with a keyword and after
 Kind: `statement`
 
 ```
-{e: expr}
+{e: expr any}
 ```
 
 | slot | takes | type |
 |---|---|---|
-| `e` | expression | any |
+| `e` | expression | `any` |

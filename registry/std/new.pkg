@@ -1,0 +1,11 @@
+doc Allocate a struct (or any value) on the heap: new Type
+  ```
+  let p = new Point     // ptr Point, every field zero
+  p.x = 3
+  ```
+
+  The memory is zeroed and never freed: Packenger has no garbage collector
+  yet, which suits short-lived programs such as compilers.
+
+syntax expr
+  new {t: type} -> ptr {t}

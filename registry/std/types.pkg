@@ -1,0 +1,18 @@
+doc The primitive types: int, u8, bool and str.
+  Declares the four primitive types and their sizes in memory. Other types
+  are built from them with `ptr T`, `[T]` and `struct`.
+
+  | type | values | size in a field or slice |
+  |---|---|---|
+  | `int` | 64-bit signed integers; overflow wraps | 8 |
+  | `u8` | bytes 0–255, written `'a'` or `65 as u8` | 1 |
+  | `bool` | `true`, `false` | 1 |
+  | `str` | immutable strings | 8 (a pointer) |
+
+  Every value fits in one register: pointers, slices and strings are
+  addresses, and structs are only used through pointers.
+
+type int 8
+type u8 1
+type bool 1
+type str 8

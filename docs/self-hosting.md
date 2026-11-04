@@ -4,7 +4,8 @@ Goal: a Packenger compiler written in Packenger (**`pkc`**) that compiles
 itself, developed alongside the Go compiler, with both producing identical
 output.
 
-Status: **phase 0 done** (parity infrastructure). Phases 1–5 are planned.
+Status: **phases 0 and 1 done** (parity infrastructure, type system).
+Phases 2–5 are planned.
 
 ## Where we start
 
@@ -59,7 +60,21 @@ Built first, because both compilers will change together from here on.
 **Done when:** the Go compiler's dumps are deterministic across runs, and
 the harness runs (comparing Go with itself).
 
-## Phase 1: the type system
+## Phase 1: the type system ✓
+
+Done. See [the std language](language.md#types) and
+[packages and trucks](packages.md#type-constraints-and-results). Two
+changes from the plan below, made during implementation:
+
+- **Every value is one machine word.** `str` is a pointer to
+  length-prefixed bytes, `[T]` a pointer to a heap header
+  `{data, len, cap}`, and structs are only used through `ptr Name`. This
+  keeps "every result is in `rax`" true and the backend simple; sizes only
+  matter for fields and slice elements (1 or 8 bytes).
+- **Two-pass parsing** makes functions and structs usable before their
+  definitions, including mutual recursion.
+
+The original plan:
 
 The compiler needs structs, pointers, arrays, bytes and booleans. The aim is
 C-level types with safer defaults, defined in packages wherever possible.

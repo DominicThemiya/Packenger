@@ -22,8 +22,9 @@ its body is indented by two spaces. Lines starting with `//` are comments.
 |---|---|
 | `doc <summary>` | one-line summary, then an indented Markdown body |
 | `needs <pkg> ...` | other packages this one builds on; they're fetched too |
+| `type <name> <size>` | declare a primitive type (size 1 or 8 bytes) |
 | `truck` | makes the file a truck; the body lists member names |
-| `syntax <kind> [prec] [left\|right]` | one or more patterns |
+| `syntax <kind> [prec] [left\|right] [place] [return]` | one or more patterns |
 | `expand` | rewrite each use into other packages' syntax |
 | `emit [<section>] [when <cond>]` | NASM template (backend packages) |
 | `data` | NASM lines for the data section, once per use |
@@ -34,7 +35,7 @@ its body is indented by two spaces. Lines starting with `//` are comments.
 ```
 // registry/std/if.pkg
 syntax statement
-  if {cond: expr int} {then: block} [else {else: block}] end
+  if {cond: expr bool} {then: block} [else {else: block}] end
 ```
 
 ### Kinds
@@ -42,13 +43,26 @@ syntax statement
 | kind | used as | notes |
 |---|---|---|
 | `statement` | a line of a block | |
-| `function` | top-level definition | gets its own stack frame and variables |
+| `function` | top-level definition | gets its own stack frame and variables; a `type` slot named `ret` is its result type |
+| `struct` | top-level type declaration | needs a `newtype` and a `fields` slot |
 | `expr` | an expression | e.g. a call: `{callee: func} ( {args: args} )` |
 | `infix <prec>` | binary operator | pattern must be `{a: expr} OP {b: expr}` |
-| `prefix <prec>` | unary operator | pattern must be `OP {a: expr}` |
+| `prefix <prec>` | unary operator | pattern must be `OP {a: expr}` (or `OP {a: place}`) |
+| `postfix <prec>` | operator after an expression | pattern must start `{a: expr} OP ...`, e.g. `{x: expr [T]} \[ {i: expr int} \]` |
 
 Higher precedence binds tighter. Infix operators are left-associative
-unless the header says `right`.
+unless the header says `right`. Several patterns of one package may share an
+operator; the operand types pick the pattern (e.g. `<` for `int` and for
+`u8`).
+
+Header flags:
+
+- `place`: the construct can be assigned to and have its address taken
+  (fields, slice elements, `*p`). Its backend package must have an
+  `emit addr` section that leaves the address in `rax`.
+- `return`: a return statement. Its slot named `value` is checked against
+  the enclosing function's result type, and leaving it out is only allowed
+  in functions without a result.
 
 ### Patterns
 
@@ -68,18 +82,45 @@ same type as that slot).
 
 | slot | matches | arg |
 |---|---|---|
-| `expr` | an expression | optional required type: `{cond: expr int}` |
+| `expr` | an expression with a value | a type constraint (below); `any` also allows calls without a result |
+| `place` | an expression that can be assigned to | a type constraint |
 | `block` | statements up to the next literal | — |
-| `newvar` | a name; declares a variable | `of <slot>`: take that slot's type |
-| `var` | an existing variable | optional required type |
+| `type` | a type, e.g. `int`, `ptr Node`, `[u8]` | a type constraint |
+| `newvar` | a name; declares a variable | `of <slot> ...`: take the type of the first of those slots present |
+| `var` | an existing variable | a type constraint |
 | `ident` | any name | — |
-| `func` | the name of a defined function | — |
+| `func` | the name of a function; has the function's result type | — |
 | `newfunc` | a name; defines a function | — |
 | `args` | comma-separated expressions | — |
-| `params` | comma-separated new names (function parameters) | — |
+| `params` | comma-separated `name: type` parameters | — |
+| `newtype` | a name; declares a struct type | — |
+| `fields` | `name: type` lines up to the next literal | — |
+| `field` | a field name of the struct pointed to by a slot | `of <slot>` (required) |
 
-A `block` slot must be followed by a literal, such as `end` or `else`, so
-the parser knows where the block stops.
+A `block` or `fields` slot must be followed by a literal, such as `end` or
+`else`, so the parser knows where it stops.
+
+### Type constraints and results
+
+A constraint is a type, possibly with **type variables** (single capital
+letters) and **slot references**:
+
+| constraint | accepts |
+|---|---|
+| `int` | exactly `int` |
+| `[T]` | any slice, binding `T` to its element type |
+| `ptr T` | any pointer, binding `T` |
+| `ptr ?` | any pointer (`?` matches anything) |
+| `T` | anything; a later `T` must be the same type |
+| `{slot}` | the type of another slot, e.g. `{value: expr {target}}` |
+| `any` | anything, including no value |
+
+The result after `->` can use the same variables and references:
+`* {p: expr ptr T} -> T`, `& {x: place} -> ptr {x}`,
+`new {t: type} -> ptr {t}`. Constraints are checked as each slot is parsed,
+so a mismatch makes the pattern fail and the next one is tried. The error
+for a pattern that matched but broke a type rule is reported in preference
+to syntax errors from other patterns.
 
 ### How statements are chosen
 
@@ -136,16 +177,21 @@ with placeholders.
 |---|---|
 | `{slot}` (alone on a line) | the slot's generated code; expressions leave their value in `rax` |
 | `{slot.addr}` | a variable's stack slot, e.g. `qword [rbp-8]` |
+| `{slot.mem}` | the same without the size, e.g. `[rbp-8]`, for `lea` |
 | `{slot.operand}` | a simple operand: the integer, or the variable's address |
 | `{slot.value}` | an integer literal's value |
 | `{slot.label}` | a function's label, e.g. `pk_fib` |
 | `{slot.name}` | a variable or function name |
-| `{slot.count}`, `{slot.size}` | number of items in a list, and 8 × that |
+| `{slot.count}`, `{slot.stack}` | number of items in a list, and 8 × that |
+| `{slot.size}` | bytes the slot's type occupies in memory (1 or 8) |
+| `{slot.elemsize}` | size of the element of a slice, the pointee of a pointer, or 1 for `str` |
+| `{slot.alloc}` | bytes to allocate for a `type` slot: a struct's full size |
+| `{slot.offset}` | a `field` slot's offset in its struct |
 | `{slot.len}`, `{slot.bytes}` | a string's length and its bytes as `db` values |
 | `{frame}` | the stack space for a function's (or the program's) variables |
 | `{L.name}` | a label unique to this use, e.g. `{L.end}:` |
 | `{D.name}` | a data label unique to this use |
-| `{a.b}` | slot `b` of slot `a`, e.g. `{cond.left}` |
+| `{a.b}` | slot `b` of slot `a`, e.g. `{cond.left}`; `self` is the node itself |
 | `{slot!section arg}` | the slot rendered with its package's named section, passing `arg` as `{target}` |
 | `{each list [reverse]}` … `{end}` | repeat lines for each item; `{it}` is the item |
 | `@pkg [section]` | inline another backend package's template |
@@ -161,6 +207,8 @@ A missing optional slot (like `{else}` with no `else`) renders as nothing.
 | `when <slot> has <section>` | the slot's backend package has that section |
 | `when <slot> simple` | the slot is a 32-bit integer literal or a variable |
 | `when <slot> empty` | the list slot has no items |
+| `when <slot> missing` | an optional slot was not given |
+| `when <slot> size <n>` | the slot's type occupies `n` bytes; `when self size 1` picks byte loads |
 
 Conditions are how the backend optimizes. For example, `if` uses
 `when cond has jfalse` to branch straight on a comparison's flags:
@@ -179,9 +227,15 @@ emit when cond has jfalse
 ### Core node kinds
 
 A few node kinds come from the lexer rather than from a syntax package, but
-they are still rendered by backend packages: `int` (number literals), `str`
-(string literals), `var` (variable reads) and `program` (the skeleton
-around everything). See [bintables/program](registry/bintables/program.md).
+they are still rendered by backend packages: `int` (number and character
+literals), `str` (string literals), `var` (variable reads; its `emit addr`
+section serves `&x` and assignment) and `program` (the skeleton around
+everything). See [bintables/program](registry/bintables/program.md).
+
+The slot kinds `type`, `field`, `newtype`, `fields`, `ident`, `func`,
+`newfunc`, `args` and `params` are data for their parent's template, not
+code; use their attributes. These names are reserved and can't be package
+names.
 
 The conventions the `bintables` packages agree on (registers, stack layout,
 calling convention) are listed on the

@@ -1,0 +1,29 @@
+use std
+
+// a linked list of structs on the heap
+struct Node
+  value: int
+  next: ptr Node
+end
+
+fn push(head: ptr Node, value: int) -> ptr Node
+  let n = new Node
+  n.value = value
+  n.next = head
+  return n
+end
+
+fn sum(list: ptr Node) -> int
+  let total = 0
+  while list != null
+    total = total + list.value
+    list = list.next
+  end
+  return total
+end
+
+let list: ptr Node = null
+for i = 1 to 100
+  list = push(list, i)
+end
+print sum(list)

@@ -1,0 +1,4 @@
+doc false: 0 in rax.
+
+emit
+  xor eax, eax

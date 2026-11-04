@@ -6,8 +6,8 @@
 
 truck [std](../std.md) · [source](../../../registry/std/while.pkg) · translated by [bintables/while](../bintables/while.md)
 
-Runs the block for as long as the condition is non-zero. The condition is
-checked before every iteration.
+Runs the block for as long as the condition is `true`. The condition must
+be a `bool` and is checked before every iteration.
 
 ```
 let i = 0
@@ -22,12 +22,12 @@ end
 Kind: `statement`
 
 ```
-while {cond: expr int} {body: block} end
+while {cond: expr bool} {body: block} end
 ```
 
 | slot | takes | type |
 |---|---|---|
-| `cond` | expression | `int` |
+| `cond` | expression | `bool` |
 | `body` | block of statements | — |
 
 ## Used by

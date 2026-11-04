@@ -1,0 +1,12 @@
+doc Dereference a pointer: *p
+  ```
+  let n = 1
+  let p = &n
+  *p = *p + 1
+  print n     // 2
+  ```
+
+  `*p` can be read and assigned.
+
+syntax prefix 80 place
+  * {p: expr ptr T} -> T

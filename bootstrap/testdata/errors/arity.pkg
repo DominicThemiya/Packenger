@@ -1,5 +1,5 @@
 use std
-fn f(a)
+fn f(a: int) -> int
   return a
 end
 print f(1, 2)

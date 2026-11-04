@@ -1,0 +1,6 @@
+use std
+struct P
+  x: int
+end
+let p = new P
+print p.y

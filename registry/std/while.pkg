@@ -1,6 +1,6 @@
 doc Loop: while cond ... end
-  Runs the block for as long as the condition is non-zero. The condition is
-  checked before every iteration.
+  Runs the block for as long as the condition is `true`. The condition must
+  be a `bool` and is checked before every iteration.
 
   ```
   let i = 0
@@ -11,4 +11,4 @@ doc Loop: while cond ... end
   ```
 
 syntax statement
-  while {cond: expr int} {body: block} end
+  while {cond: expr bool} {body: block} end

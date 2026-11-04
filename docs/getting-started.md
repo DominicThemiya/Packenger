@@ -71,7 +71,9 @@ The [`examples/`](../examples) folder has:
 | `hello.pkg` | strings |
 | `fib.pkg` | recursion; a speed benchmark |
 | `fizzbuzz.pkg` | `for`, nested `if`/`else`, `%` |
-| `primes.pkg` | functions, `while`, early `return` |
+| `primes.pkg` | functions, `while`, early `return`, `bool` |
+| `linked.pkg` | structs, pointers, `new`, `null` |
+| `words.pkg` | strings, `u8`, slices, `make`, `len` |
 | `exitcode.pkg` | the top-level `return` becomes the exit code |
 
 ## Working offline

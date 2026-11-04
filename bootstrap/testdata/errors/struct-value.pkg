@@ -1,0 +1,5 @@
+use std
+struct P
+  x: int
+end
+let v: P = null

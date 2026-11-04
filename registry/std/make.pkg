@@ -1,0 +1,14 @@
+doc Make a slice of n zeroed elements: make([T], n)
+  ```
+  let squares = make([int], 10)
+  for i = 0 to 9
+    squares[i] = i * i
+  end
+  print len(squares)    // 10
+  ```
+
+  A negative length stops the program with
+  `panic: negative length in make`.
+
+syntax expr
+  make ( {t: type [T]} , {n: expr int} ) -> {t}

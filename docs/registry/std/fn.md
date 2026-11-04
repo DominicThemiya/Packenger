@@ -2,37 +2,39 @@
 
 # std/fn
 
-> Function definition: fn name(params) ... end
+> Function definition: fn name(param: type, ...) [-> type] ... end
 
 truck [std](../std.md) · [source](../../../registry/std/fn.pkg) · translated by [bintables/fn](../bintables/fn.md)
 
-Defines a function. Parameters and the result are 64-bit integers.
-
 ```
-fn add3(a, b, c)
+fn add3(a: int, b: int, c: int) -> int
   return a + b + c
 end
 
-print add3(1, 2, 3)   // 6
+fn greet(name: str)
+  print name
+end
 ```
 
-- Functions may only be defined at the top level.
-- A function can be called before its definition, and can call itself.
-- Falling off the end of a function returns 0.
-- Each function has its own variables: top-level variables are not visible
-  inside it.
-- Parameters can be assigned to like local variables.
+- Every parameter has a type. The result type follows `->`; without it,
+  the function returns nothing and can only be called as a statement.
+- Functions may only be defined at the top level. They can be used
+  before their definition and can call each other recursively.
+- Each function has its own variables: top-level variables are not
+  visible inside it.
+- Falling off the end of a function that has a result returns zero.
 
 ## Syntax
 
 Kind: `function`
 
 ```
-fn {name: newfunc} ( {params: params} ) {body: block} end
+fn {name: newfunc} ( {params: params} ) [ -> {ret: type} ] {body: block} end
 ```
 
 | slot | takes | type |
 |---|---|---|
 | `name` | function name (defined) | — |
 | `params` | parameter list | — |
+| `ret` (optional) |  | — |
 | `body` | block of statements | — |

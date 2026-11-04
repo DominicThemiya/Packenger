@@ -2,30 +2,29 @@
 
 # std/or
 
-> || : logical or, short-circuit
+> || : logical or
 
 truck [std](../std.md) · [source](../../../registry/std/or.pkg) · translated by [bintables/or](../bintables/or.md)
 
-Logical or, short-circuit: the right side is evaluated only if the left side is 0.
+Logical or, short-circuit: the right side is evaluated only if the left side is false.
 
 ```
-print 0 || 5    // 1
+print false || true    // true
 ```
 
-Infix, precedence 10, left-associative. Both operands must be `int`; the
-result is `int`.
+Infix, precedence 10, left-associative. Both operands must be `bool`; the result is `bool`.
 
 ## Syntax
 
 Kind: `infix`, precedence 10, left-associative
 
 ```
-{left: expr int} || {right: expr int} -> int
+{left: expr bool} || {right: expr bool} -> bool
 ```
 
 | slot | takes | type |
 |---|---|---|
-| `left` | expression | `int` |
-| `right` | expression | `int` |
+| `left` | expression | `bool` |
+| `right` | expression | `bool` |
 
-Produces: `int`
+Produces: `bool`

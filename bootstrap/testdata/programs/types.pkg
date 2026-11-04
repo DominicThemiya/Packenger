@@ -1,0 +1,29 @@
+use std
+struct Pair
+  a: u8
+  ok: bool
+  b: int
+  next: ptr Pair
+end
+let p = new Pair
+p.a = 'x'
+p.ok = 1 < 2
+p.b = -5
+p.next = new Pair
+p.next.b = p.b * 2
+print p.a
+print p.ok
+print p.next.b
+print p.next.next == null
+let xs = make([ptr Pair], 2)
+xs[0] = p
+print xs[0].next.b
+let s = "abc"
+print s[2]
+print s == "abc"
+print (s[0] as int) + 1
+print 2 as bool
+let n = 41
+let q = &n
+*q = *q + 1
+print n

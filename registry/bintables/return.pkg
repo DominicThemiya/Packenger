@@ -1,5 +1,9 @@
-doc Return: value in rax, tear down the frame, ret.
+doc Return: value in rax (zero for a bare return), tear down the frame, ret.
 
+emit when value missing
+  xor eax, eax
+  leave
+  ret
 emit
   {value}
   leave

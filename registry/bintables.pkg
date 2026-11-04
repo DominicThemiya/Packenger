@@ -21,8 +21,13 @@ doc Backend truck: translates Packenger packages to NASM for x86-64 Linux.
   | parameter *i* | `qword [rbp+16+8i]` |
   | arguments | pushed right to left by the caller, popped by the caller |
   | integers | 64-bit signed, two's complement (overflow wraps) |
-  | booleans | 0 is false, anything else is true; comparisons produce 0 or 1 |
-  | strings | pointer to a `qword` length followed by the bytes |
+  | `bool` | 0 is false, 1 is true |
+  | `u8` | zero-extended in `rax`; one byte in memory |
+  | `str` | pointer to a `qword` length followed by the bytes |
+  | `[T]` | pointer to a 24-byte header: data pointer, length, capacity |
+  | `ptr T` | an address; `null` is 0 |
+  | structs | heap memory from `__pk_alloc`; fields aligned to their size |
+  | runtime errors | `__pk_panic_*`: message on stderr, exit status 2 |
   | exit code | the value returned by the top-level code |
 
   ## Optimizations
@@ -45,31 +50,45 @@ doc Backend truck: translates Packenger packages to NASM for x86-64 Linux.
 
 truck
   add
+  addr
+  alloc
   and
+  as
   assign
   binop
   call
+  deref
   div
+  dot
   eq
   exprstmt
+  false
   fn
   ge
   gt
   if
+  index
   int
   le
+  len
   let
   lt
+  make
   mod
   mul
   ne
   neg
+  new
   not
+  null
   or
+  panic
   print
   program
   return
   str
+  streq
   sub
+  true
   var
   while

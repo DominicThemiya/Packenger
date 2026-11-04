@@ -1,0 +1,12 @@
+doc Conversions: u8 keeps the low byte, bool tests for non-zero, others keep the bits.
+
+emit when t u8
+  {v}
+  movzx eax, al
+emit when t bool
+  {v}
+  test rax, rax
+  setne al
+  movzx eax, al
+emit
+  {v}

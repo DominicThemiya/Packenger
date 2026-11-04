@@ -1,0 +1,23 @@
+doc make: allocate a slice header {data, len, cap} and n zeroed elements.
+  The slice value in rax is the address of the 24-byte header: the data
+  pointer at offset 0, the length at 8 and the capacity at 16.
+
+emit
+  {n}
+  test rax, rax
+  js __pk_panic_len
+  push rax
+  mov rdi, 24
+  call __pk_alloc
+  push rax
+  mov rax, [rsp+8]
+  imul rax, {t.elemsize}
+  mov rdi, rax
+  call __pk_alloc
+  pop rcx
+  pop rdx
+  mov [rcx], rax
+  mov [rcx+8], rdx
+  mov [rcx+16], rdx
+  mov rax, rcx
+  @alloc

@@ -1,0 +1,8 @@
+doc len: a string's length is its first qword; a slice's is at offset 8 of its header.
+
+emit when x str
+  {x}
+  mov rax, [rax]
+emit
+  {x}
+  mov rax, [rax+8]

@@ -1,0 +1,19 @@
+doc Helper: `__pk_streq` compares the strings in rax and rbx; rax is 1 if equal.
+  Compares the lengths, then the bytes with `repe cmpsb`. Clobbers `rcx`,
+  `rsi` and `rdi`.
+
+emit
+support
+  __pk_streq:
+  mov rcx, [rax]
+  cmp rcx, [rbx]
+  jne .differ
+  lea rsi, [rax+8]
+  lea rdi, [rbx+8]
+  repe cmpsb
+  jne .differ
+  mov eax, 1
+  ret
+  .differ:
+  xor eax, eax
+  ret

@@ -1,17 +1,17 @@
 use std
 
-fn is_prime(n)
+fn is_prime(n: int) -> bool
   if n < 2
-    return 0
+    return false
   end
   let d = 2
   while d * d <= n
     if n % d == 0
-      return 0
+      return false
     end
     d = d + 1
   end
-  return 1
+  return true
 end
 
 let count = 0

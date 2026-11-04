@@ -1,0 +1,7 @@
+doc The boolean false.
+  ```
+  let found = false
+  ```
+
+syntax expr
+  false -> bool

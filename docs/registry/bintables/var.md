@@ -7,7 +7,8 @@
 truck [bintables](../bintables.md) · [source](../../../registry/bintables/var.pkg)
 
 `{addr}` is `qword [rbp-…]` for locals and `qword [rbp+…]` for
-parameters (see the truck's conventions).
+parameters (see the truck's conventions). The `addr` section gives the
+slot's address, for `&x`.
 
 ## Emit variants
 
@@ -17,4 +18,10 @@ The first variant whose condition holds is used.
 
 ```nasm
 mov rax, {addr}
+```
+
+### `emit addr`
+
+```nasm
+lea rax, {mem}
 ```

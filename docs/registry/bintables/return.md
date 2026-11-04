@@ -2,13 +2,21 @@
 
 # bintables/return
 
-> Return: value in rax, tear down the frame, ret.
+> Return: value in rax (zero for a bare return), tear down the frame, ret.
 
 truck [bintables](../bintables.md) · [source](../../../registry/bintables/return.pkg) · translates [std/return](../std/return.md)
 
 ## Emit variants
 
 The first variant whose condition holds is used.
+
+### `emit when value missing `
+
+```nasm
+xor eax, eax
+leave
+ret
+```
 
 ### `emit`
 

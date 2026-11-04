@@ -1,0 +1,18 @@
+doc Indexing: a[i] for slices (assignable) and s[i] for strings (a u8).
+  ```
+  let a = make([int], 3)
+  a[0] = 7
+  print a[0]
+
+  let s = "hi"
+  print s[1] == 'i'     // true
+  ```
+
+  An index outside `0 .. len - 1` stops the program with
+  `panic: index out of range`. String elements can be read but not
+  assigned: strings are immutable.
+
+syntax postfix 90 place
+  {x: expr [T]} \[ {i: expr int} \] -> T
+syntax postfix 90
+  {x: expr str} \[ {i: expr int} \] -> u8

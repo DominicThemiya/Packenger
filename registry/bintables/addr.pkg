@@ -1,0 +1,4 @@
+doc Address of: renders the operand's addr section.
+
+emit
+  {x!addr}

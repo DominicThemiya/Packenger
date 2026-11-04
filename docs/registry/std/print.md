@@ -2,19 +2,19 @@
 
 # std/print
 
-> Print an int or a string, followed by a newline.
+> Print an int, u8, bool or str, followed by a newline.
 
 truck [std](../std.md) · [source](../../../registry/std/print.pkg) · translated by [bintables/print](../bintables/print.md)
 
 ```
 print 42
 print "hello"
-print 7 * 6
+print 2 < 3      // true
+print 'A'        // 65
 ```
 
-The backend picks the integer or string routine from the value's type.
-Each `print` is one `write` system call (two for strings), so printing in a
-tight loop is dominated by system call cost.
+Each `print` is one or two `write` system calls, so printing in a tight
+loop is dominated by system call cost.
 
 ## Syntax
 

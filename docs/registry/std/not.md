@@ -6,25 +6,24 @@
 
 truck [std](../std.md) · [source](../../../registry/std/not.pkg) · translated by [bintables/not](../bintables/not.md)
 
-`!x` is 1 if `x` is 0, otherwise 0.
+`!b` is `true` if `b` is `false`, and the other way around.
 
 ```
-print !0        // 1
-print !7        // 0
+print !false    // true
 ```
 
-Prefix, precedence 70. The operand must be `int`.
+Prefix, precedence 70. The operand must be `bool`.
 
 ## Syntax
 
 Kind: `prefix`, precedence 70, left-associative
 
 ```
-! {operand: expr int} -> int
+! {operand: expr bool} -> bool
 ```
 
 | slot | takes | type |
 |---|---|---|
-| `operand` | expression | `int` |
+| `operand` | expression | `bool` |
 
-Produces: `int`
+Produces: `bool`

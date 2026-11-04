@@ -1,0 +1,12 @@
+doc Field access through a struct pointer: p.field
+  ```
+  let p = new Point
+  p.x = 3
+  print p.x + p.y
+  ```
+
+  The left side must be a `ptr` to a struct. Fields can be read and
+  assigned. Accessing a field through `null` crashes the program.
+
+syntax postfix 90 place
+  {obj: expr ptr ?} . {f: field of obj} -> {f}

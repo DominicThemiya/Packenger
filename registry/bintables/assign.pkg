@@ -1,5 +1,23 @@
-doc Assign: compute the value, store it in the variable's slot.
+doc Assign: store rax into a variable's slot, or through the target's address.
+  For a variable the value is stored directly. For any other place (a
+  field, a slice element, `*p`) the value is saved on the stack while the
+  target's `addr` section computes the address, then stored with the
+  target's size.
 
+emit when target is var
+  {value}
+  mov {target.addr}, rax
+emit when target size 1
+  {value}
+  push rax
+  {target!addr}
+  mov rcx, rax
+  pop rax
+  mov byte [rcx], al
 emit
   {value}
-  mov {name.addr}, rax
+  push rax
+  {target!addr}
+  mov rcx, rax
+  pop rax
+  mov [rcx], rax

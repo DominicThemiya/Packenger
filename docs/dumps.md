@@ -37,6 +37,7 @@ One token per line: `line:col kind [text]`.
 | `ident` | the identifier |
 | `int` | the digits, with `_` removed |
 | `str` | the quoted value (after escapes are processed) |
+| `char` | the byte value of a character literal, e.g. `char 97` for `'a'` |
 | `punct` | the symbol |
 | `newline` | none |
 | `eof` | none |
@@ -78,20 +79,21 @@ kind #id @pos [: type] [detail] [expanded=pkg,...] [frame ...]
 
 | part | meaning |
 |---|---|
-| `kind` | the package kind (`if`, `add`, ...) or a core kind: `block`, `int`, `str`, `var`, `ident`, `func`, `newfunc`, `args`, `params` |
+| `kind` | the package kind (`if`, `add`, ...) or a core kind: `block`, `int`, `str`, `var`, `ident`, `func`, `newfunc`, `args`, `params`, `type`, `newtype`, `fields`, `fielddecl`, `field` |
 | `#id` | the node number (see below) |
 | `@pos` | where the node starts |
 | `: type` | the node's type, if it has one (expressions) |
-| detail | `int`: `= 42`; `str`: `= "quoted"`; `var`: `name local N` or `name param N`; `ident`/`func`/`newfunc`: the name |
+| detail | `int`: `= 42`; `str`: `= "quoted"`; `var`: `name local N` or `name param N`; `ident`/`func`/`newfunc`/`newtype`/`fielddecl`: the name; `field`: `name offset N` |
 | `expanded=` | the packages that were expanded into this node, outermost first |
-| `frame` | on function nodes: `frame name=N params=N locals=N size=N` |
+| `frame` | on function nodes: `frame name=N params=N locals=N size=N ret="type"` |
 
 ### Node numbering
 
 Node numbers name labels in the generated code (`_L7_else`), so both
 compilers must assign them identically:
 
-- numbers are assigned **after** parsing, so parse attempts that failed
+- numbers are assigned **after** parsing (of the second pass; see
+  [how the compiler works](architecture.md)), so parse attempts that failed
   leave no trace;
 - the walk is pre-order over the top-level items in source order:
   a node, then its slots in pattern order, then its items;
@@ -125,8 +127,9 @@ In this order, each only if present:
 | `package <name>` | always |
 | `doc <quoted summary>` | always (`""` if none), followed by the doc body |
 | `needs a b ...` | |
+| `type <name> <size>` | one line per declared type |
 | `truck m1 m2 ...` | |
-| `syntax <kind> prec=N assoc=left\|right` | then `  pattern <pattern>` for each pattern |
+| `syntax <kind> prec=N assoc=left\|right [place] [return]` | then `  pattern <pattern>` for each pattern |
 | `expand` | followed by the template |
 | `emit section=<quoted> [when slot=S op=O arg=<quoted>]` | for each emit section, followed by its lines |
 | `data` | followed by its lines |
@@ -134,8 +137,8 @@ In this order, each only if present:
 
 Body lines are printed as `  | text`, or `  |` for an empty line.
 Patterns are printed normalized: elements separated by single spaces, slots
-as `{name: kind arg}` (`{name: newvar of slot}` for newvar), optional groups
-as `[ ... ]`, and the result as ` -> type`.
+as `{name: kind arg}` (`{name: newvar of slot}` for newvar and field),
+optional groups as `[ ... ]`, and the result as ` -> type`.
 
 ## The comparison harness
 

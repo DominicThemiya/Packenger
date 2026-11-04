@@ -1,6 +1,6 @@
 doc An expression used as a statement.
-  Lets an expression stand on its own line, which is useful for calls made
-  only for their side effects:
+  Lets an expression stand on its own line, which is how functions are
+  called for their side effects, including functions that return nothing:
 
   ```
   fn shout()
@@ -14,4 +14,4 @@ doc An expression used as a statement.
   `assign`, so it never hides another statement form.
 
 syntax statement
-  {e: expr}
+  {e: expr any}

@@ -2,36 +2,37 @@
 
 # std/let
 
-> Declare a variable: let name = value
+> Declare a variable: let name [: type] = value
 
 truck [std](../std.md) · [source](../../../registry/std/let.pkg) · translated by [bintables/let](../bintables/let.md)
 
-Declares a variable in the current block. Its type is the type of its
-initial value (`int` or `str`).
+```
+let count = 0             // int
+let greeting = "hello"    // str
+let head: ptr Node = null // the annotation gives null a pointee type
+```
 
-```
-let count = 0
-let greeting = "hello"
-```
+The variable's type is the annotation if there is one, otherwise the type
+of the initial value; the value must match the annotation.
 
 - Declaring the same name twice in one block is an error; an inner block
   may shadow an outer variable.
 - Variables are visible from their declaration to the end of the block.
-- The name is in scope inside its own initializer, as in C, so
-  `let x = x + 1` reads the new, uninitialized `x`.
+- Variables can't hold struct values; use `ptr Name`.
 
 ## Syntax
 
 Kind: `statement`
 
 ```
-let {name: newvar of value} = {value: expr}
+let {name: newvar of t value} [ : {t: type} ] = {value: expr {t}}
 ```
 
 | slot | takes | type |
 |---|---|---|
-| `name` | new variable name | type of `value` |
-| `value` | expression | any |
+| `name` | new variable name | type of `t value` |
+| `t` (optional) |  | — |
+| `value` | expression | `{t}` |
 
 ## Used by
 

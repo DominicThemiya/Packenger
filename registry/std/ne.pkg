@@ -1,12 +1,14 @@
 doc != : not equal
-  Not equal: 1 if the operands differ, else 0.
+  Not equal: compares two values of the same type and gives a `bool`.
 
   ```
-  print 3 != 3    // 0
+  print 3 != 3          // false
+  print "ab" != "ab"    // false: strings compare by content
+  print p != null
   ```
 
-  Infix, precedence 30, left-associative. Both operands must be `int`; the
-  result is `int`.
+  Pointers compare by address, strings by content. Infix, precedence 30,
+  left-associative.
 
 syntax infix 30 left
-  {left: expr int} != {right: expr int} -> int
+  {left: expr T} != {right: expr T} -> bool

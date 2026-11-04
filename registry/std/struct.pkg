@@ -1,0 +1,23 @@
+doc Struct declaration: struct Name ... end, one name: type field per line.
+  ```
+  struct Point
+    x: int
+    y: int
+  end
+
+  struct Node
+    value: int
+    next: ptr Node
+  end
+  ```
+
+  - Structs are top-level declarations and can be used before they are
+    declared.
+  - A struct value lives on the heap: create one with `new Point`, which
+    gives a `ptr Point` with every field zero (or `false`, or `null`).
+  - Variables, parameters, fields and slice elements hold pointers to
+    structs (`ptr Point`), never struct values.
+  - Fields are laid out in order, each aligned to its size.
+
+syntax struct
+  struct {name: newtype} {fields: fields} end

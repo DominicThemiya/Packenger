@@ -1,12 +1,12 @@
 doc <= : less than or equal
-  Less than or equal: 1 or 0 (signed comparison).
+  Less than or equal (signed for int).
 
   ```
-  print 3 <= 3    // 1
+  print 3 <= 3    // true
   ```
 
-  Infix, precedence 40, left-associative. Both operands must be `int`; the
-  result is `int`.
+  Infix, precedence 40, left-associative. Both operands must be `int`, or both `u8`; the result is `bool`.
 
 syntax infix 40 left
-  {left: expr int} <= {right: expr int} -> int
+  {left: expr int} <= {right: expr int} -> bool
+  {left: expr u8} <= {right: expr u8} -> bool

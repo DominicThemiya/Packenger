@@ -2,33 +2,32 @@
 
 # std/assign
 
-> Assign to an existing variable: name = value
+> Assign to a variable, a field, a slice element or a dereferenced pointer.
 
 truck [std](../std.md) · [source](../../../registry/std/assign.pkg) · translated by [bintables/assign](../bintables/assign.md)
 
 ```
-let total = 0
 total = total + 5
+p.x = 3
+items[i] = 0
+*counter = *counter + 1
 ```
 
-The variable must already be declared with `let`, `for` or as a function
-parameter.
-
-**Limitation:** the value's type is not yet checked against the variable's
-type, so assigning a string to an `int` variable is not caught.
+The left side must be something that can be assigned to (a *place*) and
+the value must have its type.
 
 ## Syntax
 
 Kind: `statement`
 
 ```
-{name: var} = {value: expr}
+{target: place} = {value: expr {target}}
 ```
 
 | slot | takes | type |
 |---|---|---|
-| `name` | existing variable | any |
-| `value` | expression | any |
+| `target` |  | — |
+| `value` | expression | `{target}` |
 
 ## Used by
 

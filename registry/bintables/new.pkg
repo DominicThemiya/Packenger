@@ -1,0 +1,6 @@
+doc new: allocate the type's size from the heap; rax is the pointer.
+
+emit
+  mov rdi, {t.alloc}
+  call __pk_alloc
+  @alloc

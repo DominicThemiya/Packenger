@@ -1,0 +1,34 @@
+use std
+
+// count the words in a string, using slices, u8 and bool
+fn is_space(c: u8) -> bool
+  return c == ' ' || c == '\n' || c == '\t'
+end
+
+fn count_words(s: str) -> int
+  let count = 0
+  let in_word = false
+  let i = 0
+  while i < len(s)
+    if is_space(s[i])
+      in_word = false
+    else
+      if !in_word
+        count = count + 1
+      end
+      in_word = true
+    end
+    i = i + 1
+  end
+  return count
+end
+
+let text = "the quick  brown\tfox\njumps"
+print count_words(text)
+
+// a slice of lengths, filled with a loop
+let lengths = make([int], 3)
+lengths[0] = len("one")
+lengths[1] = len("three")
+lengths[2] = len("")
+print lengths[0] + lengths[1] + lengths[2]

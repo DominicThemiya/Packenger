@@ -6,26 +6,28 @@
 
 truck [std](../std.md) · [source](../../../registry/std/eq.pkg) · translated by [bintables/eq](../bintables/eq.md)
 
-Equal: 1 if the operands are equal, else 0.
+Equal: compares two values of the same type and gives a `bool`.
 
 ```
-print 3 == 3    // 1
+print 3 == 3          // true
+print "ab" == "ab"    // true: strings compare by content
+print p == null
 ```
 
-Infix, precedence 30, left-associative. Both operands must be `int`; the
-result is `int`.
+Pointers compare by address, strings by content. Infix, precedence 30,
+left-associative.
 
 ## Syntax
 
 Kind: `infix`, precedence 30, left-associative
 
 ```
-{left: expr int} == {right: expr int} -> int
+{left: expr T} == {right: expr T} -> bool
 ```
 
 | slot | takes | type |
 |---|---|---|
-| `left` | expression | `int` |
-| `right` | expression | `int` |
+| `left` | expression | `T` |
+| `right` | expression | `T` |
 
-Produces: `int`
+Produces: `bool`

@@ -1,6 +1,9 @@
 doc Variable read: loads the variable's stack slot into rax.
   `{addr}` is `qword [rbp-…]` for locals and `qword [rbp+…]` for
-  parameters (see the truck's conventions).
+  parameters (see the truck's conventions). The `addr` section gives the
+  slot's address, for `&x`.
 
 emit
   mov rax, {addr}
+emit addr
+  lea rax, {mem}

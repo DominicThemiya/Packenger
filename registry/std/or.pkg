@@ -1,12 +1,11 @@
-doc || : logical or, short-circuit
-  Logical or, short-circuit: the right side is evaluated only if the left side is 0.
+doc || : logical or
+  Logical or, short-circuit: the right side is evaluated only if the left side is false.
 
   ```
-  print 0 || 5    // 1
+  print false || true    // true
   ```
 
-  Infix, precedence 10, left-associative. Both operands must be `int`; the
-  result is `int`.
+  Infix, precedence 10, left-associative. Both operands must be `bool`; the result is `bool`.
 
 syntax infix 10 left
-  {left: expr int} || {right: expr int} -> int
+  {left: expr bool} || {right: expr bool} -> bool

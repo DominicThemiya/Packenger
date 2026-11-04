@@ -18,14 +18,14 @@ doc Counting loop over an inclusive range: for i = a to b ... end
 
   Because it is an expansion:
 
-  - the loop variable is declared in the surrounding block and stays visible
-    after the loop;
+  - the loop variable is an `int` declared in the surrounding block, and
+    stays visible after the loop;
   - the upper bound is re-evaluated on every iteration;
   - `to` is a keyword and cannot be used as a variable name.
 
 needs std/let std/while std/le std/assign std/add
 syntax statement
-  for {i: newvar} = {from: expr int} to {to: expr int} {body: block} end
+  for {i: newvar of from} = {from: expr int} to {to: expr int} {body: block} end
 expand
   let {i} = {from}
   while {i} <= {to}

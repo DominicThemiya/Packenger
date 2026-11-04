@@ -187,7 +187,7 @@ func (c *Compiler) Compile(ctx context.Context, file, src string) (*Result, erro
 
 	// 2. parse with the grammar those packages define
 	t0 := time.Now()
-	prog, err := NewParser(L, toks).ParseProgram()
+	prog, err := Parse(L, toks)
 	if err != nil {
 		return nil, err
 	}

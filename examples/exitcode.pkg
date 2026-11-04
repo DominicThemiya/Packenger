@@ -1,7 +1,7 @@
 use std
 
 // top-level return sets the process exit code
-fn gcd(a, b)
+fn gcd(a: int, b: int) -> int
   while b != 0
     let t = b
     b = a % b

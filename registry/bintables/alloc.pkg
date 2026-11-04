@@ -1,0 +1,46 @@
+doc Helper: the heap. `__pk_alloc` returns rdi bytes of zeroed memory in rax.
+  Included with `@alloc` by `new` and `make`. It is a bump allocator: it
+  hands out memory from a chunk obtained with `mmap` (64 MB, or more for a
+  larger request) and never frees it. Fresh `mmap` memory is zero, so
+  everything allocated starts out zeroed. Sizes are rounded up to 8 bytes.
+
+  Clobbers `rcx`, `rdx`, `rsi`, `rdi`, `r8`–`r11`.
+
+emit
+  @panic
+support
+  __pk_alloc:
+  add rdi, 7
+  and rdi, -8
+  mov rax, [rel __pk_heap]
+  lea rdx, [rax+rdi]
+  cmp rdx, [rel __pk_heap_end]
+  ja .grow
+  mov [rel __pk_heap], rdx
+  ret
+  .grow:
+  push rdi
+  mov rsi, 67108864
+  cmp rdi, rsi
+  cmova rsi, rdi
+  push rsi
+  xor edi, edi
+  mov edx, 3
+  mov r10d, 34
+  mov r8, -1
+  xor r9d, r9d
+  mov eax, 9
+  syscall
+  pop rsi
+  pop rdi
+  test rax, rax
+  js __pk_panic_oom
+  lea rcx, [rax+rsi]
+  mov [rel __pk_heap_end], rcx
+  lea rdx, [rax+rdi]
+  mov [rel __pk_heap], rdx
+  ret
+  section .data
+  __pk_heap: dq 0
+  __pk_heap_end: dq 0
+  section .text

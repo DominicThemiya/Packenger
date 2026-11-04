@@ -1,0 +1,21 @@
+use std
+print total(build(5))
+fn total(n: ptr Item) -> int
+  if n == null
+    return 0
+  end
+  return n.v + total(n.next)
+end
+fn build(k: int) -> ptr Item
+  if k == 0
+    return null
+  end
+  let it = new Item
+  it.v = k
+  it.next = build(k - 1)
+  return it
+end
+struct Item
+  v: int
+  next: ptr Item
+end

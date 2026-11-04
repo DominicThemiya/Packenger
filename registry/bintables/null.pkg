@@ -1,0 +1,4 @@
+doc null: address 0 in rax.
+
+emit
+  xor eax, eax

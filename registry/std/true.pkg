@@ -1,0 +1,7 @@
+doc The boolean true.
+  ```
+  let done = true
+  ```
+
+syntax expr
+  true -> bool

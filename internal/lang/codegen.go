@@ -15,6 +15,7 @@ import (
 type Gen struct {
 	Target   string
 	Back     map[string]*pkgfile.File // kind -> backend package
+	Types    *Types
 	funcs    map[string]*Node
 	data     []string
 	support  []string
@@ -24,7 +25,7 @@ type Gen struct {
 }
 
 func NewGen(target string, back map[string]*pkgfile.File, prog *Program) *Gen {
-	g := &Gen{Target: target, Back: back, funcs: map[string]*Node{}, used: map[string]bool{}, dataDone: map[int]bool{}, Chosen: map[VariantUse]int{}}
+	g := &Gen{Target: target, Back: back, Types: prog.Types, funcs: map[string]*Node{}, used: map[string]bool{}, dataDone: map[int]bool{}, Chosen: map[VariantUse]int{}}
 	for _, f := range prog.Funcs {
 		for _, name := range f.Order {
 			if c := f.Slots[name]; c.Kind == "newfunc" {
@@ -39,9 +40,7 @@ func NewGen(target string, back map[string]*pkgfile.File, prog *Program) *Gen {
 func Kinds(prog *Program) map[string]bool {
 	kinds := map[string]bool{"program": true}
 	add := func(n *Node) {
-		switch n.Kind {
-		case "block", "ident", "func", "newfunc", "args", "params":
-		default:
+		if !notCode[n.Kind] {
 			kinds[n.Kind] = true
 		}
 	}
@@ -51,6 +50,10 @@ func Kinds(prog *Program) map[string]bool {
 	}
 	return kinds
 }
+
+// notCode are node kinds that are only data for their parent's template.
+var notCode = map[string]bool{"block": true, "ident": true, "func": true, "newfunc": true, "args": true, "params": true,
+	"type": true, "field": true, "fields": true, "fielddecl": true, "newtype": true}
 
 // Includes lists the packages a backend package pulls in with "@name".
 func Includes(f *pkgfile.File) []string {
@@ -147,7 +150,7 @@ func (g *Gen) gen(n *Node, section string, params map[string][]string) ([]string
 			out = append(out, code...)
 		}
 		return out, nil
-	case "ident", "func", "newfunc", "args", "params":
+	case "ident", "func", "newfunc", "args", "params", "type", "field", "fields", "fielddecl", "newtype":
 		return nil, fmt.Errorf("%s: a %s slot is not code; use an attribute like {name.label}", n.Pos, n.Kind)
 	}
 	pkg, err := g.backend(n.Kind, n)
@@ -211,6 +214,9 @@ func (g *Gen) cond(c *pkgfile.Cond, n *Node) (bool, error) {
 		return true, nil
 	}
 	s := pathNode(n, c.Slot)
+	if c.Op == "missing" {
+		return s == nil, nil
+	}
 	if s == nil {
 		return false, nil
 	}
@@ -234,6 +240,9 @@ func (g *Gen) cond(c *pkgfile.Cond, n *Node) (bool, error) {
 		return simple(s), nil
 	case "empty":
 		return len(s.Items) == 0, nil
+	case "size":
+		size, err := g.Types.Size(s.Type)
+		return err == nil && strconv.Itoa(size) == c.Arg, nil
 	}
 	return false, fmt.Errorf("unknown condition %q", c.Op)
 }
@@ -251,6 +260,9 @@ func simple(n *Node) bool {
 
 func pathNode(n *Node, path string) *Node {
 	for _, seg := range strings.Split(path, ".") {
+		if seg == "self" {
+			continue
+		}
 		c, ok := n.Slots[seg]
 		if !ok {
 			return nil
@@ -473,8 +485,39 @@ func (g *Gen) attr(n *Node, a string) (string, error) {
 		}
 	case "count":
 		return strconv.Itoa(len(n.Items)), nil
-	case "size":
+	case "stack":
 		return strconv.Itoa(8 * len(n.Items)), nil
+	case "size":
+		size, err := g.Types.Size(n.Type)
+		if err != nil {
+			return "", fmt.Errorf("%s: %v", n.Pos, err)
+		}
+		return strconv.Itoa(size), nil
+	case "alloc":
+		// bytes to allocate for a value of this type: a struct's full size
+		if st, ok := g.Types.Structs[n.Type]; ok {
+			return strconv.Itoa(st.Size), nil
+		}
+		size, err := g.Types.Size(n.Type)
+		if err != nil {
+			return "", fmt.Errorf("%s: %v", n.Pos, err)
+		}
+		return strconv.Itoa(size), nil
+	case "elemsize":
+		size, err := g.Types.Size(Elem(n.Type))
+		if err != nil {
+			return "", fmt.Errorf("%s: %v", n.Pos, err)
+		}
+		return strconv.Itoa(size), nil
+	case "offset":
+		if n.Field != nil {
+			return strconv.Itoa(n.Field.Offset), nil
+		}
+	case "mem":
+		if n.Var != nil {
+			a, _ := g.attr(n, "addr")
+			return strings.TrimPrefix(a, "qword "), nil
+		}
 	case "frame":
 		if n.Frame != nil {
 			return strconv.Itoa(n.Frame.Size()), nil

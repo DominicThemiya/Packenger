@@ -6,29 +6,31 @@
 
 truck [std](../std.md) · [source](../../../registry/std/le.pkg) · translated by [bintables/le](../bintables/le.md)
 
-Less than or equal: 1 or 0 (signed comparison).
+Less than or equal (signed for int).
 
 ```
-print 3 <= 3    // 1
+print 3 <= 3    // true
 ```
 
-Infix, precedence 40, left-associative. Both operands must be `int`; the
-result is `int`.
+Infix, precedence 40, left-associative. Both operands must be `int`, or both `u8`; the result is `bool`.
 
 ## Syntax
 
 Kind: `infix`, precedence 40, left-associative
 
 ```
-{left: expr int} <= {right: expr int} -> int
+{left: expr int} <= {right: expr int} -> bool
+{left: expr u8} <= {right: expr u8} -> bool
 ```
 
 | slot | takes | type |
 |---|---|---|
 | `left` | expression | `int` |
 | `right` | expression | `int` |
+| `left` | expression | `u8` |
+| `right` | expression | `u8` |
 
-Produces: `int`
+Produces: `bool`
 
 ## Used by
 

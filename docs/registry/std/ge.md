@@ -6,26 +6,28 @@
 
 truck [std](../std.md) · [source](../../../registry/std/ge.pkg) · translated by [bintables/ge](../bintables/ge.md)
 
-Greater than or equal: 1 or 0 (signed comparison).
+Greater than or equal (signed for int).
 
 ```
-print 2 >= 2    // 1
+print 2 >= 2    // true
 ```
 
-Infix, precedence 40, left-associative. Both operands must be `int`; the
-result is `int`.
+Infix, precedence 40, left-associative. Both operands must be `int`, or both `u8`; the result is `bool`.
 
 ## Syntax
 
 Kind: `infix`, precedence 40, left-associative
 
 ```
-{left: expr int} >= {right: expr int} -> int
+{left: expr int} >= {right: expr int} -> bool
+{left: expr u8} >= {right: expr u8} -> bool
 ```
 
 | slot | takes | type |
 |---|---|---|
 | `left` | expression | `int` |
 | `right` | expression | `int` |
+| `left` | expression | `u8` |
+| `right` | expression | `u8` |
 
-Produces: `int`
+Produces: `bool`

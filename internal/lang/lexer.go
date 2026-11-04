@@ -25,6 +25,7 @@ const (
 	TStr
 	TPunct
 	THole // {name} inside an expand template
+	TChar // 'a': a byte
 )
 
 type Token struct {
@@ -42,6 +43,8 @@ func (t Token) String() string {
 		return "end of line"
 	case TStr:
 		return strconv.Quote(t.Text)
+	case TChar:
+		return strconv.QuoteRune(rune(t.Int))
 	case THole:
 		return "{" + t.Text + "}"
 	}
@@ -52,7 +55,8 @@ func (t Token) String() string {
 // symbol literals declared by the loaded packages (plus "(", ")" and ",").
 // Newlines separate statements, except inside parentheses.
 func Lex(src, file string, puncts []string, holes bool) ([]Token, error) {
-	ops := append([]string{"(", ")", ","}, puncts...)
+	// ( ) , and the type syntax : [ ] are core; everything else comes from packages
+	ops := append([]string{"(", ")", ",", ":", "[", "]"}, puncts...)
 	sort.Slice(ops, func(i, j int) bool { return len(ops[i]) > len(ops[j]) })
 	var toks []Token
 	line, col, depth := 1, 1, 0
@@ -116,6 +120,24 @@ func Lex(src, file string, puncts []string, holes bool) ([]Token, error) {
 			}
 			emit(Token{Kind: TInt, Text: text, Int: n, Pos: pos})
 			adv(j - i)
+		case r == '\'':
+			j := i + 1
+			for j < len(rs) && rs[j] != '\'' && rs[j] != '\n' {
+				if rs[j] == '\\' {
+					j++
+				}
+				j++
+			}
+			if j >= len(rs) || rs[j] != '\'' {
+				return nil, fmt.Errorf("%s: unterminated character literal", pos)
+			}
+			v, err := strconv.Unquote(string(rs[i : j+1]))
+			if err != nil || len([]rune(v)) != 1 || []rune(v)[0] > 255 {
+				return nil, fmt.Errorf("%s: a character literal must be one byte, e.g. 'a' or '\\n'", pos)
+			}
+			n := int64([]rune(v)[0])
+			emit(Token{Kind: TChar, Text: strconv.FormatInt(n, 10), Int: n, Pos: pos})
+			adv(j + 1 - i)
 		case r == '"':
 			j := i + 1
 			for j < len(rs) && rs[j] != '"' && rs[j] != '\n' {

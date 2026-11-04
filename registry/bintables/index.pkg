@@ -1,0 +1,58 @@
+doc Indexing with a bounds check; loads 1 or 8 bytes depending on the element type.
+  The index is compared unsigned against the length, so negative indexes
+  fail the same check. A failed check jumps to `__pk_panic_index`.
+
+  - strings: the bytes start 8 bytes after the string's address;
+  - slices: the header's data pointer, then the element at `i × size`.
+
+  The `addr` sections give the element's address, for assignment and `&`.
+
+emit when x str
+  {x}
+  push rax
+  {i}
+  pop rcx
+  cmp rax, [rcx]
+  jae __pk_panic_index
+  movzx eax, byte [rcx+rax+8]
+  @panic
+emit when self size 1
+  {x}
+  push rax
+  {i}
+  pop rcx
+  cmp rax, [rcx+8]
+  jae __pk_panic_index
+  mov rcx, [rcx]
+  movzx eax, byte [rcx+rax]
+  @panic
+emit
+  {x}
+  push rax
+  {i}
+  pop rcx
+  cmp rax, [rcx+8]
+  jae __pk_panic_index
+  mov rcx, [rcx]
+  mov rax, [rcx+rax*8]
+  @panic
+emit addr when self size 1
+  {x}
+  push rax
+  {i}
+  pop rcx
+  cmp rax, [rcx+8]
+  jae __pk_panic_index
+  mov rcx, [rcx]
+  lea rax, [rcx+rax]
+  @panic
+emit addr
+  {x}
+  push rax
+  {i}
+  pop rcx
+  cmp rax, [rcx+8]
+  jae __pk_panic_index
+  mov rcx, [rcx]
+  lea rax, [rcx+rax*8]
+  @panic

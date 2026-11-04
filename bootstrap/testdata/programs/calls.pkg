@@ -1,9 +1,9 @@
 use std
 print twice(add3(1, 2, 3))
-fn add3(a, b, c)
+fn add3(a: int, b: int, c: int) -> int
   return a * 100 + b * 10 + c
 end
-fn twice(x)
+fn twice(x: int) -> int
   return x + x
 end
 fn noop()

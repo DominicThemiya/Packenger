@@ -1,0 +1,10 @@
+doc Dereference: load 1 or 8 bytes from the address in rax.
+
+emit when self size 1
+  {p}
+  movzx eax, byte [rax]
+emit
+  {p}
+  mov rax, [rax]
+emit addr
+  {p}

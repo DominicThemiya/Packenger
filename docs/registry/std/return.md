@@ -7,28 +7,35 @@
 truck [std](../std.md) · [source](../../../registry/std/return.pkg) · translated by [bintables/return](../bintables/return.md)
 
 ```
-fn sign(x)
+fn sign(x: int) -> int
   if x < 0
     return -1
   end
-  return x != 0
+  return 1
+end
+
+fn log(msg: str)
+  print msg
+  return
 end
 
 return sign(-5) + 1    // the program exits with code 0
 ```
 
-At the top level, `return` ends the program and its value becomes the
-process exit code (only the low 8 bits are visible to the shell). Only
-integers can be returned.
+The value must have the function's result type, and a function without a
+result takes a bare `return`. At the top level `return n` ends the program
+with exit code `n` (an `int`; only the low 8 bits reach the shell), and a
+bare `return` exits with 0.
 
 ## Syntax
 
 Kind: `statement`
 
 ```
-return {value: expr int}
+return {value: expr}
+return
 ```
 
 | slot | takes | type |
 |---|---|---|
-| `value` | expression | `int` |
+| `value` | expression | any |

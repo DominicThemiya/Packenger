@@ -2,17 +2,44 @@
 
 # bintables/assign
 
-> Assign: compute the value, store it in the variable's slot.
+> Assign: store rax into a variable's slot, or through the target's address.
 
 truck [bintables](../bintables.md) · [source](../../../registry/bintables/assign.pkg) · translates [std/assign](../std/assign.md)
+
+For a variable the value is stored directly. For any other place (a
+field, a slice element, `*p`) the value is saved on the stack while the
+target's `addr` section computes the address, then stored with the
+target's size.
 
 ## Emit variants
 
 The first variant whose condition holds is used.
 
+### `emit when target is var`
+
+```nasm
+{value}
+mov {target.addr}, rax
+```
+
+### `emit when target size 1`
+
+```nasm
+{value}
+push rax
+{target!addr}
+mov rcx, rax
+pop rax
+mov byte [rcx], al
+```
+
 ### `emit`
 
 ```nasm
 {value}
-mov {name.addr}, rax
+push rax
+{target!addr}
+mov rcx, rax
+pop rax
+mov [rcx], rax
 ```

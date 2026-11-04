@@ -9,19 +9,32 @@ format.
 
 ## The package tree
 
-- **[std](std.md)** (truck) — The standard language: C-style statements, closed with end instead of braces.
-  - [std/fn](std/fn.md) — Function definition: fn name(params) ... end
+- **[std](std.md)** (truck) — The standard language: typed, C-style statements, closed with end instead of braces.
+  - [std/types](std/types.md) — The primitive types: int, u8, bool and str.
+  - [std/struct](std/struct.md) — Struct declaration: struct Name ... end, one name: type field per line.
+  - [std/fn](std/fn.md) — Function definition: fn name(param: type, ...) [-> type] ... end
   - [std/call](std/call.md) — Function call: name(arg, ...)
   - [std/return](std/return.md) — Return from a function; at the top level, exit with that code.
-  - [std/let](std/let.md) — Declare a variable: let name = value
-  - [std/assign](std/assign.md) — Assign to an existing variable: name = value
-  - [std/print](std/print.md) — Print an int or a string, followed by a newline.
+  - [std/let](std/let.md) — Declare a variable: let name [: type] = value
+  - [std/assign](std/assign.md) — Assign to a variable, a field, a slice element or a dereferenced pointer.
+  - [std/print](std/print.md) — Print an int, u8, bool or str, followed by a newline.
   - [std/if](std/if.md) — Conditional: if cond ... [else ...] end
   - [std/while](std/while.md) — Loop: while cond ... end
   - [std/for](std/for.md) — Counting loop over an inclusive range: for i = a to b ... end
   - [std/exprstmt](std/exprstmt.md) — An expression used as a statement.
-  - [std/or](std/or.md) — || : logical or, short-circuit
-  - [std/and](std/and.md) — && : logical and, short-circuit
+  - [std/true](std/true.md) — The boolean true.
+  - [std/false](std/false.md) — The boolean false.
+  - [std/null](std/null.md) — The null pointer: a pointer to nothing, compatible with every pointer type.
+  - [std/new](std/new.md) — Allocate a struct (or any value) on the heap: new Type
+  - [std/make](std/make.md) — Make a slice of n zeroed elements: make([T], n)
+  - [std/len](std/len.md) — Length of a slice or a string: len(x)
+  - [std/index](std/index.md) — Indexing: a[i] for slices (assignable) and s[i] for strings (a u8).
+  - [std/dot](std/dot.md) — Field access through a struct pointer: p.field
+  - [std/deref](std/deref.md) — Dereference a pointer: *p
+  - [std/addr](std/addr.md) — Address of a place: &x
+  - [std/as](std/as.md) — Convert a value to another type: x as T
+  - [std/or](std/or.md) — || : logical or
+  - [std/and](std/and.md) — && : logical and
   - [std/eq](std/eq.md) — == : equal
   - [std/ne](std/ne.md) — != : not equal
   - [std/lt](std/lt.md) — < : less than
@@ -37,32 +50,46 @@ format.
   - [std/neg](std/neg.md) — - : negation
 - **[bintables](bintables.md)** (truck) — Backend truck: translates Packenger packages to NASM for x86-64 Linux.
   - [bintables/add](bintables/add.md) — + : `add`.
+  - [bintables/addr](bintables/addr.md) — Address of: renders the operand's addr section.
+  - [bintables/alloc](bintables/alloc.md) — Helper: the heap. `__pk_alloc` returns rdi bytes of zeroed memory in rax.
   - [bintables/and](bintables/and.md) — && : short-circuit with a conditional jump; produces 0 or 1.
-  - [bintables/assign](bintables/assign.md) — Assign: compute the value, store it in the variable's slot.
+  - [bintables/as](bintables/as.md) — Conversions: u8 keeps the low byte, bool tests for non-zero, others keep the bits.
+  - [bintables/assign](bintables/assign.md) — Assign: store rax into a variable's slot, or through the target's address.
   - [bintables/binop](bintables/binop.md) — Helper for binary operators: left operand in rax, right operand in rbx.
   - [bintables/call](bintables/call.md) — Call: push arguments right to left, call, then pop them.
+  - [bintables/deref](bintables/deref.md) — Dereference: load 1 or 8 bytes from the address in rax.
   - [bintables/div](bintables/div.md) — / : signed division with `idiv` (quotient in rax).
-  - [bintables/eq](bintables/eq.md) — == : `cmp`, then `sete` for a value or `jne` for a branch.
+  - [bintables/dot](bintables/dot.md) — Field access: the struct pointer plus the field's offset; 1- or 8-byte load.
+  - [bintables/eq](bintables/eq.md) — == : `cmp` and `sete`/`jne`; strings are compared by content.
   - [bintables/exprstmt](bintables/exprstmt.md) — Expression statement: compute the expression and ignore rax.
+  - [bintables/false](bintables/false.md) — false: 0 in rax.
   - [bintables/fn](bintables/fn.md) — Function: label, standard stack frame, body, default return 0.
   - [bintables/ge](bintables/ge.md) — >= : `cmp`, then `setge` for a value or `jl` for a branch.
   - [bintables/gt](bintables/gt.md) — > : `cmp`, then `setg` for a value or `jle` for a branch.
   - [bintables/if](bintables/if.md) — Conditional jump around the then/else blocks.
+  - [bintables/index](bintables/index.md) — Indexing with a bounds check; loads 1 or 8 bytes depending on the element type.
   - [bintables/int](bintables/int.md) — Integer literal: loads the value into rax.
   - [bintables/le](bintables/le.md) — <= : `cmp`, then `setle` for a value or `jg` for a branch.
+  - [bintables/len](bintables/len.md) — len: a string's length is its first qword; a slice's is at offset 8 of its header.
   - [bintables/let](bintables/let.md) — Declare: compute the value, store it in the variable's slot.
   - [bintables/lt](bintables/lt.md) — < : `cmp`, then `setl` for a value or `jge` for a branch.
+  - [bintables/make](bintables/make.md) — make: allocate a slice header {data, len, cap} and n zeroed elements.
   - [bintables/mod](bintables/mod.md) — % : signed remainder with `idiv` (remainder from rdx).
   - [bintables/mul](bintables/mul.md) — * : `imul`.
-  - [bintables/ne](bintables/ne.md) — != : `cmp`, then `setne` for a value or `je` for a branch.
+  - [bintables/ne](bintables/ne.md) — != : `cmp` and `setne`/`je`; strings are compared by content.
   - [bintables/neg](bintables/neg.md) — - : `neg rax`.
+  - [bintables/new](bintables/new.md) — new: allocate the type's size from the heap; rax is the pointer.
   - [bintables/not](bintables/not.md) — ! : `test` and `sete`; produces 0 or 1.
+  - [bintables/null](bintables/null.md) — null: address 0 in rax.
   - [bintables/or](bintables/or.md) — || : short-circuit with a conditional jump; produces 0 or 1.
+  - [bintables/panic](bintables/panic.md) — Helper: runtime errors. Prints a message to stderr and exits with status 2.
   - [bintables/print](bintables/print.md) — print: write the value and a newline to stdout with the write syscall.
   - [bintables/program](bintables/program.md) — Program skeleton: entry point, top-level code, functions, support code and data.
-  - [bintables/return](bintables/return.md) — Return: value in rax, tear down the frame, ret.
+  - [bintables/return](bintables/return.md) — Return: value in rax (zero for a bare return), tear down the frame, ret.
   - [bintables/str](bintables/str.md) — String literal: rax points at a length-prefixed byte string.
+  - [bintables/streq](bintables/streq.md) — Helper: `__pk_streq` compares the strings in rax and rbx; rax is 1 if equal.
   - [bintables/sub](bintables/sub.md) — - : `sub`.
+  - [bintables/true](bintables/true.md) — true: 1 in rax.
   - [bintables/var](bintables/var.md) — Variable read: loads the variable's stack slot into rax.
   - [bintables/while](bintables/while.md) — Loop with the condition tested at the top.
 
@@ -71,27 +98,39 @@ format.
 | syntax package | becomes |
 |---|---|
 | [std/add](std/add.md) | [bintables/add](bintables/add.md) |
+| [std/addr](std/addr.md) | [bintables/addr](bintables/addr.md) |
 | [std/and](std/and.md) | [bintables/and](bintables/and.md) |
+| [std/as](std/as.md) | [bintables/as](bintables/as.md) |
 | [std/assign](std/assign.md) | [bintables/assign](bintables/assign.md) |
 | [std/call](std/call.md) | [bintables/call](bintables/call.md) |
+| [std/deref](std/deref.md) | [bintables/deref](bintables/deref.md) |
 | [std/div](std/div.md) | [bintables/div](bintables/div.md) |
+| [std/dot](std/dot.md) | [bintables/dot](bintables/dot.md) |
 | [std/eq](std/eq.md) | [bintables/eq](bintables/eq.md) |
 | [std/exprstmt](std/exprstmt.md) | [bintables/exprstmt](bintables/exprstmt.md) |
+| [std/false](std/false.md) | [bintables/false](bintables/false.md) |
 | [std/fn](std/fn.md) | [bintables/fn](bintables/fn.md) |
 | [std/for](std/for.md) | expands into [std/let](std/let.md), [std/while](std/while.md), [std/le](std/le.md), [std/assign](std/assign.md), [std/add](std/add.md) |
 | [std/ge](std/ge.md) | [bintables/ge](bintables/ge.md) |
 | [std/gt](std/gt.md) | [bintables/gt](bintables/gt.md) |
 | [std/if](std/if.md) | [bintables/if](bintables/if.md) |
+| [std/index](std/index.md) | [bintables/index](bintables/index.md) |
 | [std/le](std/le.md) | [bintables/le](bintables/le.md) |
+| [std/len](std/len.md) | [bintables/len](bintables/len.md) |
 | [std/let](std/let.md) | [bintables/let](bintables/let.md) |
 | [std/lt](std/lt.md) | [bintables/lt](bintables/lt.md) |
+| [std/make](std/make.md) | [bintables/make](bintables/make.md) |
 | [std/mod](std/mod.md) | [bintables/mod](bintables/mod.md) |
 | [std/mul](std/mul.md) | [bintables/mul](bintables/mul.md) |
 | [std/ne](std/ne.md) | [bintables/ne](bintables/ne.md) |
 | [std/neg](std/neg.md) | [bintables/neg](bintables/neg.md) |
+| [std/new](std/new.md) | [bintables/new](bintables/new.md) |
 | [std/not](std/not.md) | [bintables/not](bintables/not.md) |
+| [std/null](std/null.md) | [bintables/null](bintables/null.md) |
 | [std/or](std/or.md) | [bintables/or](bintables/or.md) |
 | [std/print](std/print.md) | [bintables/print](bintables/print.md) |
 | [std/return](std/return.md) | [bintables/return](bintables/return.md) |
+| [std/struct](std/struct.md) | *(no backend package)* |
 | [std/sub](std/sub.md) | [bintables/sub](bintables/sub.md) |
+| [std/true](std/true.md) | [bintables/true](bintables/true.md) |
 | [std/while](std/while.md) | [bintables/while](bintables/while.md) |

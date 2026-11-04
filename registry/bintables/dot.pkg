@@ -1,0 +1,11 @@
+doc Field access: the struct pointer plus the field's offset; 1- or 8-byte load.
+
+emit when self size 1
+  {obj}
+  movzx eax, byte [rax+{f.offset}]
+emit
+  {obj}
+  mov rax, [rax+{f.offset}]
+emit addr
+  {obj}
+  add rax, {f.offset}

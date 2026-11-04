@@ -1,0 +1,9 @@
+doc Length of a slice or a string: len(x)
+  ```
+  print len("héllo")              // 6: the length in bytes
+  print len(make([u8], 3))        // 3
+  ```
+
+syntax expr
+  len ( {x: expr [T]} ) -> int
+  len ( {x: expr str} ) -> int

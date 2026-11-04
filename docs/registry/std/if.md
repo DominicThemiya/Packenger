@@ -6,8 +6,8 @@
 
 truck [std](../std.md) · [source](../../../registry/std/if.pkg) · translated by [bintables/if](../bintables/if.md)
 
-Runs the first block if the condition is non-zero, otherwise the `else`
-block, if there is one.
+Runs the first block if the condition is `true`, otherwise the `else`
+block, if there is one. The condition must be a `bool`.
 
 ```
 if n % 15 == 0
@@ -28,11 +28,11 @@ There is no `else if` chain yet; nest `if` inside `else` instead.
 Kind: `statement`
 
 ```
-if {cond: expr int} {then: block} [ else {else: block} ] end
+if {cond: expr bool} {then: block} [ else {else: block} ] end
 ```
 
 | slot | takes | type |
 |---|---|---|
-| `cond` | expression | `int` |
+| `cond` | expression | `bool` |
 | `then` | block of statements | — |
 | `else` (optional) | block of statements | — |

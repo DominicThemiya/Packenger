@@ -1,6 +1,6 @@
 doc Conditional: if cond ... [else ...] end
-  Runs the first block if the condition is non-zero, otherwise the `else`
-  block, if there is one.
+  Runs the first block if the condition is `true`, otherwise the `else`
+  block, if there is one. The condition must be a `bool`.
 
   ```
   if n % 15 == 0
@@ -17,4 +17,4 @@ doc Conditional: if cond ... [else ...] end
   There is no `else if` chain yet; nest `if` inside `else` instead.
 
 syntax statement
-  if {cond: expr int} {then: block} [else {else: block}] end
+  if {cond: expr bool} {then: block} [else {else: block}] end

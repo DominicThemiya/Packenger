@@ -6,9 +6,10 @@
 //	doc      <one-line summary>
 //	  <Markdown body, indented two spaces; blank lines and // are kept>
 //	needs    <package> <package> ...        other packages this one builds on
+//	type     <name> <size>                  declare a primitive type
 //	truck                                   this file is a truck (a collection);
 //	  <member>                              members live at <truck>/<member>.pkg
-//	syntax   <kind> [precedence] [left|right]
+//	syntax   <kind> [precedence] [left|right] [place] [return]
 //	  <pattern> [-> <type> | -> {slot}]     one or more patterns
 //	expand                                  rewrite into other packages' syntax
 //	  <source with {slot} holes>
@@ -33,6 +34,7 @@ type File struct {
 	Doc     string   // one-line summary
 	DocBody []string // Markdown, dedented
 	Needs   []string
+	Types   []TypeDecl
 	Truck   []string
 	IsTruck bool
 	Syntax  []*Syntax
@@ -52,10 +54,18 @@ func Kind(name string) string {
 	return name
 }
 
+// TypeDecl declares a primitive type and its size in bytes.
+type TypeDecl struct {
+	Name string
+	Size int
+}
+
 type Syntax struct {
-	Kind     string // statement, function, expr, infix, prefix
+	Kind     string // statement, function, struct, expr, infix, prefix, postfix
 	Prec     int
 	Right    bool
+	Place    bool // its nodes can be assigned to and have an address
+	Return   bool // a return statement: its value is checked against the function
 	Patterns []*Pattern
 	Line     int
 }
@@ -74,8 +84,8 @@ type Elem struct {
 
 type Slot struct {
 	Name string
-	Kind string // expr block newvar var ident func newfunc args params
-	Arg  string // expr/var: required type; newvar: "of <slot>"
+	Kind string // expr block newvar var ident func newfunc args params type place field newtype fields
+	Arg  string // expr/var/place/type: required type; newvar/field: "of <slot>"
 }
 
 type Emit struct {
@@ -87,22 +97,23 @@ type Emit struct {
 
 type Cond struct {
 	Slot string
-	Op   string // type, is, has, simple, empty
+	Op   string // type, is, has, simple, empty, missing, size
 	Arg  string
 }
 
 var sectionKeywords = map[string]bool{
-	"doc": true, "needs": true, "truck": true, "syntax": true, "expand": true,
+	"doc": true, "needs": true, "type": true, "truck": true, "syntax": true, "expand": true,
 	"emit": true, "data": true, "support": true,
 }
 
 var slotKinds = map[string]bool{
 	"expr": true, "block": true, "newvar": true, "var": true, "ident": true,
 	"func": true, "newfunc": true, "args": true, "params": true,
+	"type": true, "place": true, "field": true, "newtype": true, "fields": true,
 }
 
 var syntaxKinds = map[string]bool{
-	"statement": true, "function": true, "expr": true, "infix": true, "prefix": true,
+	"statement": true, "function": true, "struct": true, "expr": true, "infix": true, "prefix": true, "postfix": true,
 }
 
 func Parse(name, origin, src string) (*File, error) {
@@ -133,7 +144,7 @@ func Parse(name, origin, src string) (*File, error) {
 			fields := strings.Fields(trimmed)
 			kw := fields[0]
 			if !sectionKeywords[kw] {
-				return nil, errf(ln, "unknown section %q (expected one of doc, needs, truck, syntax, expand, emit, data, support)", kw)
+				return nil, errf(ln, "unknown section %q (expected one of doc, needs, type, truck, syntax, expand, emit, data, support)", kw)
 			}
 			cur, curSyntax = nil, nil
 			inDoc = kw == "doc"
@@ -143,6 +154,15 @@ func Parse(name, origin, src string) (*File, error) {
 				f.Doc = strings.TrimSpace(strings.TrimPrefix(trimmed, "doc"))
 			case "needs":
 				f.Needs = append(f.Needs, args...)
+			case "type":
+				if len(args) != 2 {
+					return nil, errf(ln, "use: type <name> <size in bytes>")
+				}
+				size, err := strconv.Atoi(args[1])
+				if err != nil || (size != 1 && size != 8) {
+					return nil, errf(ln, "type size must be 1 or 8 bytes")
+				}
+				f.Types = append(f.Types, TypeDecl{args[0], size})
 			case "truck":
 				f.IsTruck = true
 				cur = &f.Truck
@@ -216,7 +236,7 @@ func dedent(s string) string {
 
 func parseSyntaxHeader(args []string) (*Syntax, error) {
 	if len(args) == 0 || !syntaxKinds[args[0]] {
-		return nil, fmt.Errorf("syntax needs a kind: statement, function, expr, infix or prefix")
+		return nil, fmt.Errorf("syntax needs a kind: statement, function, struct, expr, infix, prefix or postfix")
 	}
 	s := &Syntax{Kind: args[0]}
 	for _, a := range args[1:] {
@@ -224,6 +244,10 @@ func parseSyntaxHeader(args []string) (*Syntax, error) {
 		case "left":
 		case "right":
 			s.Right = true
+		case "place":
+			s.Place = true
+		case "return":
+			s.Return = true
 		default:
 			n, err := strconv.Atoi(a)
 			if err != nil {
@@ -232,7 +256,7 @@ func parseSyntaxHeader(args []string) (*Syntax, error) {
 			s.Prec = n
 		}
 	}
-	if (s.Kind == "infix" || s.Kind == "prefix") && s.Prec == 0 {
+	if (s.Kind == "infix" || s.Kind == "prefix" || s.Kind == "postfix") && s.Prec == 0 {
 		return nil, fmt.Errorf("%s syntax needs a precedence (a positive number)", s.Kind)
 	}
 	return s, nil
@@ -252,14 +276,14 @@ func parseEmitHeader(args []string) (*Emit, error) {
 	}
 	args = args[1:]
 	switch {
-	case len(args) == 3 && (args[1] == "is" || args[1] == "has"):
+	case len(args) == 3 && (args[1] == "is" || args[1] == "has" || args[1] == "size"):
 		e.Cond = &Cond{Slot: args[0], Op: args[1], Arg: args[2]}
-	case len(args) == 2 && (args[1] == "simple" || args[1] == "empty"):
+	case len(args) == 2 && (args[1] == "simple" || args[1] == "empty" || args[1] == "missing"):
 		e.Cond = &Cond{Slot: args[0], Op: args[1]}
 	case len(args) == 2:
 		e.Cond = &Cond{Slot: args[0], Op: "type", Arg: args[1]}
 	default:
-		return nil, fmt.Errorf("bad condition; use: when <slot> <type> | <slot> is <kind> | <slot> has <section> | <slot> simple | <slot> empty")
+		return nil, fmt.Errorf("bad condition; use: when <slot> <type> | <slot> is <kind> | <slot> has <section> | <slot> size <n> | <slot> simple | <slot> empty | <slot> missing")
 	}
 	return e, nil
 }
@@ -271,9 +295,24 @@ func ParsePattern(s string) (*Pattern, error) {
 		return nil, err
 	}
 	p := &Pattern{}
-	if n := len(toks); n >= 2 && toks[n-2] == "->" {
-		p.Result = toks[n-1]
-		toks = toks[:n-2]
+	// the result type: everything after the last "->", if it is only a type
+	// (names, ?, brackets and {slot} references)
+	for i := len(toks) - 2; i >= 0; i-- {
+		if toks[i] != "->" {
+			continue
+		}
+		isType := true
+		for _, t := range toks[i+1:] {
+			if strings.Contains(t, ":") || strings.HasPrefix(t, "\x00") {
+				isType = false
+			}
+		}
+		if isType {
+			p.Result = strings.Join(toks[i+1:], " ")
+			p.Result = strings.ReplaceAll(strings.ReplaceAll(p.Result, "[ ", "["), " ]", "]")
+			toks = toks[:i]
+		}
+		break
 	}
 	elems, rest, err := parseElems(toks, false)
 	if err != nil {
@@ -299,12 +338,21 @@ func patternTokens(s string) ([]string, error) {
 			out = append(out, string(c))
 			i++
 		case c == '{':
-			j := strings.IndexByte(s[i:], '}')
-			if j < 0 {
+			depth, j := 0, i
+			for ; j < len(s); j++ {
+				if s[j] == '{' {
+					depth++
+				} else if s[j] == '}' {
+					if depth--; depth == 0 {
+						break
+					}
+				}
+			}
+			if j >= len(s) {
 				return nil, fmt.Errorf("unterminated slot in pattern")
 			}
-			out = append(out, s[i:i+j+1])
-			i += j + 1
+			out = append(out, s[i:j+1])
+			i = j + 1
 		case c == '\\' && i+1 < len(s):
 			j := i + 1
 			for j < len(s) && s[j] != ' ' && s[j] != '\t' {
@@ -372,12 +420,15 @@ func parseSlot(t string) (*Slot, error) {
 		return nil, fmt.Errorf("slot %s: unknown kind (expr, block, newvar, var, ident, func, newfunc, args, params)", t)
 	}
 	s := &Slot{Name: strings.TrimSpace(name), Kind: fields[0], Arg: strings.Join(fields[1:], " ")}
-	if s.Kind == "newvar" && s.Arg != "" {
+	if (s.Kind == "newvar" || s.Kind == "field") && s.Arg != "" {
 		of, ok := strings.CutPrefix(s.Arg, "of ")
 		if !ok {
-			return nil, fmt.Errorf("slot %s: newvar takes 'of <slot>'", t)
+			return nil, fmt.Errorf("slot %s: %s takes 'of <slot>'", t, s.Kind)
 		}
 		s.Arg = strings.TrimSpace(of)
+	}
+	if s.Kind == "field" && s.Arg == "" {
+		return nil, fmt.Errorf("slot %s: field needs 'of <slot>', the expression whose field it is", t)
 	}
 	return s, nil
 }
@@ -390,8 +441,12 @@ func checkPattern(s *Syntax, p *Pattern) error {
 			return fmt.Errorf("infix pattern must look like {a: expr} OP {b: expr}")
 		}
 	case "prefix":
-		if len(p.Elems) != 2 || p.Elems[0].Lit == "" || !isExpr(p.Elems[1]) {
+		if len(p.Elems) != 2 || p.Elems[0].Lit == "" || !(isExpr(p.Elems[1]) || p.Elems[1].Slot != nil && p.Elems[1].Slot.Kind == "place") {
 			return fmt.Errorf("prefix pattern must look like OP {a: expr}")
+		}
+	case "postfix":
+		if len(p.Elems) < 2 || !isExpr(p.Elems[0]) || p.Elems[1].Lit == "" {
+			return fmt.Errorf("postfix pattern must look like {a: expr} OP ...")
 		}
 	}
 	if _, err := blockClosers(p.Elems); err != nil {
@@ -427,10 +482,10 @@ func blockClosers(es []Elem) ([]string, error) {
 					return err
 				}
 			}
-			if e.Slot != nil && e.Slot.Kind == "block" {
+			if e.Slot != nil && (e.Slot.Kind == "block" || e.Slot.Kind == "fields") {
 				f := follow(es, i, after)
 				if len(f) == 0 {
-					return fmt.Errorf("block slot {%s} must be followed by a literal (like 'end')", e.Slot.Name)
+					return fmt.Errorf("%s slot {%s} must be followed by a literal (like 'end')", e.Slot.Kind, e.Slot.Name)
 				}
 				out = append(out, f...)
 			}

@@ -2,32 +2,45 @@
 
 # std
 
-> The standard language: C-style statements, closed with end instead of braces.
+> The standard language: typed, C-style statements, closed with end instead of braces.
 
 [source](../../registry/std.pkg) · truck
 
-`std` is the front-end truck. Its packages define what Packenger source looks
-like; none of them contains machine code. Each one declares a pattern, the
-types of its slots and the type it produces, and the compiler builds its
-grammar from whatever `std` packages are loaded.
+`std` is the front-end truck. Its packages define what Packenger source
+looks like; none of them contains machine code. Each one declares a
+pattern, the types of its slots and the type it produces, and the
+compiler builds its grammar from whatever `std` packages are loaded.
 
 ```
 use std
 
-fn fib(n)
-  if n < 2
-    return n
-  end
-  return fib(n - 1) + fib(n - 2)
+struct Node
+  value: int
+  next: ptr Node
 end
 
-print fib(35)
+fn sum(list: ptr Node) -> int
+  let total = 0
+  while list != null
+    total = total + list.value
+    list = list.next
+  end
+  return total
+end
+
+let a = new Node
+a.value = 40
+a.next = new Node
+a.next.value = 2
+print sum(a)      // 42
 ```
 
 | group | packages |
 |---|---|
+| types | `types` (`int`, `u8`, `bool`, `str`), `struct`, `as`, `true`, `false`, `null` |
 | functions | `fn`, `call`, `return` |
 | variables | `let`, `assign` |
+| memory | `new`, `make`, `len`, `index` `a[i]`, `dot` `p.x`, `deref` `*p`, `addr` `&x` |
 | control flow | `if`, `while`, `for` |
 | output | `print` |
 | statements | `exprstmt` |
@@ -35,30 +48,45 @@ print fib(35)
 | comparison | `eq` `==`, `ne` `!=`, `lt` `<`, `le` `<=`, `gt` `>`, `ge` `>=` |
 | logic | `and` `&&`, `or` `||`, `not` `!` |
 
-Operator precedence, lowest first: `||` (10), `&&` (20), `== !=` (30),
-`< <= > >=` (40), `+ -` (50), `* / %` (60), prefix `! -` (70). All infix
-operators are left-associative.
+Precedence, lowest first: `||` (10), `&&` (20), `== !=` (30),
+`< <= > >=` (40), `+ -` (50), `* / %` (60), prefix `! -` (70), prefix
+`* &` (80), `as` (85), postfix `a[i]` and `p.x` (90). All infix operators
+are left-associative.
 
 Use the whole truck with `use std`, or pick packages, e.g. `use std/print`.
 Every package except `for` is translated by the `bintables` package of the
-same name; `for` expands into other `std` packages.
+same name (`types` and `struct` only declare types and need no code);
+`for` expands into other `std` packages.
 
 ## Packages
 
 | package | summary |
 |---|---|
-| [std/fn](std/fn.md) | Function definition: fn name(params) ... end |
+| [std/types](std/types.md) | The primitive types: int, u8, bool and str. |
+| [std/struct](std/struct.md) | Struct declaration: struct Name ... end, one name: type field per line. |
+| [std/fn](std/fn.md) | Function definition: fn name(param: type, ...) [-> type] ... end |
 | [std/call](std/call.md) | Function call: name(arg, ...) |
 | [std/return](std/return.md) | Return from a function; at the top level, exit with that code. |
-| [std/let](std/let.md) | Declare a variable: let name = value |
-| [std/assign](std/assign.md) | Assign to an existing variable: name = value |
-| [std/print](std/print.md) | Print an int or a string, followed by a newline. |
+| [std/let](std/let.md) | Declare a variable: let name [: type] = value |
+| [std/assign](std/assign.md) | Assign to a variable, a field, a slice element or a dereferenced pointer. |
+| [std/print](std/print.md) | Print an int, u8, bool or str, followed by a newline. |
 | [std/if](std/if.md) | Conditional: if cond ... [else ...] end |
 | [std/while](std/while.md) | Loop: while cond ... end |
 | [std/for](std/for.md) | Counting loop over an inclusive range: for i = a to b ... end |
 | [std/exprstmt](std/exprstmt.md) | An expression used as a statement. |
-| [std/or](std/or.md) | \|\| : logical or, short-circuit |
-| [std/and](std/and.md) | && : logical and, short-circuit |
+| [std/true](std/true.md) | The boolean true. |
+| [std/false](std/false.md) | The boolean false. |
+| [std/null](std/null.md) | The null pointer: a pointer to nothing, compatible with every pointer type. |
+| [std/new](std/new.md) | Allocate a struct (or any value) on the heap: new Type |
+| [std/make](std/make.md) | Make a slice of n zeroed elements: make([T], n) |
+| [std/len](std/len.md) | Length of a slice or a string: len(x) |
+| [std/index](std/index.md) | Indexing: a[i] for slices (assignable) and s[i] for strings (a u8). |
+| [std/dot](std/dot.md) | Field access through a struct pointer: p.field |
+| [std/deref](std/deref.md) | Dereference a pointer: *p |
+| [std/addr](std/addr.md) | Address of a place: &x |
+| [std/as](std/as.md) | Convert a value to another type: x as T |
+| [std/or](std/or.md) | \|\| : logical or |
+| [std/and](std/and.md) | && : logical and |
 | [std/eq](std/eq.md) | == : equal |
 | [std/ne](std/ne.md) | != : not equal |
 | [std/lt](std/lt.md) | < : less than |

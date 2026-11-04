@@ -1,7 +1,7 @@
 use std
 
 // naive recursion: a good speed benchmark
-fn fib(n)
+fn fib(n: int) -> int
   if n < 2
     return n
   end

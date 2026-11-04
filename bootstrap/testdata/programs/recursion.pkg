@@ -1,11 +1,11 @@
 use std
-fn fact(n)
+fn fact(n: int) -> int
   if n <= 1
     return 1
   end
   return n * fact(n - 1)
 end
-fn ack(m, n)
+fn ack(m: int, n: int) -> int
   if m == 0
     return n + 1
   end

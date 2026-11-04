@@ -1,0 +1,4 @@
+doc true: 1 in rax.
+
+emit
+  mov eax, 1

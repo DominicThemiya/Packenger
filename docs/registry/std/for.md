@@ -25,8 +25,8 @@ end
 
 Because it is an expansion:
 
-- the loop variable is declared in the surrounding block and stays visible
-  after the loop;
+- the loop variable is an `int` declared in the surrounding block, and
+  stays visible after the loop;
 - the upper bound is re-evaluated on every iteration;
 - `to` is a keyword and cannot be used as a variable name.
 
@@ -35,12 +35,12 @@ Because it is an expansion:
 Kind: `statement`
 
 ```
-for {i: newvar} = {from: expr int} to {to: expr int} {body: block} end
+for {i: newvar of from} = {from: expr int} to {to: expr int} {body: block} end
 ```
 
 | slot | takes | type |
 |---|---|---|
-| `i` | new variable name | any |
+| `i` | new variable name | type of `from` |
 | `from` | expression | `int` |
 | `to` | expression | `int` |
 | `body` | block of statements | — |

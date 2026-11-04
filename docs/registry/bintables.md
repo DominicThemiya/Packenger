@@ -28,8 +28,13 @@ not enforce them.
 | parameter *i* | `qword [rbp+16+8i]` |
 | arguments | pushed right to left by the caller, popped by the caller |
 | integers | 64-bit signed, two's complement (overflow wraps) |
-| booleans | 0 is false, anything else is true; comparisons produce 0 or 1 |
-| strings | pointer to a `qword` length followed by the bytes |
+| `bool` | 0 is false, 1 is true |
+| `u8` | zero-extended in `rax`; one byte in memory |
+| `str` | pointer to a `qword` length followed by the bytes |
+| `[T]` | pointer to a 24-byte header: data pointer, length, capacity |
+| `ptr T` | an address; `null` is 0 |
+| structs | heap memory from `__pk_alloc`; fields aligned to their size |
+| runtime errors | `__pk_panic_*`: message on stderr, exit status 2 |
 | exit code | the value returned by the top-level code |
 
 ## Optimizations
@@ -55,31 +60,45 @@ names and pass `--target <truck>`.
 | package | summary |
 |---|---|
 | [bintables/add](bintables/add.md) | + : `add`. |
+| [bintables/addr](bintables/addr.md) | Address of: renders the operand's addr section. |
+| [bintables/alloc](bintables/alloc.md) | Helper: the heap. `__pk_alloc` returns rdi bytes of zeroed memory in rax. |
 | [bintables/and](bintables/and.md) | && : short-circuit with a conditional jump; produces 0 or 1. |
-| [bintables/assign](bintables/assign.md) | Assign: compute the value, store it in the variable's slot. |
+| [bintables/as](bintables/as.md) | Conversions: u8 keeps the low byte, bool tests for non-zero, others keep the bits. |
+| [bintables/assign](bintables/assign.md) | Assign: store rax into a variable's slot, or through the target's address. |
 | [bintables/binop](bintables/binop.md) | Helper for binary operators: left operand in rax, right operand in rbx. |
 | [bintables/call](bintables/call.md) | Call: push arguments right to left, call, then pop them. |
+| [bintables/deref](bintables/deref.md) | Dereference: load 1 or 8 bytes from the address in rax. |
 | [bintables/div](bintables/div.md) | / : signed division with `idiv` (quotient in rax). |
-| [bintables/eq](bintables/eq.md) | == : `cmp`, then `sete` for a value or `jne` for a branch. |
+| [bintables/dot](bintables/dot.md) | Field access: the struct pointer plus the field's offset; 1- or 8-byte load. |
+| [bintables/eq](bintables/eq.md) | == : `cmp` and `sete`/`jne`; strings are compared by content. |
 | [bintables/exprstmt](bintables/exprstmt.md) | Expression statement: compute the expression and ignore rax. |
+| [bintables/false](bintables/false.md) | false: 0 in rax. |
 | [bintables/fn](bintables/fn.md) | Function: label, standard stack frame, body, default return 0. |
 | [bintables/ge](bintables/ge.md) | >= : `cmp`, then `setge` for a value or `jl` for a branch. |
 | [bintables/gt](bintables/gt.md) | > : `cmp`, then `setg` for a value or `jle` for a branch. |
 | [bintables/if](bintables/if.md) | Conditional jump around the then/else blocks. |
+| [bintables/index](bintables/index.md) | Indexing with a bounds check; loads 1 or 8 bytes depending on the element type. |
 | [bintables/int](bintables/int.md) | Integer literal: loads the value into rax. |
 | [bintables/le](bintables/le.md) | <= : `cmp`, then `setle` for a value or `jg` for a branch. |
+| [bintables/len](bintables/len.md) | len: a string's length is its first qword; a slice's is at offset 8 of its header. |
 | [bintables/let](bintables/let.md) | Declare: compute the value, store it in the variable's slot. |
 | [bintables/lt](bintables/lt.md) | < : `cmp`, then `setl` for a value or `jge` for a branch. |
+| [bintables/make](bintables/make.md) | make: allocate a slice header {data, len, cap} and n zeroed elements. |
 | [bintables/mod](bintables/mod.md) | % : signed remainder with `idiv` (remainder from rdx). |
 | [bintables/mul](bintables/mul.md) | * : `imul`. |
-| [bintables/ne](bintables/ne.md) | != : `cmp`, then `setne` for a value or `je` for a branch. |
+| [bintables/ne](bintables/ne.md) | != : `cmp` and `setne`/`je`; strings are compared by content. |
 | [bintables/neg](bintables/neg.md) | - : `neg rax`. |
+| [bintables/new](bintables/new.md) | new: allocate the type's size from the heap; rax is the pointer. |
 | [bintables/not](bintables/not.md) | ! : `test` and `sete`; produces 0 or 1. |
+| [bintables/null](bintables/null.md) | null: address 0 in rax. |
 | [bintables/or](bintables/or.md) | \|\| : short-circuit with a conditional jump; produces 0 or 1. |
+| [bintables/panic](bintables/panic.md) | Helper: runtime errors. Prints a message to stderr and exits with status 2. |
 | [bintables/print](bintables/print.md) | print: write the value and a newline to stdout with the write syscall. |
 | [bintables/program](bintables/program.md) | Program skeleton: entry point, top-level code, functions, support code and data. |
-| [bintables/return](bintables/return.md) | Return: value in rax, tear down the frame, ret. |
+| [bintables/return](bintables/return.md) | Return: value in rax (zero for a bare return), tear down the frame, ret. |
 | [bintables/str](bintables/str.md) | String literal: rax points at a length-prefixed byte string. |
+| [bintables/streq](bintables/streq.md) | Helper: `__pk_streq` compares the strings in rax and rbx; rax is 1 if equal. |
 | [bintables/sub](bintables/sub.md) | - : `sub`. |
+| [bintables/true](bintables/true.md) | true: 1 in rax. |
 | [bintables/var](bintables/var.md) | Variable read: loads the variable's stack slot into rax. |
 | [bintables/while](bintables/while.md) | Loop with the condition tested at the top. |

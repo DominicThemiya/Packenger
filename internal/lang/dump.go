@@ -8,7 +8,7 @@ import (
 )
 
 var tokKindNames = map[TokKind]string{
-	TEOF: "eof", TNewline: "newline", TIdent: "ident", TInt: "int", TStr: "str", TPunct: "punct", THole: "hole",
+	TEOF: "eof", TNewline: "newline", TIdent: "ident", TInt: "int", TStr: "str", TPunct: "punct", THole: "hole", TChar: "char",
 }
 
 // DumpTokens renders a token stream in the stable format documented in
@@ -18,7 +18,7 @@ func DumpTokens(toks []Token) string {
 	for _, t := range toks {
 		fmt.Fprintf(&b, "%d:%d %s", t.Pos.Line, t.Pos.Col, tokKindNames[t.Kind])
 		switch t.Kind {
-		case TIdent, TPunct, TInt:
+		case TIdent, TPunct, TInt, TChar:
 			b.WriteString(" " + t.Text)
 		case TStr:
 			b.WriteString(" " + pkgfile.Quote(t.Text))
@@ -65,14 +65,19 @@ func nodeLine(n *Node) string {
 			where = "param"
 		}
 		s += fmt.Sprintf(" %s %s %d", n.Var.Name, where, n.Var.Index)
-	case "ident", "func", "newfunc":
+	case "ident", "func", "newfunc", "newtype", "fielddecl":
 		s += " " + n.Ident
+	case "field":
+		s += " " + n.Ident
+		if n.Field != nil {
+			s += fmt.Sprintf(" offset %d", n.Field.Offset)
+		}
 	}
 	if len(n.Expanded) > 0 {
 		s += " expanded=" + strings.Join(n.Expanded, ",")
 	}
 	if f := n.Frame; f != nil {
-		s += fmt.Sprintf(" frame name=%s params=%d locals=%d size=%d", f.Name, f.Params, f.Slots, f.Size())
+		s += fmt.Sprintf(" frame name=%s params=%d locals=%d size=%d ret=%s", f.Name, f.Params, f.Slots, f.Size(), pkgfile.Quote(f.Ret))
 	}
 	return s
 }

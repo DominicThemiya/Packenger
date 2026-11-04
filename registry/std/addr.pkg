@@ -1,0 +1,18 @@
+doc Address of a place: &x
+  Gives a pointer to a variable, a field or a slice element.
+
+  ```
+  fn bump(counter: ptr int)
+    *counter = *counter + 1
+  end
+
+  let n = 0
+  bump(&n)
+  print n     // 1
+  ```
+
+  A pointer to a local variable is only valid while its function is
+  running.
+
+syntax prefix 80
+  & {x: place} -> ptr {x}

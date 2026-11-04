@@ -1,13 +1,25 @@
-doc != : `cmp`, then `setne` for a value or `je` for a branch.
+doc != : `cmp` and `setne`/`je`; strings are compared by content.
   Two kinds of sections:
 
-  - `emit` produces the value 0 or 1 in `rax` with `setne`;
+  - `emit` produces `true` or `false` (1 or 0) in `rax`;
   - `emit jfalse` is used by `if` and `while`: it jumps to `{target}` when
-    the comparison is false (`je`), so no 0/1 value is produced at all.
+    the comparison is false, so no value is produced at all.
 
-  Each has a `when right simple` variant that compares against the right
-  operand directly.
+  Strings go through `__pk_streq`, which compares lengths and then bytes.
+  Comparisons with `null` just test the pointer (`when right is null`).
+  Other operands have a `when right simple` variant that compares against
+  the right operand directly.
 
+emit when left str
+  @binop
+  call __pk_streq
+  xor eax, 1
+  @streq
+emit when right is null
+  {left}
+  test rax, rax
+  setne al
+  movzx eax, al
 emit when right simple
   {left}
   cmp rax, {right.operand}
@@ -18,6 +30,16 @@ emit
   cmp rax, rbx
   setne al
   movzx eax, al
+emit jfalse when left str
+  @binop
+  call __pk_streq
+  test rax, rax
+  jnz {target}
+  @streq
+emit jfalse when right is null
+  {left}
+  test rax, rax
+  je {target}
 emit jfalse when right simple
   {left}
   cmp rax, {right.operand}

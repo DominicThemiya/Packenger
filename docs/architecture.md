@@ -17,8 +17,9 @@ instruction comes from a package.
  2. build the grammar ────── keywords, symbols, statement/expr/infix/prefix tables
      │
      ▼
- 3. lex + parse ──────────── pattern matching with backtracking; expand
-     │                         packages are rewritten and parsed again
+ 3. lex + parse ──────────── two passes of pattern matching with backtracking
+     │                         and type checking; expand packages are rewritten
+     │                         and parsed again
      ▼  AST of node kinds (if, add, int, var, ...)
  4. fetch backend packages ─ bintables/<kind> for each kind used (+ @includes)
      │
@@ -39,12 +40,18 @@ instruction comes from a package.
    literals that end a block, such as `end` and `else`).
 3. **Parsing** matches patterns. Statements starting with a keyword are tried
    first, then slot-first patterns, longest first. Expressions use
-   precedence climbing (a Pratt parser) over the operator tables.
-   Declarations made during a failed attempt are undone. Slots are
-   type-checked against the pattern. A package with `expand` is matched,
+   precedence climbing (a Pratt parser) over the prefix, infix and postfix
+   operator tables. Declarations made during a failed attempt are undone.
+   Each slot is checked against its pattern's type constraint as it is
+   parsed, binding type variables. A package with `expand` is matched,
    then its template is filled with the source of each slot and parsed
-   again in its place. After parsing, calls are checked against function
-   definitions.
+   again in its place.
+
+   The file is parsed **twice**. The first pass is lenient about functions,
+   structs and fields that are defined later in the file, and collects every
+   function signature and struct layout. The second pass parses again with
+   all of them known, checks every type, and produces the tree. Calls are
+   then checked against the signatures.
 4. **Backend packages** are downloaded only for the node kinds present in
    the AST, plus anything they include with `@`.
 5. **Rendering** picks, for each node, the first `emit` section whose
@@ -62,7 +69,8 @@ instruction comes from a package.
 | [`internal/registry`](../internal/registry) | downloading packages over HTTP or `file://`, in memory |
 | [`internal/pkgfile`](../internal/pkgfile) | parsing package files: sections, patterns, emit headers |
 | [`internal/lang/lexer.go`](../internal/lang/lexer.go) | tokenizer; symbols come from the loaded packages |
-| [`internal/lang/parser.go`](../internal/lang/parser.go) | grammar tables, pattern matching, expansion, scopes |
+| [`internal/lang/parser.go`](../internal/lang/parser.go) | grammar tables, pattern matching, expansion, scopes, the two passes |
+| [`internal/lang/types.go`](../internal/lang/types.go) | type expressions, constraints with type variables, struct layout |
 | [`internal/lang/codegen.go`](../internal/lang/codegen.go) | rendering emit templates: placeholders, conditions, `@include`, `{each}` |
 | [`internal/lang/driver.go`](../internal/lang/driver.go) | the pipeline, parallel fetching, `nasm`/`ld`, `tree` |
 | [`internal/lang/report.go`](../internal/lang/report.go) | the build events behind `-vb` |

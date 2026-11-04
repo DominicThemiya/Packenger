@@ -28,14 +28,17 @@ type Lang struct {
 	stmtSlot []*Rule
 	exprLit  map[string][]*Rule
 	exprSlot []*Rule
-	infix    map[string]*Rule
-	prefix   map[string]*Rule
+	infix    map[string][]*Rule
+	prefix   map[string][]*Rule
+	postfix  map[string][]*Rule
+	Prims    map[string]int // primitive types declared by packages, with their sizes
 	closers  map[string]bool
 	keywords map[string]bool
 	Puncts   []string
 }
 
-var coreKinds = map[string]bool{"block": true, "int": true, "str": true, "var": true, "ident": true, "func": true, "newfunc": true, "args": true, "params": true, "program": true}
+var coreKinds = map[string]bool{"block": true, "int": true, "str": true, "var": true, "ident": true, "func": true, "newfunc": true, "args": true, "params": true, "program": true,
+	"type": true, "field": true, "fields": true, "fielddecl": true, "newtype": true}
 
 func isWord(s string) bool {
 	for _, r := range s {
@@ -50,9 +53,10 @@ func NewLang(pkgs []*pkgfile.File) (*Lang, error) {
 	L := &Lang{
 		Pkgs:    map[string]*pkgfile.File{},
 		stmtLit: map[string][]*Rule{}, exprLit: map[string][]*Rule{},
-		infix: map[string]*Rule{}, prefix: map[string]*Rule{},
-		closers: map[string]bool{}, keywords: map[string]bool{},
+		infix: map[string][]*Rule{}, prefix: map[string][]*Rule{}, postfix: map[string][]*Rule{},
+		Prims: map[string]int{}, closers: map[string]bool{}, keywords: map[string]bool{},
 	}
+	typeOwner := map[string]string{}
 	punct := map[string]bool{}
 	for _, f := range pkgs {
 		kind := f.Kind()
@@ -63,6 +67,13 @@ func NewLang(pkgs []*pkgfile.File) (*Lang, error) {
 			return nil, fmt.Errorf("two loaded packages both define %q: %s and %s", kind, other.Name, f.Name)
 		}
 		L.Pkgs[kind] = f
+		for _, t := range f.Types {
+			if o, ok := typeOwner[t.Name]; ok {
+				return nil, fmt.Errorf("type %s is declared by both %s and %s", t.Name, o, f.Name)
+			}
+			typeOwner[t.Name] = f.Name
+			L.Prims[t.Name] = t.Size
+		}
 		for _, s := range f.Syntax {
 			for _, p := range s.Patterns {
 				r := &Rule{Pkg: f, Kind: kind, Syn: s, Pat: p}
@@ -78,24 +89,27 @@ func NewLang(pkgs []*pkgfile.File) (*Lang, error) {
 				}
 				first := p.Elems[0]
 				switch s.Kind {
-				case "infix":
-					op := p.Elems[1].Lit
-					if o, ok := L.infix[op]; ok {
-						return nil, fmt.Errorf("operator %q is defined by both %s and %s", op, o.Pkg.Name, f.Name)
+				case "infix", "prefix", "postfix":
+					table, op := L.infix, p.Elems[1].Lit
+					switch s.Kind {
+					case "prefix":
+						table, op = L.prefix, first.Lit
+					case "postfix":
+						table = L.postfix
 					}
-					L.infix[op] = r
-				case "prefix":
-					if o, ok := L.prefix[first.Lit]; ok {
-						return nil, fmt.Errorf("prefix operator %q is defined by both %s and %s", first.Lit, o.Pkg.Name, f.Name)
+					// several patterns may share an operator (chosen by operand
+					// types), but only within one package
+					if o := table[op]; len(o) > 0 && (o[0].Pkg != f || o[0].Syn.Prec != s.Prec) {
+						return nil, fmt.Errorf("%s operator %q is defined by both %s and %s", s.Kind, op, o[0].Pkg.Name, f.Name)
 					}
-					L.prefix[first.Lit] = r
+					table[op] = append(table[op], r)
 				case "expr":
 					if first.Lit != "" {
 						L.exprLit[first.Lit] = append(L.exprLit[first.Lit], r)
 					} else {
 						L.exprSlot = append(L.exprSlot, r)
 					}
-				default: // statement, function
+				default: // statement, function, struct
 					if first.Lit != "" {
 						L.stmtLit[first.Lit] = append(L.stmtLit[first.Lit], r)
 					} else {
@@ -128,10 +142,12 @@ func NewLang(pkgs []*pkgfile.File) (*Lang, error) {
 			}
 		}
 	}
-	for _, m := range []map[string]*Rule{L.infix, L.prefix} {
-		for _, r := range m {
-			if err := L.lexTemplate(r); err != nil {
-				return nil, err
+	for _, m := range []map[string][]*Rule{L.infix, L.prefix, L.postfix} {
+		for _, rs := range m {
+			for _, r := range rs {
+				if err := L.lexTemplate(r); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -176,6 +192,8 @@ type Frame struct {
 	scopes []map[string]*Var
 	Slots  int
 	Params int
+	Ret    string // result type; "" if the function returns nothing
+	Top    bool   // the top level: a bare return exits with 0
 }
 
 func newFrame(name string) *Frame {
@@ -198,6 +216,7 @@ type Node struct {
 	Str      string
 	Ident    string
 	Var      *Var
+	Field    *Field
 	Frame    *Frame
 	Expanded []string // packages that were expanded into this node
 
@@ -206,10 +225,18 @@ type Node struct {
 }
 
 type Program struct {
-	Main  *Node // block of top-level statements
-	Frame *Frame
-	Funcs []*Node
-	Top   []*Node // every top-level item, statements and functions, in source order
+	Main    *Node // block of top-level statements
+	Frame   *Frame
+	Funcs   []*Node
+	Structs []*Node
+	Top     []*Node // every top-level item, statements, functions and structs, in source order
+	Types   *Types
+}
+
+// Sig is a function's signature.
+type Sig struct {
+	Params []string
+	Ret    string
 }
 
 // setSlot fills a slot, remembering the order slots were filled in.
@@ -250,19 +277,56 @@ func number(prog *Program) {
 // ---------------------------------------------------------------- parser
 
 type Parser struct {
-	L      *Lang
-	toks   []Token
-	i      int
-	frame  *Frame
-	funcs  map[string]*Node
-	undo   []func()
-	far    error
-	farPos Pos
-	depth  int
+	L        *Lang
+	toks     []Token
+	i        int
+	frame    *Frame
+	funcs    map[string]*Node
+	undo     []func()
+	far      error
+	farPos   Pos
+	farHard  bool // far is a definite error (see failHard)
+	depth    int
+	lenient  bool            // first pass: unknown functions, structs and fields are allowed
+	sigs     map[string]*Sig // second pass: every function's signature, from the first pass
+	types    *Types
+	declared map[string]bool // structs declared so far in this pass
 }
 
-func NewParser(L *Lang, toks []Token) *Parser {
-	return &Parser{L: L, toks: toks, funcs: map[string]*Node{}}
+func newParser(L *Lang, toks []Token) *Parser {
+	return &Parser{L: L, toks: toks, funcs: map[string]*Node{}, sigs: map[string]*Sig{},
+		types: &Types{Prims: L.Prims, Structs: map[string]*Struct{}}, declared: map[string]bool{}}
+}
+
+// Parse parses a program in two passes. The first pass is lenient about
+// names defined later in the file and collects every function signature and
+// struct; the second pass parses again with those known and checks all
+// types. So functions and structs can be used before they are defined.
+func Parse(L *Lang, toks []Token) (*Program, error) {
+	p1 := newParser(L, toks)
+	p1.lenient = true
+	first, err := p1.parseProgram()
+	if err != nil {
+		return nil, err
+	}
+	p2 := newParser(L, toks)
+	p2.types.Structs = p1.types.Structs
+	for _, f := range first.Funcs {
+		sig := &Sig{Ret: f.Frame.Ret}
+		for _, name := range f.Order {
+			if c := f.Slots[name]; c.Kind == "params" {
+				for _, prm := range c.Items {
+					sig.Params = append(sig.Params, prm.Type)
+				}
+			}
+		}
+		p2.sigs[f.Frame.Name] = sig
+	}
+	prog, err := p2.parseProgram()
+	if err != nil {
+		return nil, err
+	}
+	return prog, p2.checkCalls(prog)
 }
 
 func (p *Parser) tok() Token { return p.toks[p.i] }
@@ -275,11 +339,32 @@ func later(a, b Pos) bool { return a.Line > b.Line || a.Line == b.Line && a.Col 
 
 func (p *Parser) fail(t Token, format string, args ...any) error {
 	err := fmt.Errorf("%s: %s", t.Pos, fmt.Sprintf(format, args...))
-	if p.far == nil || (t.Pos.File == p.farPos.File && later(t.Pos, p.farPos)) {
+	if !p.farHard && (p.far == nil || (t.Pos.File == p.farPos.File && later(t.Pos, p.farPos))) {
 		p.far, p.farPos = err, t.Pos
 	}
 	return err
 }
+
+// failHard reports a definite error: the source matched a pattern, but
+// breaks one of its rules (a type, a return value, an assignment target).
+// If no alternative succeeds, it is reported in preference to syntax errors
+// from other alternatives.
+func (p *Parser) failHard(pos Pos, format string, args ...any) error {
+	err := fmt.Errorf("%s: %s", pos, fmt.Sprintf(format, args...))
+	if !p.farHard || (pos.File == p.farPos.File && later(pos, p.farPos)) {
+		p.far, p.farPos, p.farHard = err, pos, true
+	}
+	return err
+}
+
+type farState struct {
+	err  error
+	pos  Pos
+	hard bool
+}
+
+func (p *Parser) saveFar() farState     { return farState{p.far, p.farPos, p.farHard} }
+func (p *Parser) restoreFar(f farState) { p.far, p.farPos, p.farHard = f.err, f.pos, f.hard }
 
 // best returns the most informative error: the one that got furthest.
 func (p *Parser) best(err error) error {
@@ -325,10 +410,11 @@ func (p *Parser) skipNL() {
 	}
 }
 
-func (p *Parser) ParseProgram() (*Program, error) {
+func (p *Parser) parseProgram() (*Program, error) {
 	main := newFrame("main")
+	main.Ret, main.Top = "int", true
 	p.frame = main
-	prog := &Program{Frame: main}
+	prog := &Program{Frame: main, Types: p.types}
 	body := p.node("block", p.tok().Pos)
 	for {
 		p.skipNL()
@@ -343,17 +429,20 @@ func (p *Parser) ParseProgram() (*Program, error) {
 		if err != nil {
 			return nil, err
 		}
-		p.far = nil
+		p.restoreFar(farState{})
 		prog.Top = append(prog.Top, n)
-		if n.Frame != nil {
+		switch {
+		case n.Rule != nil && n.Rule.Syn.Kind == "struct":
+			prog.Structs = append(prog.Structs, n)
+		case n.Frame != nil:
 			prog.Funcs = append(prog.Funcs, n)
-		} else {
+		default:
 			body.Items = append(body.Items, n)
 		}
 	}
 	prog.Main = body
 	number(prog)
-	return prog, p.checkCalls(prog)
+	return prog, nil
 }
 
 func (p *Parser) statement(top bool) (*Node, error) {
@@ -367,13 +456,13 @@ func (p *Parser) statement(top bool) (*Node, error) {
 		return nil, p.fail(t, "%s does not start any statement the loaded packages define", t)
 	}
 	var first error
-	far, farPos := p.far, p.farPos
+	far := p.saveFar()
 	for _, r := range cands {
 		s := p.save()
 		n, err := p.match(r, top)
 		if err == nil {
 			if e := p.tok(); e.Kind == TNewline || e.Kind == TEOF || p.isCloser(e) {
-				p.far, p.farPos = far, farPos
+				p.restoreFar(far)
 				return n, nil
 			}
 			err = p.fail(p.tok(), "expected end of line, found %s", p.tok())
@@ -388,7 +477,7 @@ func (p *Parser) statement(top bool) (*Node, error) {
 
 func (p *Parser) match(r *Rule, top bool) (*Node, error) {
 	t := p.tok()
-	if r.Syn.Kind == "function" && !top {
+	if (r.Syn.Kind == "function" || r.Syn.Kind == "struct") && !top {
 		return nil, p.fail(t, "%s (%s) may only be used at the top level", t, r.Pkg.Name)
 	}
 	s := p.save()
@@ -398,13 +487,14 @@ func (p *Parser) match(r *Rule, top bool) (*Node, error) {
 		n.Frame = newFrame("")
 		p.frame = n.Frame
 	}
-	err := p.elems(r.Pat.Elems, n)
+	b := p.binder(n)
+	err := p.elems(r.Pat.Elems, n, b)
 	p.frame = s.frame
 	if err != nil {
 		return nil, err
 	}
 	n.end = p.i
-	if err := p.setType(n); err != nil {
+	if err := p.finish(n, b, t); err != nil {
 		return nil, err
 	}
 	if r.tmpl != nil {
@@ -413,25 +503,58 @@ func (p *Parser) match(r *Rule, top bool) (*Node, error) {
 	return n, nil
 }
 
-func (p *Parser) setType(n *Node) error {
-	res := n.Rule.Pat.Result
-	if strings.HasPrefix(res, "{") {
-		name := strings.Trim(res, "{}")
+// binder matches the type constraints of n's pattern as its slots are parsed.
+func (p *Parser) binder(n *Node) *binder {
+	return newBinder(func(name string) (string, bool) {
 		c, ok := n.Slots[name]
 		if !ok {
-			return fmt.Errorf("%s: result type %s names a missing slot", n.Rule.Pkg.Origin, res)
+			return "", false
 		}
-		n.Type = c.Type
-		return nil
-	}
-	n.Type = res
-	if n.Type == "" && (n.Rule.Syn.Kind == "expr" || n.Rule.Syn.Kind == "infix" || n.Rule.Syn.Kind == "prefix") {
+		return c.Type, true
+	})
+}
+
+// finish runs the checks that need the whole match: the result type,
+// return statements and struct declarations.
+func (p *Parser) finish(n *Node, b *binder, t Token) error {
+	syn := n.Rule.Syn
+	res := n.Rule.Pat.Result
+	switch {
+	case res != "":
+		typ, err := b.Subst(res)
+		if err != nil {
+			return fmt.Errorf("%s: %v", n.Rule.Pkg.Origin, err)
+		}
+		n.Type = typ
+	case syn.Kind == "expr" || syn.Kind == "infix" || syn.Kind == "prefix" || syn.Kind == "postfix":
 		n.Type = "int"
+	}
+	if syn.Return {
+		f := p.frame
+		v, ok := n.Slots["value"]
+		switch {
+		case ok && f.Ret == "" && !f.Top:
+			return p.failHard(v.Pos, "%s returns nothing, so return takes no value", f.Name)
+		case ok && !Compatible(f.Ret, v.Type):
+			return p.failHard(v.Pos, "%s must return %s, but this is %s", frameName(f), f.Ret, describeType(v.Type))
+		case !ok && f.Ret != "" && !f.Top:
+			return p.failHard(t.Pos, "%s must return %s, so return needs a value", f.Name, f.Ret)
+		}
+	}
+	if syn.Kind == "struct" {
+		return p.declareStruct(n, t)
 	}
 	return nil
 }
 
-func (p *Parser) elems(es []pkgfile.Elem, n *Node) error {
+func frameName(f *Frame) string {
+	if f.Top {
+		return "the program"
+	}
+	return f.Name
+}
+
+func (p *Parser) elems(es []pkgfile.Elem, n *Node, b *binder) error {
 	for _, e := range es {
 		t := p.tok()
 		switch {
@@ -442,7 +565,7 @@ func (p *Parser) elems(es []pkgfile.Elem, n *Node) error {
 			p.i++
 		case e.Optional != nil:
 			if p.isLit(t, e.Optional[0].Lit) {
-				if err := p.elems(e.Optional, n); err != nil {
+				if err := p.elems(e.Optional, n, b); err != nil {
 					return err
 				}
 			}
@@ -453,8 +576,82 @@ func (p *Parser) elems(es []pkgfile.Elem, n *Node) error {
 				return err
 			}
 			c.toks, c.start, c.end = p.toks, start, p.i
+			if err := p.constrain(e.Slot, c, b, t, fmt.Sprintf("{%s} of %s", e.Slot.Name, n.Kind)); err != nil {
+				return err
+			}
 			n.setSlot(e.Slot.Name, c)
+			if err := p.typeNewvars(n, e.Slot.Name, c); err != nil {
+				return err
+			}
 		}
+	}
+	return nil
+}
+
+// constrain checks a parsed slot against its pattern's type constraint.
+func (p *Parser) constrain(s *pkgfile.Slot, c *Node, b *binder, t Token, what string) error {
+	switch s.Kind {
+	case "expr", "place":
+		if c.Type == "" && s.Arg != "any" {
+			return p.fail(t, "%s needs a value, but this has none", what)
+		}
+	case "var", "type":
+	default:
+		return nil
+	}
+	ok, err := b.Matches(s.Arg, c.Type)
+	if err != nil {
+		return fmt.Errorf("%s: bad type constraint %q: %v", t.Pos, s.Arg, err)
+	}
+	if !ok {
+		want, _ := b.Subst(s.Arg)
+		if want == "?" || strings.Contains(s.Arg, "[") || strings.Contains(s.Arg, "ptr") {
+			want = describeConstraint(s.Arg, want)
+		}
+		return p.fail(t, "%s must be %s, but it is %s", what, want, describeType(c.Type))
+	}
+	return nil
+}
+
+func describeType(t string) string {
+	if t == "" {
+		return "nothing"
+	}
+	return t
+}
+
+func describeConstraint(arg, subst string) string {
+	if !strings.Contains(subst, "?") {
+		return subst
+	}
+	r := strings.NewReplacer("?", "…")
+	return "of the form " + r.Replace(subst)
+}
+
+// typeNewvars gives a variable declared "of" the given slot its type. With
+// several slots listed (of t value), the first one present wins.
+func (p *Parser) typeNewvars(n *Node, slot string, c *Node) error {
+	typ := c.Type
+	for _, name := range n.Order {
+		v := n.Slots[name]
+		if v.Kind != "var" || v.Var == nil || v.Str == "" {
+			continue
+		}
+		of := strings.Fields(v.Str)
+		rank := -1
+		for i, o := range of {
+			if o == slot {
+				rank = i
+			}
+		}
+		if rank < 0 || (v.Int > 0 && int(v.Int)-1 < rank) {
+			continue
+		}
+		if _, isStruct := p.types.Structs[typ]; isStruct {
+			return p.failHard(c.Pos, "%s can't hold a struct value; use ptr %s", v.Var.Name, typ)
+		}
+		v.Int = int64(rank + 1) // remembers which "of" slot typed it
+		v.Var.Type, v.Type = typ, typ
 	}
 	return nil
 }
@@ -471,32 +668,112 @@ func (p *Parser) ident(what string) (Token, error) {
 	return t, nil
 }
 
-func (p *Parser) checkType(t Token, want, got, what string) error {
-	if want == "" || want == "any" || want == got {
-		return nil
-	}
-	return p.fail(t, "%s must be %s, but it is %s", what, want, got)
-}
-
 func (p *Parser) slot(s *pkgfile.Slot, parent *Node) (*Node, error) {
 	t := p.tok()
 	switch s.Kind {
 	case "expr":
+		return p.expr(0)
+	case "place":
 		e, err := p.expr(0)
 		if err != nil {
 			return nil, err
 		}
-		if err := p.checkType(t, s.Arg, e.Type, fmt.Sprintf("{%s} of %s", s.Name, parent.Kind)); err != nil {
-			return nil, err
-		}
-		// a newvar declared "of" this slot takes its type
-		for _, name := range parent.Order {
-			other := parent.Slots[name]
-			if other.Kind == "var" && other.Var != nil && other.Str == s.Name {
-				other.Var.Type, other.Type = e.Type, e.Type
-			}
+		if !isPlace(e) {
+			return nil, p.failHard(t.Pos, "this can't be assigned to or have its address taken")
 		}
 		return e, nil
+	case "type":
+		typ, err := p.typeExpr()
+		if err != nil {
+			return nil, err
+		}
+		n := p.node("type", t.Pos)
+		n.Type = typ
+		if parent.Frame != nil && s.Name == "ret" {
+			parent.Frame.Ret = typ
+		}
+		return n, nil
+	case "newtype":
+		id, err := p.ident("a type name")
+		if err != nil {
+			return nil, err
+		}
+		if _, prim := p.L.Prims[id.Text]; prim || p.declared[id.Text] {
+			return nil, p.fail(id, "type %s is already declared", id.Text)
+		}
+		p.declared[id.Text] = true
+		p.undo = append(p.undo, func() { delete(p.declared, id.Text) })
+		if _, ok := p.types.Structs[id.Text]; !ok {
+			p.types.Structs[id.Text] = &Struct{Name: id.Text}
+			p.undo = append(p.undo, func() { delete(p.types.Structs, id.Text) })
+		}
+		n := p.node("newtype", t.Pos)
+		n.Ident = id.Text
+		return n, nil
+	case "fields":
+		n := p.node("fields", t.Pos)
+		seen := map[string]bool{}
+		for {
+			p.skipNL()
+			if p.tok().Kind == TEOF || p.isCloser(p.tok()) {
+				return n, nil
+			}
+			id, err := p.ident("a field name")
+			if err != nil {
+				return nil, err
+			}
+			if seen[id.Text] {
+				return nil, p.fail(id, "field %s is declared twice", id.Text)
+			}
+			seen[id.Text] = true
+			if !p.isLit(p.tok(), ":") {
+				return nil, p.fail(p.tok(), "expected ':' and a type after field %s", id.Text)
+			}
+			p.i++
+			typ, err := p.typeExpr()
+			if err != nil {
+				return nil, err
+			}
+			fd := p.node("fielddecl", id.Pos)
+			fd.Ident, fd.Type = id.Text, typ
+			n.Items = append(n.Items, fd)
+			if k := p.tok().Kind; k != TNewline && k != TEOF {
+				return nil, p.fail(p.tok(), "expected end of line after field %s", id.Text)
+			}
+		}
+	case "field":
+		id, err := p.ident("a field name")
+		if err != nil {
+			return nil, err
+		}
+		n := p.node("field", t.Pos)
+		n.Ident = id.Text
+		obj, ok := parent.Slots[s.Arg]
+		if !ok {
+			return nil, fmt.Errorf("%s: field slot names {%s}, which comes later or is missing", t.Pos, s.Arg)
+		}
+		if obj.Type == "?" || (p.lenient && obj.Type == "ptr ?") {
+			n.Type = "?"
+			return n, nil
+		}
+		st := p.types.Structs[Elem(obj.Type)]
+		if st == nil && p.lenient && strings.HasPrefix(obj.Type, "ptr ") {
+			n.Type = "?" // a struct declared later in the file
+			return n, nil
+		}
+		if !strings.HasPrefix(obj.Type, "ptr ") || st == nil {
+			return nil, p.fail(id, "%s has no fields: it is %s, not a pointer to a struct", fieldOwner(obj), describeType(obj.Type))
+		}
+		f := st.Field(id.Text)
+		if f == nil {
+			if p.lenient && len(st.Fields) == 0 {
+				n.Type = "?" // declared later in the file
+				return n, nil
+			}
+			return nil, p.fail(id, "struct %s has no field %s", st.Name, id.Text)
+		}
+		n.Field, n.Type = f, f.Type
+		return n, nil
 	case "block":
 		return p.block()
 	case "newvar":
@@ -504,12 +781,12 @@ func (p *Parser) slot(s *pkgfile.Slot, parent *Node) (*Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		v, err := p.declare(id, false)
+		v, err := p.declare(id, false, "?")
 		if err != nil {
 			return nil, err
 		}
 		n := p.node("var", t.Pos)
-		n.Var, n.Type, n.Str = v, v.Type, s.Arg // Str remembers the "of" slot
+		n.Var, n.Type, n.Str = v, v.Type, s.Arg // Str remembers the "of" slots
 		return n, nil
 	case "var":
 		id, err := p.ident("a variable")
@@ -520,19 +797,32 @@ func (p *Parser) slot(s *pkgfile.Slot, parent *Node) (*Node, error) {
 		if v == nil {
 			return nil, p.fail(id, "unknown variable %s", id)
 		}
-		if err := p.checkType(id, s.Arg, v.Type, id.Text); err != nil {
-			return nil, err
-		}
 		n := p.node("var", t.Pos)
 		n.Var, n.Type = v, v.Type
 		return n, nil
-	case "ident", "func":
+	case "ident":
 		id, err := p.ident("a name")
 		if err != nil {
 			return nil, err
 		}
 		n := p.node(s.Kind, t.Pos)
 		n.Ident = id.Text
+		return n, nil
+	case "func":
+		id, err := p.ident("a function name")
+		if err != nil {
+			return nil, err
+		}
+		n := p.node("func", t.Pos)
+		n.Ident = id.Text
+		switch sig, ok := p.sigs[id.Text]; {
+		case ok:
+			n.Type = sig.Ret
+		case p.lenient:
+			n.Type = "?"
+		default:
+			return nil, p.fail(id, "unknown function %s", id.Text)
+		}
 		return n, nil
 	case "newfunc":
 		id, err := p.ident("a function name")
@@ -576,7 +866,15 @@ func (p *Parser) slot(s *pkgfile.Slot, parent *Node) (*Node, error) {
 			if err != nil {
 				return nil, err
 			}
-			v, err := p.declare(id, true)
+			if !p.isLit(p.tok(), ":") {
+				return nil, p.fail(p.tok(), "parameter %s needs a type, e.g. %s: int", id.Text, id.Text)
+			}
+			p.i++
+			typ, err := p.typeExpr()
+			if err != nil {
+				return nil, err
+			}
+			v, err := p.declare(id, true, typ)
 			if err != nil {
 				return nil, err
 			}
@@ -592,13 +890,16 @@ func (p *Parser) slot(s *pkgfile.Slot, parent *Node) (*Node, error) {
 	return nil, fmt.Errorf("internal: unknown slot kind %s", s.Kind)
 }
 
-func (p *Parser) declare(id Token, param bool) (*Var, error) {
+func (p *Parser) declare(id Token, param bool, typ string) (*Var, error) {
 	f := p.frame
 	sc := f.scopes[len(f.scopes)-1]
 	if _, dup := sc[id.Text]; dup {
 		return nil, p.fail(id, "%s is already declared here", id)
 	}
-	v := &Var{Name: id.Text, Type: "int", Param: param}
+	if _, isStruct := p.types.Structs[typ]; isStruct {
+		return nil, p.fail(id, "%s can't hold a struct value; use ptr %s", id.Text, typ)
+	}
+	v := &Var{Name: id.Text, Type: typ, Param: param}
 	if param {
 		v.Index = f.Params
 		f.Params++
@@ -662,36 +963,59 @@ func (p *Parser) expr(minPrec int) (*Node, error) {
 		if t.Kind != TPunct && t.Kind != TIdent {
 			return left, nil
 		}
-		r := p.L.infix[t.Text]
-		if r == nil || r.Syn.Prec < minPrec {
+		if rules := p.L.postfix[t.Text]; len(rules) > 0 && rules[0].Syn.Prec >= minPrec {
+			n, err := p.postfix(rules, left, start)
+			if err != nil {
+				return nil, err
+			}
+			left = n
+			continue
+		}
+		rules := p.L.infix[t.Text]
+		if len(rules) == 0 || rules[0].Syn.Prec < minPrec {
 			return left, nil
 		}
+		syn := rules[0].Syn
 		p.i++
-		next := r.Syn.Prec + 1
-		if r.Syn.Right {
-			next = r.Syn.Prec
+		next := syn.Prec + 1
+		if syn.Right {
+			next = syn.Prec
 		}
 		rt := p.tok()
 		right, err := p.expr(next)
 		if err != nil {
 			return nil, err
 		}
-		ls, rs := r.Pat.Elems[0].Slot, r.Pat.Elems[2].Slot
-		if err := p.checkType(t, ls.Arg, left.Type, fmt.Sprintf("left side of '%s'", t.Text)); err != nil {
-			return nil, err
+		// operand types choose among the operator's patterns
+		var firstErr error
+		var n *Node
+		for _, r := range rules {
+			ls, rs := r.Pat.Elems[0].Slot, r.Pat.Elems[2].Slot
+			cand := p.node(r.Kind, t.Pos)
+			cand.Rule, cand.start, cand.end = r, start, p.i
+			b := p.binder(cand)
+			err := p.constrain(ls, left, b, t, fmt.Sprintf("left side of '%s'", t.Text))
+			if err == nil {
+				cand.setSlot(ls.Name, left)
+				err = p.constrain(rs, right, b, rt, fmt.Sprintf("right side of '%s'", t.Text))
+			}
+			if err == nil {
+				cand.setSlot(rs.Name, right)
+				err = p.finish(cand, b, t)
+			}
+			if err == nil {
+				n = cand
+				break
+			}
+			if firstErr == nil {
+				firstErr = err
+			}
 		}
-		if err := p.checkType(rt, rs.Arg, right.Type, fmt.Sprintf("right side of '%s'", t.Text)); err != nil {
-			return nil, err
+		if n == nil {
+			return nil, firstErr
 		}
-		n := p.node(r.Kind, t.Pos)
-		n.Rule, n.start, n.end = r, start, p.i
-		n.setSlot(ls.Name, left)
-		n.setSlot(rs.Name, right)
-		if err := p.setType(n); err != nil {
-			return nil, err
-		}
-		if r.tmpl != nil {
-			if left, err = p.expand(r, n, p.save()); err != nil {
+		if n.Rule.tmpl != nil {
+			if left, err = p.expand(n.Rule, n, p.save()); err != nil {
 				return nil, err
 			}
 			continue
@@ -700,31 +1024,123 @@ func (p *Parser) expr(minPrec int) (*Node, error) {
 	}
 }
 
-func (p *Parser) prefix() (*Node, error) {
+// postfix applies a postfix operator (field access, indexing, as) to left.
+func (p *Parser) postfix(rules []*Rule, left *Node, start int) (*Node, error) {
 	t := p.tok()
-	start := p.i
-	if t.Kind == TIdent || t.Kind == TPunct {
-		if r := p.L.prefix[t.Text]; r != nil {
-			p.i++
-			ot := p.tok()
-			operand, err := p.expr(r.Syn.Prec)
-			if err != nil {
-				return nil, err
-			}
-			sl := r.Pat.Elems[1].Slot
-			if err := p.checkType(ot, sl.Arg, operand.Type, fmt.Sprintf("operand of '%s'", t.Text)); err != nil {
-				return nil, err
-			}
-			n := p.node(r.Kind, t.Pos)
-			n.Rule, n.start, n.end = r, start, p.i
-			n.setSlot(sl.Name, operand)
-			if err := p.setType(n); err != nil {
-				return nil, err
-			}
+	var firstErr error
+	far := p.saveFar()
+	for _, r := range rules {
+		s := p.save()
+		n := p.node(r.Kind, t.Pos)
+		n.Rule, n.start = r, start
+		b := p.binder(n)
+		ls := r.Pat.Elems[0].Slot
+		err := p.constrain(ls, left, b, t, fmt.Sprintf("the left side of '%s'", t.Text))
+		if err == nil {
+			n.setSlot(ls.Name, left)
+			err = p.elems(r.Pat.Elems[1:], n, b)
+		}
+		if err == nil {
+			n.end = p.i
+			err = p.finish(n, b, t)
+		}
+		if err == nil {
+			p.restoreFar(far)
 			if r.tmpl != nil {
 				return p.expand(r, n, p.save())
 			}
 			return n, nil
+		}
+		p.restore(s)
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+	return nil, p.best(firstErr)
+}
+
+func isPlace(n *Node) bool {
+	return n.Kind == "var" && n.Var != nil || n.Rule != nil && n.Rule.Syn.Place
+}
+
+func fieldOwner(n *Node) string {
+	if n.Kind == "var" && n.Var != nil {
+		return n.Var.Name
+	}
+	return "this"
+}
+
+// typeExpr parses a type: a name, ptr T, or [T].
+func (p *Parser) typeExpr() (string, error) {
+	t := p.tok()
+	switch {
+	case p.isLit(t, "["):
+		p.i++
+		elem, err := p.typeExpr()
+		if err != nil {
+			return "", err
+		}
+		if !p.isLit(p.tok(), "]") {
+			return "", p.fail(p.tok(), "expected ']' to close the slice type")
+		}
+		p.i++
+		return "[" + elem + "]", nil
+	case t.Kind == TIdent && t.Text == "ptr":
+		p.i++
+		elem, err := p.typeExpr()
+		if err != nil {
+			return "", err
+		}
+		return "ptr " + elem, nil
+	case t.Kind == TIdent:
+		p.i++
+		if _, ok := p.L.Prims[t.Text]; ok {
+			return t.Text, nil
+		}
+		if _, ok := p.types.Structs[t.Text]; ok || p.lenient {
+			return t.Text, nil
+		}
+		return "", p.fail(t, "unknown type %s", t.Text)
+	}
+	return "", p.fail(t, "expected a type, found %s", t)
+}
+
+func (p *Parser) prefix() (*Node, error) {
+	t := p.tok()
+	start := p.i
+	if t.Kind == TIdent || t.Kind == TPunct {
+		if rules := p.L.prefix[t.Text]; len(rules) > 0 {
+			p.i++
+			ot := p.tok()
+			operand, err := p.expr(rules[0].Syn.Prec)
+			if err != nil {
+				return nil, err
+			}
+			var firstErr error
+			for _, r := range rules {
+				sl := r.Pat.Elems[1].Slot
+				n := p.node(r.Kind, t.Pos)
+				n.Rule, n.start, n.end = r, start, p.i
+				b := p.binder(n)
+				err := p.constrain(sl, operand, b, ot, fmt.Sprintf("operand of '%s'", t.Text))
+				if err == nil && sl.Kind == "place" && !isPlace(operand) {
+					err = p.fail(ot, "the operand of '%s' can't have its address taken", t.Text)
+				}
+				if err == nil {
+					n.setSlot(sl.Name, operand)
+					err = p.finish(n, b, t)
+				}
+				if err == nil {
+					if r.tmpl != nil {
+						return p.expand(r, n, p.save())
+					}
+					return n, nil
+				}
+				if firstErr == nil {
+					firstErr = err
+				}
+			}
+			return nil, firstErr
 		}
 	}
 	var cands []*Rule
@@ -732,22 +1148,25 @@ func (p *Parser) prefix() (*Node, error) {
 		cands = append(cands, p.L.exprLit[t.Text]...)
 	}
 	cands = append(cands, p.L.exprSlot...)
-	far, farPos := p.far, p.farPos
+	far := p.saveFar()
 	for _, r := range cands {
 		s := p.save()
 		if n, err := p.match(r, false); err == nil {
-			p.far, p.farPos = far, farPos
+			p.restoreFar(far)
 			return n, nil
 		}
 		p.restore(s)
 	}
-	ruleFar, ruleFarPos := p.far, p.farPos
-	p.far, p.farPos = far, farPos // a core form may still match
+	ruleFar := p.saveFar()
+	p.restoreFar(far) // a core form may still match
 	switch t.Kind {
-	case TInt:
+	case TInt, TChar:
 		p.i++
 		n := p.node("int", t.Pos)
 		n.Int, n.Type, n.start, n.end = t.Int, "int", start, p.i
+		if t.Kind == TChar {
+			n.Type = "u8"
+		}
 		return n, nil
 	case TStr:
 		p.i++
@@ -756,14 +1175,18 @@ func (p *Parser) prefix() (*Node, error) {
 		return n, nil
 	case TIdent:
 		if p.L.keywords[t.Text] {
+			if ruleFar.err != nil && len(p.L.exprLit[t.Text]) > 0 {
+				p.restoreFar(ruleFar)
+				return nil, ruleFar.err
+			}
 			return nil, p.fail(t, "expected an expression, found keyword %s", t)
 		}
 		v := p.lookup(t.Text)
 		if v == nil {
-			if len(cands) > 0 && p.isLit(p.toks[p.i+1], "(") && ruleFar != nil {
+			if len(cands) > 0 && p.isLit(p.toks[p.i+1], "(") && ruleFar.err != nil {
 				// looks like a use of an expression package (e.g. a call): its error is the useful one
-				p.far, p.farPos = ruleFar, ruleFarPos
-				return nil, ruleFar
+				p.restoreFar(ruleFar)
+				return nil, ruleFar.err
 			}
 			return nil, p.fail(t, "unknown variable %s", t)
 		}
@@ -880,6 +1303,39 @@ func Walk(n *Node, fn func(*Node)) {
 	}
 }
 
+// declareStruct lays out a struct once its fields are parsed.
+func (p *Parser) declareStruct(n *Node, t Token) error {
+	var name string
+	var fields *Node
+	for _, sname := range n.Order {
+		switch c := n.Slots[sname]; c.Kind {
+		case "newtype":
+			name = c.Ident
+		case "fields":
+			fields = c
+		}
+	}
+	if name == "" || fields == nil {
+		return fmt.Errorf("%s: a struct pattern needs a newtype slot and a fields slot", n.Rule.Pkg.Origin)
+	}
+	st := p.types.Structs[name]
+	if len(st.Fields) > 0 {
+		return nil // laid out in the first pass
+	}
+	for _, fd := range fields.Items {
+		st.Fields = append(st.Fields, &Field{Name: fd.Ident, Type: fd.Type})
+	}
+	if err := p.types.layout(st); err != nil {
+		if p.lenient && strings.Contains(err.Error(), "unknown type") {
+			return nil
+		}
+		return p.fail(t, "%v", err)
+	}
+	return nil
+}
+
+// checkCalls checks every call's arguments against the function's
+// parameters.
 func (p *Parser) checkCalls(prog *Program) error {
 	var err error
 	check := func(n *Node) {
@@ -891,23 +1347,27 @@ func (p *Parser) checkCalls(prog *Program) error {
 			if c.Kind != "func" {
 				continue
 			}
-			def, ok := p.funcs[c.Ident]
-			if !ok {
-				err = fmt.Errorf("%s: unknown function %s", c.Pos, c.Ident)
-				return
-			}
+			sig := p.sigs[c.Ident]
 			for _, aname := range n.Order {
 				a := n.Slots[aname]
-				if a.Kind == "args" && len(a.Items) != def.Frame.Params {
-					err = fmt.Errorf("%s: %s takes %d argument(s), got %d", c.Pos, c.Ident, def.Frame.Params, len(a.Items))
+				if a.Kind != "args" {
+					continue
+				}
+				if len(a.Items) != len(sig.Params) {
+					err = fmt.Errorf("%s: %s takes %d argument(s), got %d", c.Pos, c.Ident, len(sig.Params), len(a.Items))
 					return
+				}
+				for i, arg := range a.Items {
+					if !Compatible(sig.Params[i], arg.Type) {
+						err = fmt.Errorf("%s: argument %d of %s must be %s, but it is %s", arg.Pos, i+1, c.Ident, sig.Params[i], describeType(arg.Type))
+						return
+					}
 				}
 			}
 		}
 	}
-	Walk(prog.Main, check)
-	for _, f := range prog.Funcs {
-		Walk(f, check)
+	for _, n := range prog.Top {
+		Walk(n, check)
 	}
 	return err
 }

@@ -1,0 +1,15 @@
+doc Convert a value to another type: x as T
+  ```
+  let c = 'a'
+  print (c as int) + 1      // 98
+  print 300 as u8           // 44: the low byte
+  print 5 as bool           // true: non-zero
+  ```
+
+  - To `u8`: keeps the low byte.
+  - To `bool`: `true` if the value is non-zero.
+  - Anything else (for example between pointer types, or a pointer and
+    `int`) keeps the bits unchanged, so it can make unsafe pointers.
+
+syntax postfix 85
+  {v: expr} as {t: type} -> {t}

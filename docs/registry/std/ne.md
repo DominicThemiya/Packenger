@@ -6,26 +6,28 @@
 
 truck [std](../std.md) · [source](../../../registry/std/ne.pkg) · translated by [bintables/ne](../bintables/ne.md)
 
-Not equal: 1 if the operands differ, else 0.
+Not equal: compares two values of the same type and gives a `bool`.
 
 ```
-print 3 != 3    // 0
+print 3 != 3          // false
+print "ab" != "ab"    // false: strings compare by content
+print p != null
 ```
 
-Infix, precedence 30, left-associative. Both operands must be `int`; the
-result is `int`.
+Pointers compare by address, strings by content. Infix, precedence 30,
+left-associative.
 
 ## Syntax
 
 Kind: `infix`, precedence 30, left-associative
 
 ```
-{left: expr int} != {right: expr int} -> int
+{left: expr T} != {right: expr T} -> bool
 ```
 
 | slot | takes | type |
 |---|---|---|
-| `left` | expression | `int` |
-| `right` | expression | `int` |
+| `left` | expression | `T` |
+| `right` | expression | `T` |
 
-Produces: `int`
+Produces: `bool`

@@ -6,13 +6,15 @@
 
 truck [bintables](../bintables.md) · [source](../../../registry/bintables/print.pkg) · translates [std/print](../std/print.md)
 
-Two support routines are included once if `print` is used:
+Support routines are included once if `print` is used:
 
-- `__pk_print_int` converts `rax` to decimal in a stack buffer (handling the
-  sign and the most negative value) and writes it with one syscall;
-- `__pk_print_str` writes a length-prefixed string, then the newline.
+- `__pk_print_int` converts `rax` to decimal in a stack buffer (handling
+  the sign and the most negative value) and writes it with one syscall;
+  `u8` values print as numbers through it too;
+- `__pk_print_str` writes a length-prefixed string, then the newline;
+- `__pk_print_bool` writes `true` or `false`.
 
-The variant is chosen from the value's type (`when value str`).
+The variant is chosen from the value's type.
 
 ## Emit variants
 
@@ -23,6 +25,13 @@ The first variant whose condition holds is used.
 ```nasm
 {value}
 call __pk_print_str
+```
+
+### `emit when value bool`
+
+```nasm
+{value}
+call __pk_print_bool
 ```
 
 ### `emit`
@@ -79,4 +88,20 @@ mov edx, 1
 syscall
 add rsp, 8
 ret
+__pk_print_bool:
+lea rsi, [rel __pk_true]
+mov edx, 5
+test rax, rax
+jnz .write
+lea rsi, [rel __pk_false]
+mov edx, 6
+.write:
+mov eax, 1
+mov edi, 1
+syscall
+ret
+section .data
+__pk_true: db "true", 10
+__pk_false: db "false", 10
+section .text
 ```
