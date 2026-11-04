@@ -8,6 +8,7 @@
 | [Publishing packages](publishing.md) | the registry, adding packages and trucks, keeping docs current |
 | [Command line](cli.md) | every command and flag, including the `-vb` build report |
 | [How the compiler works](architecture.md) | the pipeline, and where each part lives in the code |
+| [Self-hosting plan](self-hosting.md) | roadmap for a Packenger compiler written in Packenger |
 | [Package reference](registry/README.md) | generated: every truck and package in the registry |
 
 The package reference is generated from the packages themselves. Don't
