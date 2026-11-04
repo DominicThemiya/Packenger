@@ -15,6 +15,8 @@ format.
   - [pkc/pkgfile](pkc/pkgfile.md) — pkc: package files — parse sections, patterns and emit headers (port of internal/pkgfile).
   - [pkc/lexer](pkc/lexer.md) — pkc: the tokenizer (port of internal/lang/lexer.go).
   - [pkc/lang](pkc/lang.md) — pkc: the grammar assembled from the loaded syntax packages (port of NewLang).
+  - [pkc/types](pkc/types.md) — pkc: type expressions, constraints with type variables, struct layout (port of types.go).
+  - [pkc/parser](pkc/parser.md) — pkc: the parser (port of internal/lang/parser.go) and the dump ast format.
   - [pkc/driver](pkc/driver.md) — pkc: the compile pipeline (port of internal/lang/driver.go).
   - [pkc/ui](pkc/ui.md) — pkc: errors and the -vb report on stderr (port of internal/ui).
   - [pkc/main](pkc/main.md) — pkc: the command line — the same commands, flags and messages as the Go compiler.

@@ -1,0 +1,3 @@
+use std
+for i = 1 to "x"
+end

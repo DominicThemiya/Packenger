@@ -1,0 +1,3 @@
+use std
+let a = make([int], 2)
+let b: [u8] = a

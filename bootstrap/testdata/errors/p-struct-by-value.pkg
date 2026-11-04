@@ -1,0 +1,7 @@
+use std
+struct A
+  b: B
+end
+struct B
+  x: int
+end

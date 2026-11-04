@@ -1,0 +1,4 @@
+use std
+struct P
+  x int
+end

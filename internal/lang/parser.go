@@ -1504,6 +1504,8 @@ func (p *Parser) declareStruct(n *Node, t Token) error {
 	}
 	if err := p.types.layout(st); err != nil {
 		if p.lenient && strings.Contains(err.Error(), "unknown type") {
+			// a field's type is declared later: lay it out in the second pass
+			st.Fields = nil
 			return nil
 		}
 		return p.fail(t, "%v", err)

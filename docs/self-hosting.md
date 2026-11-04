@@ -202,15 +202,15 @@ is [bootstrap/pkc.pkg](../bootstrap/pkc.pkg). Build and check it with:
 
 ```sh
 packenger build bootstrap/pkc.pkg -o bin/pkc
-PKC=$PWD/bin/pkc PKC_STAGES=pkg,tokens go test ./bootstrap/
+PKC=$PWD/bin/pkc PKC_STAGES=pkg,tokens,ast go test ./bootstrap/
 ```
 
 | stage | modules | status |
 |---|---|---|
 | `pkg` | `pkc/util`, `pkc/fetch`, `pkc/pkgfile`, `pkc/ui` (errors), `pkc/main` | ✓ matches on every registry package, a corpus of broken packages, and command-line errors |
 | `tokens` | `pkc/lexer`, `pkc/lang`, `pkc/driver` (use lines, fetch rounds) | ✓ matches on every program, example, `rt` test and error case |
-| `ast` | parser, types | next |
-| `asm` | codegen | |
+| `ast` | `pkc/types`, `pkc/parser`, library units in `pkc/driver` | ✓ matches on the whole corpus and 29 parser error cases; `pkc` parses its own 5,600 lines into the same 29,000-line tree, 7.6× faster than the Go compiler (0.30 s against 2.25 s) |
+| `asm` | codegen | next |
 | `run` | build, run, assembling | |
 | `-vb`, `tree` | report, tree | |
 
@@ -225,6 +225,12 @@ Notes from the port so far:
 - `curl` is used for `http(s)://` registries, one package at a time so far;
   the harness uses a `file://` registry.
 - Porting found a bug in `rt/str`: `str_parse_int` didn't detect overflow.
+- Porting the parser found a bug in the Go compiler: a struct field holding
+  a struct declared later *by value* escaped the check, because the first
+  pass kept fields it couldn't lay out. Both compilers now redo the layout
+  in the second pass and report it.
+- Go closures and map deletion have no Packenger equivalent: the undo log
+  is a list of records, and maps treat a value of 0 as absent.
 - Keywords are global (`to`, `next`, `argv`), so the port avoids them as
   names; this is the main friction of writing real code in Packenger.
 

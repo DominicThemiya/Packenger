@@ -3,7 +3,7 @@ doc pkc: the command line — the same commands, flags and messages as the Go co
   just calls it. The commands are implemented as their modules are ported:
   see [the self-hosting plan](../../self-hosting.md).
 
-needs std rt pkc/util pkc/fetch pkc/pkgfile pkc/ui pkc/lexer pkc/driver
+needs std rt pkc/util pkc/fetch pkc/pkgfile pkc/ui pkc/lexer pkc/driver pkc/parser
 code
   const PKC_DEFAULT_REGISTRY = "https://raw.githubusercontent.com/DominicThemiya/Packenger/main/registry"
 
@@ -175,6 +175,22 @@ code
         return -1
       end
       io_out(lx_dump(r.toks))
+      return 0
+    end
+    if a.cmd == "dump" && stage == "ast"
+      let text = ""
+      if !pkc_read(*src, &text)
+        return -1
+      end
+      let r = dr_lex(a.registry, ui_base(*src), text)
+      if r == null
+        return -1
+      end
+      let prog = dr_parse(r, ui_base(*src))
+      if prog == null
+        return -1
+      end
+      io_out(ps_dump(prog))
       return 0
     end
     u_fail(u_cat3("pkc: ", a.cmd, " is not implemented yet"))

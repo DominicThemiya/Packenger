@@ -1,0 +1,2 @@
+use std
+let x: int = true

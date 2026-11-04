@@ -1,0 +1,3 @@
+use std
+let s = "x"
+s[0] = 'y'

@@ -1,0 +1,1867 @@
+doc pkc: the parser (port of internal/lang/parser.go) and the dump ast format.
+  Pattern matching with backtracking over the grammar from `pkc/lang`, in
+  two passes like the Go compiler: a lenient first pass collects function
+  signatures, structs, globals and constants, and the second pass checks
+  every type. Declarations made by failed attempts are undone through an
+  undo log, so slot numbers depend only on the final tree.
+
+needs std rt pkc/util pkc/pkgfile pkc/lexer pkc/lang pkc/types
+code
+  // ---------------------------------------------------------------- AST
+
+  struct PVar
+    name: str
+    ty: str
+    param: bool
+    global: bool
+    index: int
+  end
+
+  struct PFrame
+    name: str
+    scopes: ptr Vec
+    slots: int
+    params: int
+    ret: str
+    top: bool
+  end
+
+  struct PNode
+    id: int
+    kind: str
+    rule: ptr LgRule
+    file: str
+    line: int
+    col: int
+    ty: str
+    snames: ptr Vec
+    svals: ptr Vec
+    items: ptr Vec
+    ival: int
+    sval: str
+    ident: str
+    vr: ptr PVar
+    field: ptr TyField
+    frame: ptr PFrame
+    loop: ptr PNode
+    expanded: ptr Vec
+    toks: ptr Vec
+    start: int
+    stop: int
+    ofrank: int
+  end
+
+  struct PProg
+    main: ptr PNode
+    frame: ptr PFrame
+    funcs: ptr Vec
+    structs: ptr Vec
+    top: ptr Vec
+    types: ptr Types
+    globals: ptr Vec
+  end
+
+  struct PUnit
+    name: str
+    toks: ptr Vec
+    lib: bool
+  end
+
+  struct PSig
+    params: ptr Vec
+    ret: str
+  end
+
+  fn ps_new_frame(name: str) -> ptr PFrame
+    let f = new PFrame
+    f.name = name
+    f.scopes = vec_new()
+    vec_push(f.scopes, vec_new() as int)
+    f.ret = ""
+    return f
+  end
+
+  fn ps_frame_size(f: ptr PFrame) -> int
+    return (f.slots * 8 + 15) & -16
+  end
+
+  fn ps_pos(n: ptr PNode) -> str
+    return u_cat4(n.file, ":", str_from_int(n.line), u_cat(":", str_from_int(n.col)))
+  end
+
+  fn ps_nd(v: ptr Vec, i: int) -> ptr PNode
+    return vec_get(v, i) as ptr PNode
+  end
+
+  // ps_slot returns the node in slot name, or null.
+  fn ps_slot(n: ptr PNode, name: str) -> ptr PNode
+    if n.snames == null
+      return null
+    end
+    for i = 0 to vec_len(n.snames) - 1
+      if u_get(n.snames, i) == name
+        return ps_nd(n.svals, i)
+      end
+    end
+    return null
+  end
+
+  fn ps_set_slot(n: ptr PNode, name: str, c: ptr PNode)
+    if n.snames == null
+      n.snames = vec_new()
+      n.svals = vec_new()
+    end
+    for i = 0 to vec_len(n.snames) - 1
+      if u_get(n.snames, i) == name
+        vec_set(n.svals, i, c as int)
+        return
+      end
+    end
+    u_push(n.snames, name)
+    vec_push(n.svals, c as int)
+  end
+
+  fn ps_nslots(n: ptr PNode) -> int
+    if n.snames == null
+      return 0
+    end
+    return vec_len(n.snames)
+  end
+
+  fn ps_nitems(n: ptr PNode) -> int
+    if n.items == null
+      return 0
+    end
+    return vec_len(n.items)
+  end
+
+  fn ps_add_item(n: ptr PNode, c: ptr PNode)
+    if n.items == null
+      n.items = vec_new()
+    end
+    vec_push(n.items, c as int)
+  end
+
+  // ps_children: the slots in pattern order, then the items
+  fn ps_children(n: ptr PNode) -> ptr Vec
+    let out = vec_new()
+    for i = 0 to ps_nslots(n) - 1
+      vec_push(out, vec_get(n.svals, i))
+    end
+    for i = 0 to ps_nitems(n) - 1
+      vec_push(out, vec_get(n.items, i))
+    end
+    return out
+  end
+
+  // ps_slot_type is how a binder sees the node it belongs to.
+  fn ps_slot_type(node: int, name: str, ok: ptr bool) -> str
+    let c = ps_slot(node as ptr PNode, name)
+    if c == null
+      *ok = false
+      return ""
+    end
+    *ok = true
+    return c.ty
+  end
+
+  fn ps_number_walk(n: ptr PNode, id: ptr int)
+    *id = *id + 1
+    n.id = *id
+    for i = 0 to ps_nslots(n) - 1
+      ps_number_walk(ps_nd(n.svals, i), id)
+    end
+    for i = 0 to ps_nitems(n) - 1
+      ps_number_walk(ps_nd(n.items, i), id)
+    end
+  end
+
+  // ps_number gives every node its ID, pre-order over the top-level items.
+  fn ps_number(prog: ptr PProg)
+    let id = 0
+    for i = 0 to vec_len(prog.top) - 1
+      ps_number_walk(ps_nd(prog.top, i), &id)
+    end
+  end
+
+  // ---------------------------------------------------------------- parser state
+
+  struct Parser
+    lang: ptr Lang
+    toks: ptr Vec
+    i: int
+    frame: ptr PFrame
+    funcs: ptr Map
+    undo: ptr Vec
+    far: str
+    far_has: bool
+    far_file: str
+    far_line: int
+    far_col: int
+    far_hard: bool
+    depth: int
+    lenient: bool
+    sigs: ptr Map
+    types: ptr Types
+    declared: ptr Map
+    globals: ptr Map
+    consts: ptr Map
+    gorder: ptr Vec
+    loops: ptr Vec
+  end
+
+  struct PFar
+    err: str
+    has: bool
+    file: str
+    line: int
+    col: int
+    hard: bool
+  end
+
+  struct PSnap
+    i: int
+    undo: int
+    frame: ptr PFrame
+    toks: ptr Vec
+  end
+
+  struct PUndo
+    kind: int
+    a: int
+    b: int
+    c: int
+  end
+
+  const UNDO_DECLARE = 1
+  const UNDO_MAPKEY = 2
+  const UNDO_GORDER = 3
+  const UNDO_CONST = 4
+
+  fn ps_new(L: ptr Lang) -> ptr Parser
+    let p = new Parser
+    p.lang = L
+    p.funcs = map_new()
+    p.undo = vec_new()
+    p.far = ""
+    p.sigs = map_new()
+    p.types = new Types
+    p.types.prims = L.prims
+    p.types.structs = map_new()
+    p.declared = map_new()
+    p.globals = map_new()
+    p.consts = map_new()
+    p.gorder = vec_new()
+    p.loops = vec_new()
+    return p
+  end
+
+  fn ps_tok(p: ptr Parser) -> ptr Tok
+    return lx_tok(p.toks, p.i)
+  end
+
+  fn ps_node(p: ptr Parser, kind: str, t: ptr Tok) -> ptr PNode
+    let n = new PNode
+    n.kind = kind
+    n.file = t.file
+    n.line = t.line
+    n.col = t.col
+    n.ty = ""
+    n.sval = ""
+    n.ident = ""
+    n.toks = p.toks
+    n.start = p.i
+    return n
+  end
+
+  fn ps_node_at(p: ptr Parser, kind: str, at: ptr PNode) -> ptr PNode
+    let n = new PNode
+    n.kind = kind
+    n.file = at.file
+    n.line = at.line
+    n.col = at.col
+    n.ty = ""
+    n.sval = ""
+    n.ident = ""
+    n.toks = p.toks
+    n.start = p.i
+    return n
+  end
+
+  fn ps_later(line: int, col: int, line2: int, col2: int) -> bool
+    return line > line2 || line == line2 && col > col2
+  end
+
+  fn ps_errat(file: str, line: int, col: int, msg: str) -> str
+    return u_cat4(file, ":", str_from_int(line), u_cat4(":", str_from_int(col), ": ", msg))
+  end
+
+  // ps_fail records a syntax error at t: the error that got furthest is the
+  // one reported if no alternative succeeds.
+  fn ps_fail(p: ptr Parser, t: ptr Tok, msg: str) -> ptr PNode
+    let err = ps_errat(t.file, t.line, t.col, msg)
+    pk_err = err
+    if !p.far_hard && (!p.far_has || t.file == p.far_file && ps_later(t.line, t.col, p.far_line, p.far_col))
+      p.far = err
+      p.far_has = true
+      p.far_file = t.file
+      p.far_line = t.line
+      p.far_col = t.col
+    end
+    return null
+  end
+
+  // ps_fail_hard records a definite error: the source matched a pattern but
+  // breaks one of its rules. It wins over syntax errors.
+  fn ps_fail_hard(p: ptr Parser, file: str, line: int, col: int, msg: str) -> ptr PNode
+    let err = ps_errat(file, line, col, msg)
+    pk_err = err
+    if !p.far_hard || file == p.far_file && ps_later(line, col, p.far_line, p.far_col)
+      p.far = err
+      p.far_has = true
+      p.far_file = file
+      p.far_line = line
+      p.far_col = col
+      p.far_hard = true
+    end
+    return null
+  end
+
+  fn ps_save_far(p: ptr Parser) -> ptr PFar
+    let f = new PFar
+    f.err = p.far
+    f.has = p.far_has
+    f.file = p.far_file
+    f.line = p.far_line
+    f.col = p.far_col
+    f.hard = p.far_hard
+    return f
+  end
+
+  fn ps_restore_far(p: ptr Parser, f: ptr PFar)
+    p.far = f.err
+    p.far_has = f.has
+    p.far_file = f.file
+    p.far_line = f.line
+    p.far_col = f.col
+    p.far_hard = f.hard
+  end
+
+  fn ps_clear_far(p: ptr Parser)
+    p.far = ""
+    p.far_has = false
+    p.far_file = ""
+    p.far_line = 0
+    p.far_col = 0
+    p.far_hard = false
+  end
+
+  // ps_best: the most informative error, the one that got furthest
+  fn ps_best(p: ptr Parser, err: str) -> str
+    if p.far_has
+      return p.far
+    end
+    return err
+  end
+
+  fn ps_save(p: ptr Parser) -> ptr PSnap
+    let s = new PSnap
+    s.i = p.i
+    s.undo = vec_len(p.undo)
+    s.frame = p.frame
+    s.toks = p.toks
+    return s
+  end
+
+  fn ps_unwind(p: ptr Parser, s: ptr PSnap)
+    while vec_len(p.undo) > s.undo
+      let u = vec_pop(p.undo) as ptr PUndo
+      if u.kind == UNDO_DECLARE
+        vec_pop(u.a as ptr Vec)
+        let f = u.b as ptr PFrame
+        if u.c == 1
+          f.params = f.params - 1
+        else
+          f.slots = f.slots - 1
+        end
+      elif u.kind == UNDO_MAPKEY
+        map_set(u.a as ptr Map, u.b as str, 0)
+      elif u.kind == UNDO_GORDER
+        vec_pop(p.gorder)
+      elif u.kind == UNDO_CONST
+        map_set(p.consts, u.a as str, u.b)
+      end
+    end
+    p.frame = s.frame
+  end
+
+  fn ps_restore(p: ptr Parser, s: ptr PSnap)
+    ps_unwind(p, s)
+    p.i = s.i
+    p.toks = s.toks
+  end
+
+  fn ps_log(p: ptr Parser, kind: int, a: int, b: int, c: int)
+    let u = new PUndo
+    u.kind = kind
+    u.a = a
+    u.b = b
+    u.c = c
+    vec_push(p.undo, u as int)
+  end
+
+  fn ps_is_lit(t: ptr Tok, lit: str) -> bool
+    return (t.kind == TK_IDENT || t.kind == TK_PUNCT) && t.text == lit
+  end
+
+  fn ps_is_closer(p: ptr Parser, t: ptr Tok) -> bool
+    return (t.kind == TK_IDENT || t.kind == TK_PUNCT) && map_has(p.lang.closers, t.text)
+  end
+
+  fn ps_skip_nl(p: ptr Parser)
+    while ps_tok(p).kind == TK_NL
+      p.i = p.i + 1
+    end
+  end
+
+  fn ps_keyword(p: ptr Parser, s: str) -> bool
+    return map_has(p.lang.keywords, s)
+  end
+
+  // ---------------------------------------------------------------- program
+
+  // ps_parse parses in two passes; see the module doc.
+  fn ps_parse(L: ptr Lang, units: ptr Vec) -> ptr PProg
+    let p1 = ps_new(L)
+    p1.lenient = true
+    let first = ps_program(p1, units)
+    if first == null
+      return null
+    end
+    let p2 = ps_new(L)
+    p2.types.structs = p1.types.structs
+    for i = 0 to vec_len(first.globals) - 1
+      let v = vec_get(first.globals, i) as ptr PVar
+      let g = new PVar
+      g.name = v.name
+      g.ty = v.ty
+      g.global = true
+      map_set(p2.globals, v.name, g as int)
+    end
+    for i = 0 to map_len(p1.consts) - 1
+      if map_value(p1.consts, i) != 0
+        map_set(p2.consts, map_key(p1.consts, i), map_value(p1.consts, i))
+      end
+    end
+    for i = 0 to vec_len(first.funcs) - 1
+      let f = ps_nd(first.funcs, i)
+      let sig = new PSig
+      sig.ret = f.frame.ret
+      sig.params = vec_new()
+      for k = 0 to ps_nslots(f) - 1
+        let c = ps_nd(f.svals, k)
+        if c.kind == "params"
+          for m = 0 to ps_nitems(c) - 1
+            u_push(sig.params, ps_nd(c.items, m).ty)
+          end
+        end
+      end
+      map_set(p2.sigs, f.frame.name, sig as int)
+    end
+    let prog = ps_program(p2, units)
+    if prog == null
+      return null
+    end
+    if !ps_check_calls(p2, prog)
+      return null
+    end
+    return prog
+  end
+
+  fn ps_program(p: ptr Parser, units: ptr Vec) -> ptr PProg
+    let main_ = ps_new_frame("main")
+    main_.ret = "int"
+    main_.top = true
+    p.frame = main_
+    let prog = new PProg
+    prog.frame = main_
+    prog.types = p.types
+    prog.funcs = vec_new()
+    prog.structs = vec_new()
+    prog.top = vec_new()
+    let body: ptr PNode = null
+    for ui = 0 to vec_len(units) - 1
+      let u = vec_get(units, ui) as ptr PUnit
+      p.toks = u.toks
+      p.i = 0
+      if body == null
+        body = ps_node(p, "block", ps_tok(p))
+      end
+      while true
+        ps_skip_nl(p)
+        let t = ps_tok(p)
+        if t.kind == TK_EOF
+          break
+        end
+        if ps_is_closer(p, t)
+          pk_err = ps_errat(t.file, t.line, t.col, u_cat3("unexpected ", lx_describe(t), " (nothing to close)"))
+          return null
+        end
+        let n = ps_statement(p, true)
+        if n == null
+          return null
+        end
+        ps_clear_far(p)
+        if u.lib && n.frame == null && (n.rule == null || n.rule.syn.kind != "struct" && !n.rule.syn.top)
+          pk_err = u_cat4(ps_pos(n), ": library code (", u.name, ") may only contain functions, structs and top-level declarations such as global and const")
+          return null
+        end
+        vec_push(prog.top, n as int)
+        if n.rule != null && n.rule.syn.kind == "struct"
+          vec_push(prog.structs, n as int)
+        elif n.frame != null
+          vec_push(prog.funcs, n as int)
+        else
+          ps_add_item(body, n)
+        end
+      end
+    end
+    prog.main = body
+    prog.globals = p.gorder
+    ps_number(prog)
+    return prog
+  end
+
+  fn ps_statement(p: ptr Parser, top: bool) -> ptr PNode
+    let t = ps_tok(p)
+    let cands = vec_new()
+    if t.kind == TK_IDENT || t.kind == TK_PUNCT
+      let lit = lg_rules(p.lang.stmt_lit, t.text)
+      if lit != null
+        for i = 0 to vec_len(lit) - 1
+          vec_push(cands, vec_get(lit, i))
+        end
+      end
+    end
+    for i = 0 to vec_len(p.lang.stmt_slot) - 1
+      vec_push(cands, vec_get(p.lang.stmt_slot, i))
+    end
+    if vec_len(cands) == 0
+      return ps_fail(p, t, u_cat(lx_describe(t), " does not start any statement the loaded packages define"))
+    end
+    let first = ""
+    let have_first = false
+    let far = ps_save_far(p)
+    for i = 0 to vec_len(cands) - 1
+      let r = lg_rule(cands, i)
+      let s = ps_save(p)
+      let n = ps_match(p, r, top)
+      let err = pk_err
+      if n != null
+        let e = ps_tok(p)
+        if e.kind == TK_NL || e.kind == TK_EOF || ps_is_closer(p, e)
+          ps_restore_far(p, far)
+          return n
+        end
+        ps_fail(p, e, u_cat("expected end of line, found ", lx_describe(e)))
+        err = pk_err
+      end
+      ps_restore(p, s)
+      if !have_first
+        first = err
+        have_first = true
+      end
+    end
+    pk_err = ps_best(p, first)
+    return null
+  end
+
+  fn ps_match(p: ptr Parser, r: ptr LgRule, top: bool) -> ptr PNode
+    let t = ps_tok(p)
+    if (r.syn.kind == "function" || r.syn.kind == "struct" || r.syn.top) && !top
+      return ps_fail(p, t, u_cat4(lx_describe(t), " (", r.pkg.name, ") may only be used at the top level"))
+    end
+    if r.syn.inloop && vec_len(p.loops) == 0
+      return ps_fail_hard(p, t.file, t.line, t.col, u_cat(lx_describe(t), " can only be used inside a loop"))
+    end
+    let s = ps_save(p)
+    let n = ps_node(p, r.kind, t)
+    n.rule = r
+    if vec_len(p.loops) > 0
+      n.loop = ps_nd(p.loops, vec_len(p.loops) - 1)
+    end
+    let loops = p.loops
+    if r.syn.kind == "function"
+      n.frame = ps_new_frame("")
+      p.frame = n.frame
+      p.loops = vec_new()
+    end
+    if r.syn.loop
+      let more = vec_new()
+      for i = 0 to vec_len(p.loops) - 1
+        vec_push(more, vec_get(p.loops, i))
+      end
+      vec_push(more, n as int)
+      p.loops = more
+    end
+    let b = ty_binder(n as int)
+    let ok = ps_elems(p, r.pat.elems, n, b)
+    p.frame = s.frame
+    p.loops = loops
+    if !ok
+      return null
+    end
+    n.stop = p.i
+    if !ps_finish(p, n, b, t)
+      return null
+    end
+    if r.tmpl != null
+      return ps_expand(p, r, n, s)
+    end
+    return n
+  end
+
+  fn ps_frame_name(f: ptr PFrame) -> str
+    if f.top
+      return "the program"
+    end
+    return f.name
+  end
+
+  fn ps_describe_type(t: str) -> str
+    if t == ""
+      return "nothing"
+    end
+    return t
+  end
+
+  // ps_finish: the result type, return statements, structs and constants
+  fn ps_finish(p: ptr Parser, n: ptr PNode, b: ptr TyBinder, t: ptr Tok) -> bool
+    let syn = n.rule.syn
+    let res = n.rule.pat.result
+    if res != ""
+      let out = ""
+      if !ty_subst(b, res, &out)
+        pk_err = u_cat3(n.rule.pkg.origin, ": ", pk_err)
+        return false
+      end
+      n.ty = out
+    elif syn.kind == "expr" || syn.kind == "infix" || syn.kind == "prefix" || syn.kind == "postfix"
+      n.ty = "int"
+    end
+    if syn.ret
+      let f = p.frame
+      let v = ps_slot(n, "value")
+      if v != null && f.ret == "" && !f.top
+        ps_fail_hard(p, v.file, v.line, v.col, u_cat(f.name, " returns nothing, so return takes no value"))
+        return false
+      elif v != null && !ty_compatible(f.ret, v.ty)
+        ps_fail_hard(p, v.file, v.line, v.col, u_cat4(ps_frame_name(f), " must return ", f.ret, u_cat(", but this is ", ps_describe_type(v.ty))))
+        return false
+      elif v == null && f.ret != "" && !f.top
+        ps_fail_hard(p, t.file, t.line, t.col, u_cat4(f.name, " must return ", f.ret, ", so return needs a value"))
+        return false
+      end
+    end
+    if syn.kind == "struct"
+      return ps_declare_struct(p, n, t)
+    end
+    for i = 0 to ps_nslots(n) - 1
+      let c = ps_nd(n.svals, i)
+      if c.kind == "newconst"
+        return ps_declare_const(p, n, c)
+      end
+    end
+    return true
+  end
+
+  fn ps_elems(p: ptr Parser, es: ptr Vec, n: ptr PNode, b: ptr TyBinder) -> bool
+    for ei = 0 to vec_len(es) - 1
+      let e = pf_elem(es, ei)
+      let t = ps_tok(p)
+      if e.lit != ""
+        if !ps_is_lit(t, e.lit)
+          ps_fail(p, t, u_cat4("expected '", e.lit, "', found ", lx_describe(t)))
+          return false
+        end
+        p.i = p.i + 1
+      elif e.optional != null && e.repeat
+        let first_lit = pf_elem(e.optional, 0).lit
+        let list = ps_node(p, "groups", t)
+        while ps_is_lit(ps_tok(p), first_lit)
+          let g = ps_node(p, "group", ps_tok(p))
+          g.loop = n.loop
+          if !ps_elems(p, e.optional, g, ty_binder(g as int))
+            return false
+          end
+          g.stop = p.i
+          ps_add_item(list, g)
+        end
+        list.stop = p.i
+        ps_set_slot(n, first_lit, list)
+      elif e.optional != null
+        if ps_is_lit(t, pf_elem(e.optional, 0).lit)
+          if !ps_elems(p, e.optional, n, b)
+            return false
+          end
+        end
+      elif e.slot != null
+        let start = p.i
+        let c = ps_slot_parse(p, e.slot, n)
+        if c == null
+          return false
+        end
+        c.toks = p.toks
+        c.start = start
+        c.stop = p.i
+        if !ps_constrain(p, e.slot, c, b, t, u_cat4("{", e.slot.name, "} of ", n.kind))
+          return false
+        end
+        ps_set_slot(n, e.slot.name, c)
+        if !ps_type_newvars(p, n, e.slot.name, c)
+          return false
+        end
+      end
+    end
+    return true
+  end
+
+  fn ps_describe_constraint(subst: str) -> str
+    if !u_has(subst, "?")
+      return subst
+    end
+    return u_cat("of the form ", u_replace(subst, "?", "…"))
+  end
+
+  // ps_constrain checks a parsed slot against its pattern's constraint.
+  fn ps_constrain(p: ptr Parser, s: ptr PfSlot, c: ptr PNode, b: ptr TyBinder, t: ptr Tok, what: str) -> bool
+    if s.kind == "expr" || s.kind == "place"
+      if c.ty == "" && s.arg != "any"
+        ps_fail(p, t, u_cat(what, " needs a value, but this has none"))
+        return false
+      end
+    elif s.kind != "var" && s.kind != "type"
+      return true
+    end
+    let bad = false
+    let ok = ty_matches(b, s.arg, c.ty, &bad)
+    if bad
+      pk_err = u_cat4(lx_pos(t), ": bad type constraint ", u_quote(s.arg), u_cat(": ", pk_err))
+      return false
+    end
+    if !ok
+      let want = ""
+      ty_subst(b, s.arg, &want)
+      if want == "?" || u_has(s.arg, "[") || u_has(s.arg, "ptr")
+        want = ps_describe_constraint(want)
+      end
+      ps_fail(p, t, u_cat4(what, " must be ", want, u_cat(", but it is ", ps_describe_type(c.ty))))
+      return false
+    end
+    return true
+  end
+
+  // ps_type_newvars gives a variable declared "of" slot its type; with
+  // several slots listed, the first one present wins.
+  fn ps_type_newvars(p: ptr Parser, n: ptr PNode, slot: str, c: ptr PNode) -> bool
+    let ty = c.ty
+    for i = 0 to ps_nslots(n) - 1
+      let v = ps_nd(n.svals, i)
+      if v.kind != "var" || v.vr == null || v.sval == ""
+        continue
+      end
+      let of = u_fields(v.sval)
+      let rank = -1
+      for k = 0 to vec_len(of) - 1
+        if u_get(of, k) == slot
+          rank = k
+        end
+      end
+      if rank < 0 || v.ofrank > 0 && v.ofrank - 1 < rank
+        continue
+      end
+      if ty_struct(p.types, ty) != null
+        ps_fail_hard(p, c.file, c.line, c.col, u_cat4(v.vr.name, " can't hold a struct value; use ptr ", ty, ""))
+        return false
+      end
+      v.ofrank = rank + 1
+      v.vr.ty = ty
+      v.ty = ty
+    end
+    return true
+  end
+
+  fn ps_field_name(p: ptr Parser) -> ptr Tok
+    let t = ps_tok(p)
+    if t.kind != TK_IDENT
+      ps_fail(p, t, u_cat("expected a field name, found ", lx_describe(t)))
+      return null
+    end
+    p.i = p.i + 1
+    return t
+  end
+
+  fn ps_ident(p: ptr Parser, what: str) -> ptr Tok
+    let t = ps_tok(p)
+    if t.kind != TK_IDENT
+      ps_fail(p, t, u_cat4("expected ", what, ", found ", lx_describe(t)))
+      return null
+    end
+    if ps_keyword(p, t.text)
+      ps_fail(p, t, u_cat4("expected ", what, ", found keyword ", lx_describe(t)))
+      return null
+    end
+    p.i = p.i + 1
+    return t
+  end
+
+  fn ps_tok_node(p: ptr Parser, kind: str, t: ptr Tok) -> ptr PNode
+    return ps_node(p, kind, t)
+  end
+
+  // ---------------------------------------------------------------- slots
+
+  fn ps_slot_parse(p: ptr Parser, s: ptr PfSlot, parent: ptr PNode) -> ptr PNode
+    let t = ps_tok(p)
+    let k = s.kind
+    if k == "expr"
+      return ps_expr(p, 0)
+    elif k == "place"
+      let e = ps_expr(p, 0)
+      if e == null
+        return null
+      end
+      if !ps_is_place(e)
+        return ps_fail_hard(p, t.file, t.line, t.col, "this can't be assigned to or have its address taken")
+      end
+      return e
+    elif k == "type"
+      let ty = ""
+      if !ps_type_expr(p, &ty)
+        return null
+      end
+      let n = ps_node(p, "type", t)
+      n.ty = ty
+      if parent.frame != null && s.name == "ret"
+        parent.frame.ret = ty
+      end
+      return n
+    elif k == "newtype"
+      let id = ps_ident(p, "a type name")
+      if id == null
+        return null
+      end
+      if map_has(p.lang.prims, id.text) || map_get(p.declared, id.text) != 0
+        return ps_fail(p, id, u_cat3("type ", id.text, " is already declared"))
+      end
+      map_set(p.declared, id.text, 1)
+      ps_log(p, UNDO_MAPKEY, p.declared as int, id.text as int, 0)
+      if ty_struct(p.types, id.text) == null
+        let st = new TyStruct
+        st.name = id.text
+        st.fields = vec_new()
+        map_set(p.types.structs, id.text, st as int)
+        ps_log(p, UNDO_MAPKEY, p.types.structs as int, id.text as int, 0)
+      end
+      let n = ps_node(p, "newtype", t)
+      n.ident = id.text
+      return n
+    elif k == "fields"
+      let n = ps_node(p, "fields", t)
+      let seen = map_new()
+      while true
+        ps_skip_nl(p)
+        if ps_tok(p).kind == TK_EOF
+          return n
+        end
+        let stop = false
+        for i = 0 to vec_len(s.follow) - 1
+          if ps_is_lit(ps_tok(p), u_get(s.follow, i))
+            stop = true
+          end
+        end
+        if stop
+          return n
+        end
+        let id = ps_field_name(p)
+        if id == null
+          return null
+        end
+        if map_has(seen, id.text)
+          return ps_fail(p, id, u_cat3("field ", id.text, " is declared twice"))
+        end
+        map_set(seen, id.text, 1)
+        if !ps_is_lit(ps_tok(p), ":")
+          return ps_fail(p, ps_tok(p), u_cat("expected ':' and a type after field ", id.text))
+        end
+        p.i = p.i + 1
+        let ty = ""
+        if !ps_type_expr(p, &ty)
+          return null
+        end
+        let fd = ps_node(p, "fielddecl", id)
+        fd.ident = id.text
+        fd.ty = ty
+        ps_add_item(n, fd)
+        let nk = ps_tok(p).kind
+        if nk != TK_NL && nk != TK_EOF
+          return ps_fail(p, ps_tok(p), u_cat("expected end of line after field ", id.text))
+        end
+      end
+      return n
+    elif k == "field"
+      let id = ps_field_name(p)
+      if id == null
+        return null
+      end
+      let n = ps_node(p, "field", t)
+      n.ident = id.text
+      let obj = ps_slot(parent, s.arg)
+      if obj == null
+        pk_err = u_cat4(lx_pos(t), ": field slot names {", s.arg, "}, which comes later or is missing")
+        return null
+      end
+      if obj.ty == "?" || p.lenient && obj.ty == "ptr ?"
+        n.ty = "?"
+        return n
+      end
+      let st = ty_struct(p.types, ty_elem(obj.ty))
+      if st == null && p.lenient && str_starts(obj.ty, "ptr ")
+        n.ty = "?"
+        return n
+      end
+      if !str_starts(obj.ty, "ptr ") || st == null
+        return ps_fail(p, id, u_cat4(ps_field_owner(obj), " has no fields: it is ", ps_describe_type(obj.ty), ", not a pointer to a struct"))
+      end
+      let f = ty_field(st, id.text)
+      if f == null
+        if p.lenient && vec_len(st.fields) == 0
+          n.ty = "?"
+          return n
+        end
+        return ps_fail(p, id, u_cat4("struct ", st.name, " has no field ", id.text))
+      end
+      n.field = f
+      n.ty = f.ty
+      return n
+    elif k == "block"
+      return ps_block(p)
+    elif k == "newglobal"
+      let id = ps_ident(p, "a global variable name")
+      if id == null
+        return null
+      end
+      if !ps_declare_top(p, id)
+        return null
+      end
+      let v = map_get(p.globals, id.text) as ptr PVar
+      if v == null
+        v = new PVar
+        v.name = id.text
+        v.ty = "?"
+        v.global = true
+        map_set(p.globals, id.text, v as int)
+        ps_log(p, UNDO_MAPKEY, p.globals as int, id.text as int, 0)
+      end
+      vec_push(p.gorder, v as int)
+      ps_log(p, UNDO_GORDER, 0, 0, 0)
+      let n = ps_node(p, "var", t)
+      n.vr = v
+      n.ty = v.ty
+      n.sval = s.arg
+      return n
+    elif k == "newconst"
+      let id = ps_ident(p, "a constant name")
+      if id == null
+        return null
+      end
+      if !ps_declare_top(p, id)
+        return null
+      end
+      let n = ps_node(p, "newconst", t)
+      n.ident = id.text
+      return n
+    elif k == "newvar"
+      let id = ps_ident(p, "a new variable name")
+      if id == null
+        return null
+      end
+      let v = ps_declare(p, id, false, "?")
+      if v == null
+        return null
+      end
+      let n = ps_node(p, "var", t)
+      n.vr = v
+      n.ty = v.ty
+      n.sval = s.arg
+      return n
+    elif k == "var"
+      let id = ps_ident(p, "a variable")
+      if id == null
+        return null
+      end
+      let v = ps_lookup(p, id.text)
+      if v == null
+        return ps_fail(p, id, u_cat("unknown variable ", lx_describe(id)))
+      end
+      let n = ps_node(p, "var", t)
+      n.vr = v
+      n.ty = v.ty
+      return n
+    elif k == "ident"
+      let id = ps_ident(p, "a name")
+      if id == null
+        return null
+      end
+      let n = ps_node(p, "ident", t)
+      n.ident = id.text
+      return n
+    elif k == "func"
+      let id = ps_ident(p, "a function name")
+      if id == null
+        return null
+      end
+      let n = ps_node(p, "func", t)
+      n.ident = id.text
+      let sig = map_get(p.sigs, id.text) as ptr PSig
+      if sig != null
+        n.ty = sig.ret
+      elif p.lenient
+        n.ty = "?"
+      else
+        return ps_fail(p, id, u_cat("unknown function ", id.text))
+      end
+      return n
+    elif k == "newfunc"
+      let id = ps_ident(p, "a function name")
+      if id == null
+        return null
+      end
+      if map_get(p.funcs, id.text) != 0
+        return ps_fail(p, id, u_cat3("function ", lx_describe(id), " is already defined"))
+      end
+      map_set(p.funcs, id.text, parent as int)
+      ps_log(p, UNDO_MAPKEY, p.funcs as int, id.text as int, 0)
+      if parent.frame != null
+        parent.frame.name = id.text
+      end
+      let n = ps_node(p, "newfunc", t)
+      n.ident = id.text
+      return n
+    elif k == "args"
+      let n = ps_node(p, "args", t)
+      if ps_is_lit(ps_tok(p), ")")
+        return n
+      end
+      while true
+        let e = ps_expr(p, 0)
+        if e == null
+          return null
+        end
+        ps_add_item(n, e)
+        if !ps_is_lit(ps_tok(p), ",")
+          return n
+        end
+        p.i = p.i + 1
+      end
+      return n
+    elif k == "params"
+      let n = ps_node(p, "params", t)
+      if ps_is_lit(ps_tok(p), ")")
+        return n
+      end
+      while true
+        let id = ps_ident(p, "a parameter name")
+        if id == null
+          return null
+        end
+        if !ps_is_lit(ps_tok(p), ":")
+          return ps_fail(p, ps_tok(p), u_cat4("parameter ", id.text, " needs a type, e.g. ", u_cat(id.text, ": int")))
+        end
+        p.i = p.i + 1
+        let ty = ""
+        if !ps_type_expr(p, &ty)
+          return null
+        end
+        let v = ps_declare(p, id, true, ty)
+        if v == null
+          return null
+        end
+        let pn = ps_node(p, "var", id)
+        pn.vr = v
+        pn.ty = v.ty
+        ps_add_item(n, pn)
+        if !ps_is_lit(ps_tok(p), ",")
+          return n
+        end
+        p.i = p.i + 1
+      end
+      return n
+    end
+    pk_err = u_cat("internal: unknown slot kind ", k)
+    return null
+  end
+
+  fn ps_declare(p: ptr Parser, id: ptr Tok, param: bool, ty: str) -> ptr PVar
+    let f = p.frame
+    let sc = vec_get(f.scopes, vec_len(f.scopes) - 1) as ptr Vec
+    for i = 0 to vec_len(sc) - 1
+      if (vec_get(sc, i) as ptr PVar).name == id.text
+        ps_fail(p, id, u_cat(lx_describe(id), " is already declared here"))
+        return null
+      end
+    end
+    if ty_struct(p.types, ty) != null
+      ps_fail(p, id, u_cat4(id.text, " can't hold a struct value; use ptr ", ty, ""))
+      return null
+    end
+    let v = new PVar
+    v.name = id.text
+    v.ty = ty
+    v.param = param
+    let pflag = 0
+    if param
+      v.index = f.params
+      f.params = f.params + 1
+      pflag = 1
+    else
+      v.index = f.slots
+      f.slots = f.slots + 1
+    end
+    vec_push(sc, v as int)
+    ps_log(p, UNDO_DECLARE, sc as int, f as int, pflag)
+    return v
+  end
+
+  fn ps_lookup(p: ptr Parser, name: str) -> ptr PVar
+    let f = p.frame
+    let i = vec_len(f.scopes) - 1
+    while i >= 0
+      let sc = vec_get(f.scopes, i) as ptr Vec
+      let j = vec_len(sc) - 1
+      while j >= 0
+        let v = vec_get(sc, j) as ptr PVar
+        if v.name == name
+          return v
+        end
+        j = j - 1
+      end
+      i = i - 1
+    end
+    return map_get(p.globals, name) as ptr PVar
+  end
+
+  fn ps_declare_top(p: ptr Parser, id: ptr Tok) -> bool
+    let key = u_cat("name ", id.text)
+    if map_get(p.declared, key) != 0
+      ps_fail(p, id, u_cat(id.text, " is already declared"))
+      return false
+    end
+    map_set(p.declared, key, 1)
+    ps_log(p, UNDO_MAPKEY, p.declared as int, key as int, 0)
+    return true
+  end
+
+  fn ps_find_bad(n: ptr PNode) -> ptr PNode
+    if n.kind == "var" || n.kind == "func"
+      return n
+    end
+    for i = 0 to ps_nslots(n) - 1
+      let b = ps_find_bad(ps_nd(n.svals, i))
+      if b != null
+        return b
+      end
+    end
+    for i = 0 to ps_nitems(n) - 1
+      let b = ps_find_bad(ps_nd(n.items, i))
+      if b != null
+        return b
+      end
+    end
+    return null
+  end
+
+  fn ps_declare_const(p: ptr Parser, n: ptr PNode, name: ptr PNode) -> bool
+    let v = ps_slot(n, "value")
+    if v == null
+      pk_err = u_cat(n.rule.pkg.origin, ": a pattern with a newconst slot needs a slot named value")
+      return false
+    end
+    let bad = ps_find_bad(v)
+    if bad != null
+      ps_fail_hard(p, bad.file, bad.line, bad.col, u_cat3("the value of constant ", name.ident, " must not use variables or calls"))
+      return false
+    end
+    let old = map_get(p.consts, name.ident)
+    map_set(p.consts, name.ident, v as int)
+    ps_log(p, UNDO_CONST, name.ident as int, old, 0)
+    return true
+  end
+
+  fn ps_clone(n: ptr PNode) -> ptr PNode
+    let c = new PNode
+    c.id = n.id
+    c.kind = n.kind
+    c.rule = n.rule
+    c.file = n.file
+    c.line = n.line
+    c.col = n.col
+    c.ty = n.ty
+    c.ival = n.ival
+    c.sval = n.sval
+    c.ident = n.ident
+    c.vr = n.vr
+    c.field = n.field
+    c.frame = n.frame
+    c.loop = n.loop
+    c.expanded = n.expanded
+    c.toks = n.toks
+    c.start = n.start
+    c.stop = n.stop
+    c.ofrank = n.ofrank
+    c.snames = null
+    c.svals = null
+    for i = 0 to ps_nslots(n) - 1
+      ps_set_slot(c, u_get(n.snames, i), ps_clone(ps_nd(n.svals, i)))
+    end
+    c.items = null
+    for i = 0 to ps_nitems(n) - 1
+      ps_add_item(c, ps_clone(ps_nd(n.items, i)))
+    end
+    return c
+  end
+
+  fn ps_block(p: ptr Parser) -> ptr PNode
+    let f = p.frame
+    vec_push(f.scopes, vec_new() as int)
+    let n = ps_node(p, "block", ps_tok(p))
+    while true
+      ps_skip_nl(p)
+      let t = ps_tok(p)
+      if t.kind == TK_EOF || ps_is_closer(p, t)
+        vec_pop(f.scopes)
+        return n
+      end
+      let s = ps_statement(p, false)
+      if s == null
+        vec_pop(f.scopes)
+        return null
+      end
+      ps_add_item(n, s)
+    end
+    return n
+  end
+
+  // ---------------------------------------------------------------- expressions
+
+  fn ps_expr(p: ptr Parser, min_prec: int) -> ptr PNode
+    let start = p.i
+    let left = ps_prefix(p)
+    if left == null
+      return null
+    end
+    while true
+      let t = ps_tok(p)
+      if t.kind != TK_PUNCT && t.kind != TK_IDENT
+        return left
+      end
+      let post = lg_rules(p.lang.postfix, t.text)
+      if post != null && vec_len(post) > 0 && lg_rule(post, 0).syn.prec >= min_prec
+        let n = ps_postfix(p, post, left, start)
+        if n == null
+          return null
+        end
+        left = n
+        continue
+      end
+      let rules = lg_rules(p.lang.infix, t.text)
+      if rules == null || vec_len(rules) == 0 || lg_rule(rules, 0).syn.prec < min_prec
+        return left
+      end
+      let syn = lg_rule(rules, 0).syn
+      p.i = p.i + 1
+      let nxt = syn.prec + 1
+      if syn.right
+        nxt = syn.prec
+      end
+      let rt = ps_tok(p)
+      let right = ps_expr(p, nxt)
+      if right == null
+        return null
+      end
+      let first_err = ""
+      let have_first = false
+      let n: ptr PNode = null
+      for i = 0 to vec_len(rules) - 1
+        let r = lg_rule(rules, i)
+        let ls = pf_elem(r.pat.elems, 0).slot
+        let rs = pf_elem(r.pat.elems, 2).slot
+        let cand = ps_node(p, r.kind, t)
+        cand.rule = r
+        cand.start = start
+        cand.stop = p.i
+        let b = ty_binder(cand as int)
+        let ok = ps_constrain(p, ls, left, b, t, u_cat3("left side of '", t.text, "'"))
+        if ok
+          ps_set_slot(cand, ls.name, left)
+          ok = ps_constrain(p, rs, right, b, rt, u_cat3("right side of '", t.text, "'"))
+        end
+        if ok
+          ps_set_slot(cand, rs.name, right)
+          ok = ps_finish(p, cand, b, t)
+        end
+        if ok
+          n = cand
+          break
+        end
+        if !have_first
+          first_err = pk_err
+          have_first = true
+        end
+      end
+      if n == null
+        pk_err = first_err
+        return null
+      end
+      if n.rule.tmpl != null
+        left = ps_expand(p, n.rule, n, ps_save(p))
+        if left == null
+          return null
+        end
+        continue
+      end
+      left = n
+    end
+    return left
+  end
+
+  fn ps_postfix(p: ptr Parser, rules: ptr Vec, left: ptr PNode, start: int) -> ptr PNode
+    let t = ps_tok(p)
+    let first_err = ""
+    let have_first = false
+    let far = ps_save_far(p)
+    for i = 0 to vec_len(rules) - 1
+      let r = lg_rule(rules, i)
+      let s = ps_save(p)
+      let n = ps_node(p, r.kind, t)
+      n.rule = r
+      n.start = start
+      let b = ty_binder(n as int)
+      let ls = pf_elem(r.pat.elems, 0).slot
+      let ok = ps_constrain(p, ls, left, b, t, u_cat3("the left side of '", t.text, "'"))
+      if ok
+        ps_set_slot(n, ls.name, left)
+        let rest = vec_new()
+        for k = 1 to vec_len(r.pat.elems) - 1
+          vec_push(rest, vec_get(r.pat.elems, k))
+        end
+        ok = ps_elems(p, rest, n, b)
+      end
+      if ok
+        n.stop = p.i
+        ok = ps_finish(p, n, b, t)
+      end
+      if ok
+        ps_restore_far(p, far)
+        if r.tmpl != null
+          return ps_expand(p, r, n, ps_save(p))
+        end
+        return n
+      end
+      let err = pk_err
+      ps_restore(p, s)
+      if !have_first
+        first_err = err
+        have_first = true
+      end
+    end
+    pk_err = ps_best(p, first_err)
+    return null
+  end
+
+  fn ps_is_place(n: ptr PNode) -> bool
+    return n.kind == "var" && n.vr != null || n.rule != null && n.rule.syn.place
+  end
+
+  fn ps_field_owner(n: ptr PNode) -> str
+    if n.kind == "var" && n.vr != null
+      return n.vr.name
+    end
+    return "this"
+  end
+
+  // ps_type_expr parses a type: a name, ptr T, or [T].
+  fn ps_type_expr(p: ptr Parser, out: ptr str) -> bool
+    let t = ps_tok(p)
+    if ps_is_lit(t, "[")
+      p.i = p.i + 1
+      let elem = ""
+      if !ps_type_expr(p, &elem)
+        return false
+      end
+      if !ps_is_lit(ps_tok(p), "]")
+        ps_fail(p, ps_tok(p), "expected ']' to close the slice type")
+        return false
+      end
+      p.i = p.i + 1
+      *out = u_cat3("[", elem, "]")
+      return true
+    elif t.kind == TK_IDENT && t.text == "ptr"
+      p.i = p.i + 1
+      let elem = ""
+      if !ps_type_expr(p, &elem)
+        return false
+      end
+      *out = u_cat("ptr ", elem)
+      return true
+    elif t.kind == TK_IDENT
+      p.i = p.i + 1
+      if map_has(p.lang.prims, t.text) || ty_struct(p.types, t.text) != null || p.lenient
+        *out = t.text
+        return true
+      end
+      ps_fail(p, t, u_cat("unknown type ", t.text))
+      return false
+    end
+    ps_fail(p, t, u_cat("expected a type, found ", lx_describe(t)))
+    return false
+  end
+
+  fn ps_prefix(p: ptr Parser) -> ptr PNode
+    let t = ps_tok(p)
+    let start = p.i
+    if t.kind == TK_IDENT || t.kind == TK_PUNCT
+      let rules = lg_rules(p.lang.prefix, t.text)
+      if rules != null && vec_len(rules) > 0
+        p.i = p.i + 1
+        let ot = ps_tok(p)
+        let operand = ps_expr(p, lg_rule(rules, 0).syn.prec)
+        if operand == null
+          return null
+        end
+        let first_err = ""
+        let have_first = false
+        for i = 0 to vec_len(rules) - 1
+          let r = lg_rule(rules, i)
+          let sl = pf_elem(r.pat.elems, 1).slot
+          let n = ps_node(p, r.kind, t)
+          n.rule = r
+          n.start = start
+          n.stop = p.i
+          let b = ty_binder(n as int)
+          let ok = ps_constrain(p, sl, operand, b, ot, u_cat3("operand of '", t.text, "'"))
+          if ok && sl.kind == "place" && !ps_is_place(operand)
+            ps_fail(p, ot, u_cat3("the operand of '", t.text, "' can't have its address taken"))
+            ok = false
+          end
+          if ok
+            ps_set_slot(n, sl.name, operand)
+            ok = ps_finish(p, n, b, t)
+          end
+          if ok
+            if r.tmpl != null
+              return ps_expand(p, r, n, ps_save(p))
+            end
+            return n
+          end
+          if !have_first
+            first_err = pk_err
+            have_first = true
+          end
+        end
+        pk_err = first_err
+        return null
+      end
+    end
+    let cands = vec_new()
+    if t.kind == TK_IDENT || t.kind == TK_PUNCT
+      let lit = lg_rules(p.lang.expr_lit, t.text)
+      if lit != null
+        for i = 0 to vec_len(lit) - 1
+          vec_push(cands, vec_get(lit, i))
+        end
+      end
+    end
+    for i = 0 to vec_len(p.lang.expr_slot) - 1
+      vec_push(cands, vec_get(p.lang.expr_slot, i))
+    end
+    let far = ps_save_far(p)
+    for i = 0 to vec_len(cands) - 1
+      let r = lg_rule(cands, i)
+      let s = ps_save(p)
+      let n = ps_match(p, r, false)
+      if n != null
+        ps_restore_far(p, far)
+        return n
+      end
+      ps_restore(p, s)
+    end
+    let rule_far = ps_save_far(p)
+    ps_restore_far(p, far)
+    if t.kind == TK_INT || t.kind == TK_CHAR
+      p.i = p.i + 1
+      let n = ps_node(p, "int", t)
+      n.ival = t.ival
+      n.ty = "int"
+      if t.kind == TK_CHAR
+        n.ty = "u8"
+      end
+      n.start = start
+      n.stop = p.i
+      return n
+    elif t.kind == TK_STR
+      p.i = p.i + 1
+      let n = ps_node(p, "str", t)
+      n.sval = t.text
+      n.ty = "str"
+      n.start = start
+      n.stop = p.i
+      return n
+    elif t.kind == TK_IDENT
+      if ps_keyword(p, t.text)
+        let lit = lg_rules(p.lang.expr_lit, t.text)
+        if rule_far.has && lit != null && vec_len(lit) > 0
+          ps_restore_far(p, rule_far)
+          pk_err = rule_far.err
+          return null
+        end
+        return ps_fail(p, t, u_cat("expected an expression, found keyword ", lx_describe(t)))
+      end
+      let v = ps_lookup(p, t.text)
+      if v == null
+        let c = map_get(p.consts, t.text) as ptr PNode
+        if c != null
+          p.i = p.i + 1
+          return ps_clone(c)
+        end
+        if vec_len(cands) > 0 && ps_is_lit(lx_tok(p.toks, p.i + 1), "(") && rule_far.has
+          ps_restore_far(p, rule_far)
+          pk_err = rule_far.err
+          return null
+        end
+        if p.lenient
+          v = new PVar
+          v.name = t.text
+          v.ty = "?"
+          v.global = true
+        else
+          return ps_fail(p, t, u_cat("unknown variable ", lx_describe(t)))
+        end
+      end
+      p.i = p.i + 1
+      let n = ps_node(p, "var", t)
+      n.vr = v
+      n.ty = v.ty
+      n.start = start
+      n.stop = p.i
+      return n
+    elif t.kind == TK_PUNCT && t.text == "("
+      p.i = p.i + 1
+      let e = ps_expr(p, 0)
+      if e == null
+        return null
+      end
+      if !ps_is_lit(ps_tok(p), ")")
+        return ps_fail(p, ps_tok(p), u_cat("expected ')', found ", lx_describe(ps_tok(p))))
+      end
+      p.i = p.i + 1
+      return e
+    end
+    return ps_fail(p, t, u_cat("expected an expression, found ", lx_describe(t)))
+  end
+
+  // ---------------------------------------------------------------- expansion
+
+  fn ps_has_slot(es: ptr Vec, name: str) -> bool
+    for i = 0 to vec_len(es) - 1
+      let e = pf_elem(es, i)
+      if e.slot != null && e.slot.name == name
+        return true
+      end
+      if e.optional != null && ps_has_slot(e.optional, name)
+        return true
+      end
+    end
+    return false
+  end
+
+  fn ps_tok_copy(kind: int, text: str, at: ptr Tok) -> ptr Tok
+    return lx_new(kind, text, at.file, at.line, at.col)
+  end
+
+  // ps_expand rewrites a matched node with its package's expand template and
+  // parses the result again.
+  fn ps_expand(p: ptr Parser, r: ptr LgRule, n: ptr PNode, s: ptr PSnap) -> ptr PNode
+    if p.depth > 64
+      pk_err = u_cat4(ps_pos(n), ": expansion of ", r.pkg.name, " nests too deeply (does it expand into itself?)")
+      return null
+    end
+    let stop = p.i
+    let outer = p.toks
+    ps_unwind(p, s)
+    let toks = vec_new()
+    for i = 0 to vec_len(r.tmpl) - 1
+      let t = lx_tok(r.tmpl, i)
+      if t.kind != TK_HOLE
+        vec_push(toks, t as int)
+        continue
+      end
+      if str_starts(t.text, "$")
+        let name = str_slice(t.text, 1, len(t.text))
+        let text = u_cat4("__", name, "_", u_cat4(str_from_int(n.line), "_", str_from_int(n.col), u_cat("_", str_from_int(p.depth))))
+        vec_push(toks, ps_tok_copy(TK_IDENT, text, t) as int)
+        continue
+      end
+      let c = ps_slot(n, t.text)
+      if c == null
+        if ps_has_slot(r.pat.elems, t.text)
+          continue
+        end
+        pk_err = u_cat4(lx_pos(t), ": expand template uses unknown slot {", t.text, "}")
+        p.toks = outer
+        p.i = stop
+        return null
+      end
+      let count = c.stop - c.start
+      let wrap = c.kind != "block" && count > 1
+      if wrap
+        vec_push(toks, ps_tok_copy(TK_PUNCT, "(", lx_tok(c.toks, c.start)) as int)
+      end
+      for k = c.start to c.stop - 1
+        vec_push(toks, vec_get(c.toks, k))
+      end
+      if wrap
+        vec_push(toks, ps_tok_copy(TK_PUNCT, ")", lx_tok(c.toks, c.stop - 1)) as int)
+      end
+    end
+    let at = lx_new(TK_NL, "", n.file, n.line, n.col)
+    vec_push(toks, at as int)
+    vec_push(toks, lx_new(TK_EOF, "", n.file, n.line, n.col) as int)
+
+    p.toks = toks
+    p.i = 0
+    p.depth = p.depth + 1
+    let out: ptr PNode = null
+    if r.syn.kind == "statement"
+      out = ps_node_at(p, "block", n)
+      while true
+        ps_skip_nl(p)
+        if ps_tok(p).kind == TK_EOF
+          break
+        end
+        let st = ps_statement(p, false)
+        if st == null
+          pk_err = u_cat4("in expansion of ", r.pkg.name, " at ", u_cat3(ps_pos(n), ": ", ps_best(p, pk_err)))
+          p.toks = outer
+          p.i = stop
+          p.depth = p.depth - 1
+          return null
+        end
+        ps_add_item(out, st)
+      end
+    else
+      let e = ps_expr(p, 0)
+      if e == null
+        pk_err = u_cat4("in expansion of ", r.pkg.name, " at ", u_cat3(ps_pos(n), ": ", pk_err))
+        p.toks = outer
+        p.i = stop
+        p.depth = p.depth - 1
+        return null
+      end
+      ps_skip_nl(p)
+      if ps_tok(p).kind != TK_EOF
+        pk_err = u_cat4("in expansion of ", r.pkg.name, " at ", u_cat(ps_pos(n), ": template is not a single expression"))
+        p.toks = outer
+        p.i = stop
+        p.depth = p.depth - 1
+        return null
+      end
+      out = e
+    end
+    let ex = vec_new()
+    u_push(ex, r.pkg.name)
+    if out.expanded != null
+      for i = 0 to vec_len(out.expanded) - 1
+        u_push(ex, u_get(out.expanded, i))
+      end
+    end
+    out.expanded = ex
+    out.toks = outer
+    out.start = n.start
+    out.stop = stop
+    p.toks = outer
+    p.i = stop
+    p.depth = p.depth - 1
+    return out
+  end
+
+  // ---------------------------------------------------------------- checks
+
+  fn ps_declare_struct(p: ptr Parser, n: ptr PNode, t: ptr Tok) -> bool
+    let name = ""
+    let fields: ptr PNode = null
+    for i = 0 to ps_nslots(n) - 1
+      let c = ps_nd(n.svals, i)
+      if c.kind == "newtype"
+        name = c.ident
+      elif c.kind == "fields"
+        fields = c
+      end
+    end
+    if name == "" || fields == null
+      pk_err = u_cat(n.rule.pkg.origin, ": a struct pattern needs a newtype slot and a fields slot")
+      return false
+    end
+    let st = ty_struct(p.types, name)
+    if vec_len(st.fields) > 0
+      return true
+    end
+    for i = 0 to ps_nitems(fields) - 1
+      let fd = ps_nd(fields.items, i)
+      let f = new TyField
+      f.name = fd.ident
+      f.ty = fd.ty
+      vec_push(st.fields, f as int)
+    end
+    if !ty_layout(p.types, st)
+      if p.lenient && u_has(pk_err, "unknown type")
+        // a field's type is declared later: lay it out in the second pass
+        st.fields = vec_new()
+        return true
+      end
+      ps_fail(p, t, pk_err)
+      return false
+    end
+    return true
+  end
+
+  fn ps_check_node(p: ptr Parser, n: ptr PNode) -> bool
+    for i = 0 to ps_nslots(n) - 1
+      let c = ps_nd(n.svals, i)
+      if c.kind != "func"
+        continue
+      end
+      let sig = map_get(p.sigs, c.ident) as ptr PSig
+      for k = 0 to ps_nslots(n) - 1
+        let a = ps_nd(n.svals, k)
+        if a.kind != "args"
+          continue
+        end
+        if ps_nitems(a) != vec_len(sig.params)
+          pk_err = u_cat4(ps_pos(c), ": ", c.ident, u_cat4(" takes ", str_from_int(vec_len(sig.params)), " argument(s), got ", str_from_int(ps_nitems(a))))
+          return false
+        end
+        for m = 0 to ps_nitems(a) - 1
+          let arg = ps_nd(a.items, m)
+          if !ty_compatible(u_get(sig.params, m), arg.ty)
+            pk_err = u_cat4(ps_pos(arg), ": argument ", str_from_int(m + 1), u_cat4(" of ", c.ident, " must be ", u_cat3(u_get(sig.params, m), ", but it is ", ps_describe_type(arg.ty))))
+            return false
+          end
+        end
+      end
+    end
+    for i = 0 to ps_nslots(n) - 1
+      if !ps_check_node(p, ps_nd(n.svals, i))
+        return false
+      end
+    end
+    for i = 0 to ps_nitems(n) - 1
+      if !ps_check_node(p, ps_nd(n.items, i))
+        return false
+      end
+    end
+    return true
+  end
+
+  fn ps_check_calls(p: ptr Parser, prog: ptr PProg) -> bool
+    for i = 0 to vec_len(prog.top) - 1
+      if !ps_check_node(p, ps_nd(prog.top, i))
+        return false
+      end
+    end
+    return true
+  end
+
+  // ---------------------------------------------------------------- dump ast
+
+  fn ps_node_line(n: ptr PNode) -> str
+    let b = sb_new()
+    sb_add(b, n.kind)
+    sb_add(b, " #")
+    sb_int(b, n.id)
+    sb_add(b, " @")
+    sb_add(b, ps_pos(n))
+    if n.ty != ""
+      sb_add(b, " : ")
+      sb_add(b, n.ty)
+    end
+    let k = n.kind
+    if k == "int"
+      sb_add(b, " = ")
+      sb_int(b, n.ival)
+    elif k == "str"
+      sb_add(b, " = ")
+      sb_add(b, pf_dquote(n.sval))
+    elif k == "var"
+      let where = "local"
+      if n.vr.param
+        where = "param"
+      elif n.vr.global
+        where = "global"
+      end
+      sb_add(b, u_cat4(" ", n.vr.name, " ", where))
+      sb_byte(b, ' ')
+      sb_int(b, n.vr.index)
+    elif k == "ident" || k == "func" || k == "newfunc" || k == "newtype" || k == "fielddecl" || k == "newconst"
+      sb_add(b, u_cat(" ", n.ident))
+    elif k == "field"
+      sb_add(b, u_cat(" ", n.ident))
+      if n.field != null
+        sb_add(b, " offset ")
+        sb_int(b, n.field.offset)
+      end
+    end
+    if n.expanded != null && vec_len(n.expanded) > 0
+      sb_add(b, u_cat(" expanded=", u_join(n.expanded, ",")))
+    end
+    if n.frame != null
+      let f = n.frame
+      sb_add(b, u_cat(" frame name=", f.name))
+      sb_add(b, " params=")
+      sb_int(b, f.params)
+      sb_add(b, " locals=")
+      sb_int(b, f.slots)
+      sb_add(b, " size=")
+      sb_int(b, ps_frame_size(f))
+      sb_add(b, u_cat(" ret=", pf_dquote(f.ret)))
+    end
+    return sb_str(b)
+  end
+
+  fn ps_dump_walk(b: ptr StrBuf, n: ptr PNode, depth: int, label: str)
+    for i = 1 to depth
+      sb_add(b, "  ")
+    end
+    sb_add(b, label)
+    sb_add(b, ps_node_line(n))
+    sb_byte(b, '\n')
+    for i = 0 to ps_nslots(n) - 1
+      ps_dump_walk(b, ps_nd(n.svals, i), depth + 1, u_cat(u_get(n.snames, i), ": "))
+    end
+    for i = 0 to ps_nitems(n) - 1
+      ps_dump_walk(b, ps_nd(n.items, i), depth + 1, "- ")
+    end
+  end
+
+  fn ps_dump(prog: ptr PProg) -> str
+    let b = sb_new()
+    sb_add(b, "program frame locals=")
+    sb_int(b, prog.frame.slots)
+    sb_add(b, " size=")
+    sb_int(b, ps_frame_size(prog.frame))
+    sb_byte(b, '\n')
+    for i = 0 to vec_len(prog.top) - 1
+      ps_dump_walk(b, ps_nd(prog.top, i), 1, "- ")
+    end
+    return sb_str(b)
+  end

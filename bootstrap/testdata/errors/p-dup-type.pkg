@@ -1,0 +1,7 @@
+use std
+struct P
+  x: int
+end
+struct P
+  y: int
+end

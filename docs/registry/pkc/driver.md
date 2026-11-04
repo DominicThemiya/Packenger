@@ -7,7 +7,8 @@
 truck [pkc](../pkc.md) · [source](../../../registry/pkc/driver.pkg)
 
 So far: reading `use` lines, fetching packages in rounds, building the
-grammar and tokenizing (`dr_lex`).
+grammar and tokenizing (`dr_lex`), then lexing library code and parsing
+(`dr_parse`).
 
 ## Needs
 
@@ -18,6 +19,7 @@ grammar and tokenizing (`dr_lex`).
 - [pkc/pkgfile](pkgfile.md)
 - [pkc/lexer](lexer.md)
 - [pkc/lang](lang.md)
+- [pkc/parser](parser.md)
 
 ## Library code
 
@@ -175,6 +177,51 @@ fn dr_lex(reg: str, file: str, src: str) -> ptr DrFront
   r.front = front
   r.uses = uses
   return r
+end
+
+// dr_library_units lexes the code sections of the loaded packages, in
+// name order, with positions in the package files.
+fn dr_library_units(front: ptr Map, L: ptr Lang) -> ptr Vec
+  let names = vec_new()
+  for i = 0 to map_len(front) - 1
+    u_push(names, map_key(front, i))
+  end
+  u_sort_strs(names)
+  let units = vec_new()
+  for i = 0 to vec_len(names) - 1
+    let f = map_get(front, u_get(names, i)) as ptr PfFile
+    if f.code == null
+      continue
+    end
+    let toks = lx_lex(u_join(f.code, "\n"), u_cat(f.name, ".pkg"), L.puncts, false)
+    if toks == null
+      return null
+    end
+    for k = 0 to vec_len(toks) - 1
+      let t = lx_tok(toks, k)
+      t.line = t.line + f.code_at - 1
+      t.col = t.col + 2
+    end
+    let u = new PUnit
+    u.name = f.name
+    u.toks = toks
+    u.lib = true
+    vec_push(units, u as int)
+  end
+  return units
+end
+
+// dr_parse runs the pipeline up to the syntax tree.
+fn dr_parse(fr: ptr DrFront, file: str) -> ptr PProg
+  let units = dr_library_units(fr.front, fr.lang)
+  if units == null
+    return null
+  end
+  let u = new PUnit
+  u.name = file
+  u.toks = fr.toks
+  vec_push(units, u as int)
+  return ps_parse(fr.lang, units)
 end
 ```
 

@@ -554,4 +554,4 @@ end
 
 ## Used by
 
-[pkc/driver](driver.md), [pkc/lang](lang.md), [pkc/main](main.md)
+[pkc/driver](driver.md), [pkc/lang](lang.md), [pkc/main](main.md), [pkc/parser](parser.md)

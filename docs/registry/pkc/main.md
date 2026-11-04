@@ -20,6 +20,7 @@ see [the self-hosting plan](../../self-hosting.md).
 - [pkc/ui](ui.md)
 - [pkc/lexer](lexer.md)
 - [pkc/driver](driver.md)
+- [pkc/parser](parser.md)
 
 ## Library code
 
@@ -196,6 +197,22 @@ fn pkc_run(args: [str], a: ptr PkcArgs, src: ptr str) -> int
       return -1
     end
     io_out(lx_dump(r.toks))
+    return 0
+  end
+  if a.cmd == "dump" && stage == "ast"
+    let text = ""
+    if !pkc_read(*src, &text)
+      return -1
+    end
+    let r = dr_lex(a.registry, ui_base(*src), text)
+    if r == null
+      return -1
+    end
+    let prog = dr_parse(r, ui_base(*src))
+    if prog == null
+      return -1
+    end
+    io_out(ps_dump(prog))
     return 0
   end
   u_fail(u_cat3("pkc: ", a.cmd, " is not implemented yet"))
