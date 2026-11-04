@@ -1,4 +1,12 @@
-doc print: writes the value and a newline to stdout with the write syscall.
+doc print: write the value and a newline to stdout with the write syscall.
+  Two support routines are included once if `print` is used:
+
+  - `__pk_print_int` converts `rax` to decimal in a stack buffer (handling the
+    sign and the most negative value) and writes it with one syscall;
+  - `__pk_print_str` writes a length-prefixed string, then the newline.
+
+  The variant is chosen from the value's type (`when value str`).
+
 emit when value str
   {value}
   call __pk_print_str

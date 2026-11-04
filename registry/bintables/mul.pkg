@@ -1,3 +1,8 @@
+doc * : `imul`.
+  If the right operand is a small integer or a variable, it is used directly
+  as the instruction's operand (`when right simple`); otherwise both operands
+  are computed through `@binop`.
+
 emit when right simple
   {left}
   imul rax, {right.operand}

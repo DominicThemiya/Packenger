@@ -1,3 +1,12 @@
-doc && : logical and (short-circuit)
+doc && : logical and, short-circuit
+  Logical and, short-circuit: the right side is evaluated only if the left side is non-zero.
+
+  ```
+  print 2 && 0    // 0
+  ```
+
+  Infix, precedence 20, left-associative. Both operands must be `int`; the
+  result is `int`.
+
 syntax infix 20 left
   {left: expr int} && {right: expr int} -> int

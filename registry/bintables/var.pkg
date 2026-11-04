@@ -1,3 +1,6 @@
-doc Variable read.
+doc Variable read: loads the variable's stack slot into rax.
+  `{addr}` is `qword [rbp-…]` for locals and `qword [rbp+…]` for
+  parameters (see the truck's conventions).
+
 emit
   mov rax, {addr}

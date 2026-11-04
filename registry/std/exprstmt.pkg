@@ -1,3 +1,17 @@
-doc An expression used as a statement, e.g. a call whose result is ignored.
+doc An expression used as a statement.
+  Lets an expression stand on its own line, which is useful for calls made
+  only for their side effects:
+
+  ```
+  fn shout()
+    print "HEY"
+  end
+
+  shout()
+  ```
+
+  It is tried after every statement that starts with a keyword and after
+  `assign`, so it never hides another statement form.
+
 syntax statement
   {e: expr}

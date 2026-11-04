@@ -1,3 +1,13 @@
-doc % : remainder
+doc % : remainder (sign follows the left operand, like C)
+  Remainder, with the sign of the left operand (like C). A zero divisor crashes the program.
+
+  ```
+  print 7 % 3     // 1
+  print -7 % 3    // -1
+  ```
+
+  Infix, precedence 60, left-associative. Both operands must be `int`; the
+  result is `int`.
+
 syntax infix 60 left
   {left: expr int} % {right: expr int} -> int

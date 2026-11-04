@@ -1,3 +1,13 @@
 doc Print an int or a string, followed by a newline.
+  ```
+  print 42
+  print "hello"
+  print 7 * 6
+  ```
+
+  The backend picks the integer or string routine from the value's type.
+  Each `print` is one `write` system call (two for strings), so printing in a
+  tight loop is dominated by system call cost.
+
 syntax statement
   print {value: expr}

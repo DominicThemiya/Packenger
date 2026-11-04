@@ -1,3 +1,5 @@
+doc Assign: compute the value, store it in the variable's slot.
+
 emit
   {value}
   mov {name.addr}, rax

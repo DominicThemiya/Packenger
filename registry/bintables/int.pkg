@@ -1,3 +1,6 @@
-doc Integer literal: loaded into rax.
+doc Integer literal: loads the value into rax.
+  Any 64-bit value is allowed. Packages that can use an integer directly as
+  an operand (`when right simple`) skip this package for small values.
+
 emit
   mov rax, {value}

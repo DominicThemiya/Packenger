@@ -1,4 +1,8 @@
 doc Helper for binary operators: left operand in rax, right operand in rbx.
+  Not a language construct: arithmetic and comparison packages include it with
+  `@binop` when their right operand is not simple. The left operand is
+  evaluated first and saved on the stack while the right one is evaluated.
+
 emit
   {left}
   push rax

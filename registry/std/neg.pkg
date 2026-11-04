@@ -1,3 +1,12 @@
 doc - : negation
+  `-x` negates an integer.
+
+  ```
+  print -(2 + 3)  // -5
+  ```
+
+  Prefix, precedence 70 (binds tighter than every infix operator). The
+  operand must be `int`.
+
 syntax prefix 70
   - {operand: expr int} -> int

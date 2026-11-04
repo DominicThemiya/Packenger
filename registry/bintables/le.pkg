@@ -1,4 +1,13 @@
-doc Comparison. The jfalse section lets if/while branch on the flags directly.
+doc <= : `cmp`, then `setle` for a value or `jg` for a branch.
+  Two kinds of sections:
+
+  - `emit` produces the value 0 or 1 in `rax` with `setle`;
+  - `emit jfalse` is used by `if` and `while`: it jumps to `{target}` when
+    the comparison is false (`jg`), so no 0/1 value is produced at all.
+
+  Each has a `when right simple` variant that compares against the right
+  operand directly.
+
 emit when right simple
   {left}
   cmp rax, {right.operand}

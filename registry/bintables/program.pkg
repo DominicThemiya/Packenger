@@ -1,4 +1,18 @@
-doc Program skeleton for x86-64 Linux. _start runs the top-level code and exits with its result.
+doc Program skeleton: entry point, top-level code, functions, support code and data.
+  Rendered once per program. The compiler fills these placeholders:
+
+  | placeholder | contents |
+  |---|---|
+  | `{main}` | the top-level statements |
+  | `{frame}` | stack space for top-level variables |
+  | `{functions}` | every `fn` |
+  | `{support}` | `support` sections of the packages used |
+  | `{data}` | `data` sections, e.g. string literals |
+
+  `_start` calls the top-level code as a function (`__pk_entry`), then passes
+  its result to the `exit` system call, so a top-level `return` sets the exit
+  code.
+
 emit
   bits 64
   default rel

@@ -1,3 +1,12 @@
 doc - : subtraction
+  Subtraction. Overflow wraps around (two's complement).
+
+  ```
+  print 10 - 2 - 3   // 5 (left-associative)
+  ```
+
+  Infix, precedence 50, left-associative. Both operands must be `int`; the
+  result is `int`.
+
 syntax infix 50 left
   {left: expr int} - {right: expr int} -> int

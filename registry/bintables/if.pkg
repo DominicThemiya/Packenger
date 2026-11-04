@@ -1,3 +1,9 @@
+doc Conditional jump around the then/else blocks.
+  When the condition's package has a `jfalse` section (all comparisons do),
+  the branch is taken directly on the CPU flags. Otherwise the condition is
+  computed into `rax` and tested against zero. When there is no `else`, the
+  `{else}` placeholder renders as nothing.
+
 emit when cond has jfalse
   {cond!jfalse L.else}
   {then}

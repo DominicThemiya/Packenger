@@ -1,4 +1,7 @@
 doc String literal: rax points at a length-prefixed byte string.
+  Each literal gets its own entry in the data section: a `qword` with the
+  length in bytes, followed by the UTF-8 bytes (no terminating zero).
+
 emit
   lea rax, [rel {D.s}]
 data

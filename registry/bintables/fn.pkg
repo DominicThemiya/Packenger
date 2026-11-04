@@ -1,4 +1,7 @@
-doc Function: arguments are on the stack above the return address, locals below rbp.
+doc Function: label, standard stack frame, body, default return 0.
+  The label is `pk_<name>`. `{frame}` is the space for the function's local
+  variables, rounded to 16 bytes.
+
 emit
   {name.label}:
   push rbp

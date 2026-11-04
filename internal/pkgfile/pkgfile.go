@@ -3,7 +3,8 @@
 // A package file is a list of sections. A section header starts in column 1;
 // its body lines are indented. Lines starting with "//" are comments.
 //
-//	doc      <one line description>
+//	doc      <one-line summary>
+//	  <Markdown body, indented two spaces; blank lines and // are kept>
 //	needs    <package> <package> ...        other packages this one builds on
 //	truck                                   this file is a truck (a collection);
 //	  <member>                              members live at <truck>/<member>.pkg
@@ -29,7 +30,8 @@ import (
 type File struct {
 	Name    string // e.g. "std/if"
 	Origin  string
-	Doc     string
+	Doc     string   // one-line summary
+	DocBody []string // Markdown, dedented
 	Needs   []string
 	Truck   []string
 	IsTruck bool
@@ -111,9 +113,19 @@ func Parse(name, origin, src string) (*File, error) {
 	}
 	var cur *[]string // where body lines go
 	var curSyntax *Syntax
+	inDoc := false
 	for idx, raw := range lines {
 		ln := idx + 1
 		trimmed := strings.TrimSpace(raw)
+		if inDoc && (raw == "" || raw[0] == ' ' || raw[0] == '\t') {
+			// doc bodies are Markdown: keep blank lines, comments and indentation
+			if trimmed == "" {
+				f.DocBody = append(f.DocBody, "")
+			} else {
+				f.DocBody = append(f.DocBody, dedent(raw))
+			}
+			continue
+		}
 		if trimmed == "" || strings.HasPrefix(trimmed, "//") {
 			continue
 		}
@@ -124,6 +136,7 @@ func Parse(name, origin, src string) (*File, error) {
 				return nil, errf(ln, "unknown section %q (expected one of doc, needs, truck, syntax, expand, emit, data, support)", kw)
 			}
 			cur, curSyntax = nil, nil
+			inDoc = kw == "doc"
 			args := fields[1:]
 			switch kw {
 			case "doc":
@@ -179,12 +192,26 @@ func Parse(name, origin, src string) (*File, error) {
 			return nil, errf(ln, "indented line outside of a section")
 		}
 	}
+	for len(f.DocBody) > 0 && f.DocBody[len(f.DocBody)-1] == "" {
+		f.DocBody = f.DocBody[:len(f.DocBody)-1]
+	}
 	for _, s := range f.Syntax {
 		if len(s.Patterns) == 0 {
 			return nil, errf(s.Line, "syntax section has no patterns")
 		}
 	}
 	return f, nil
+}
+
+// dedent removes one level (a tab or two spaces) of indentation.
+func dedent(s string) string {
+	if strings.HasPrefix(s, "\t") {
+		return s[1:]
+	}
+	for i := 0; i < 2 && strings.HasPrefix(s, " "); i++ {
+		s = s[1:]
+	}
+	return s
 }
 
 func parseSyntaxHeader(args []string) (*Syntax, error) {

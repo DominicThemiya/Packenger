@@ -1,3 +1,7 @@
+doc / : signed division with `idiv` (quotient in rax).
+  `cqo` sign-extends `rax` into `rdx:rax` before `idiv`. Division by zero
+  raises a CPU exception, which kills the program (SIGFPE).
+
 emit when right simple
   {left}
   mov rbx, {right.operand}

@@ -1,11 +1,11 @@
 # Packenger
 
-A compiled programming language where **everything is a package**, including
+A compiled programming language where **everything is a package**, even
 the syntax. `if`, `while`, `+`, `print` and `fn` are not built into the
-compiler. Each is a package that declares its own syntax, inputs and output.
-Packages are downloaded from a hosted registry at compile time, and the
-**`bintables`** truck translates them to NASM, which becomes a native x86-64
-Linux executable.
+compiler. Each is a package that declares its own syntax, inputs and
+output. Packages are downloaded from a hosted registry at compile time, and
+the **`bintables`** truck translates them to NASM, which becomes a native
+x86-64 Linux executable.
 
 ```
 use std
@@ -20,252 +20,53 @@ end
 print fib(35)
 ```
 
-```
-$ packenger run examples/fib.pkg
-9227465
-```
-
-## Speed
-
-fib(35), measured on the development machine:
-
-| | time |
-|---|---|
-| Packenger (bintables) | 0.15 s |
-| C, `gcc -O0` | 0.12 s |
-| C, `gcc -O2` | 0.035 s |
-| Python 3 | 2.1 s |
-
-The executable is about 5 KB and uses no libc: it makes Linux syscalls directly.
-
-## Packages and trucks
-
-A **truck** is a collection of packages. Two trucks make up the language:
-
-- **`std`** is the front end: what the language *looks like*.
-- **`bintables`** is the back end: what each package *becomes* in NASM.
-
-A program loads syntax with `use`:
-
-```
-use std          // the whole truck
-use std/print    // or individual packages
+```sh
+go build -o bin/packenger ./cmd/packenger
+./bin/packenger run examples/fib.pkg        # 9227465
+./bin/packenger build examples/fib.pkg -vb  # show every step
 ```
 
-### A syntax package declares syntax, inputs and output
+fib(35) runs in 0.15 s, against 0.12 s for `gcc -O0`, 0.035 s for
+`gcc -O2` and 2.1 s for Python. The executables are about 5 KB and don't
+use libc.
+
+## How it fits together
 
 ```
-// registry/std/if.pkg
-doc Conditional. Any non-zero int is true.
+your program ──use std──▶ std truck          syntax packages: what the language looks like
+                              │ parse
+                              ▼
+                          bintables truck    backend packages: NASM for each construct
+                              │ nasm + ld
+                              ▼
+                          native executable
+```
+
+A syntax package (`registry/std/if.pkg`):
+
+```
+doc Conditional: if cond ... [else ...] end
 syntax statement
   if {cond: expr int} {then: block} [else {else: block}] end
 ```
 
-```
-// registry/std/add.pkg
-syntax infix 50 left
-  {left: expr int} + {right: expr int} -> int
-```
+Its backend package (`registry/bintables/if.pkg`) is a NASM template.
+Packages can also be built from other packages; `std/for` expands into
+`let`, `while`, `<=`, `=` and `+`.
 
-A pattern is made of literals (`if`, `end`, `+`), typed slots
-`{name: kind [type]}` and optional groups `[ ... ]`. The compiler builds
-its grammar entirely from the loaded patterns, including which symbols the
-lexer recognizes.
+## Documentation
 
-| slot kind | matches |
+| | |
 |---|---|
-| `expr [type]` | an expression, optionally of a required type (`int`, `str`) |
-| `block` | statements up to the next literal (e.g. `end`) |
-| `newvar [of slot]` | a name that declares a variable (typed like `slot`) |
-| `var [type]` | an existing variable |
-| `ident`, `func`, `newfunc` | a name, a called function, a defined function |
-| `args`, `params` | comma-separated arguments / parameters |
+| [Getting started](docs/getting-started.md) | install, build, first program |
+| [The std language](docs/language.md) | writing programs |
+| [Packages and trucks](docs/packages.md) | the package format: syntax, expansion, NASM templates |
+| [Publishing packages](docs/publishing.md) | the registry and keeping docs current |
+| [Command line](docs/cli.md) | commands, flags and the `-vb` report |
+| [How the compiler works](docs/architecture.md) | pipeline and code map |
+| [Package reference](docs/registry/README.md) | every truck and package, generated from the registry |
 
-The syntax kinds are `statement`, `function` (top level, gets its own stack
-frame), `expr`, `infix <prec> [left|right]` and `prefix <prec>`.
+## Requirements
 
-### A package can be made only of other packages
-
-`for` has no backend. It expands into `let`, `while`, `<=`, `=` and `+`:
-
-```
-// registry/std/for.pkg
-needs std/let std/while std/le std/assign std/add
-syntax statement
-  for {i: newvar} = {from: expr int} to {to: expr int} {body: block} end
-expand
-  let {i} = {from}
-  while {i} <= {to}
-    {body}
-    {i} = {i} + 1
-  end
-```
-
-### bintables: packages → NASM
-
-Every node kind is rendered by the `bintables` package of the same name.
-That includes integer literals, variables and the program skeleton
-(`bintables/program`):
-
-```
-// registry/bintables/add.pkg
-emit when right simple
-  {left}
-  add rax, {right.operand}
-emit
-  @binop
-  add rax, rbx
-```
-
-- `{slot}` inserts the slot's code, and its value ends up in `rax`.
-  `{slot.addr}`, `{slot.label}`, `{slot.value}`, `{slot.operand}`, `{frame}`
-  and similar placeholders insert attributes.
-- `{L.name}` inserts a label unique to this use. `{D.name}` does the same
-  for the data section.
-- `@pkg` inlines another bintables package. `{each args reverse}` ...
-  `{end}` loops over a list.
-- `emit when <slot> simple | is <kind> | has <section> | <type> | empty`
-  picks a variant. This is how the truck does its optimizations, all inside
-  packages. Comparisons provide an `emit jfalse` section, so `if` and `while`
-  branch on the CPU flags directly:
-
-```
-// registry/bintables/if.pkg
-emit when cond has jfalse
-  {cond!jfalse L.else}
-  {then}
-  jmp {L.end}
-  {L.else}:
-  {else}
-  {L.end}:
-```
-
-Further sections are `data` (per-use lines in `.data`) and `support` (code
-emitted once if the package is used, e.g. `print`'s integer formatting).
-Retargeting the language means writing another truck and passing
-`--target`.
-
-### Extending the language
-
-Adding syntax means adding packages, with no change to the compiler. From
-the test suite:
-
-```
-// unless.pkg: front end only
-needs std/if std/not
-syntax statement
-  unless {cond: expr int} {body: block} end
-expand
-  if !({cond})
-    {body}
-  end
-```
-
-```
-// std/max.pkg + bintables/max.pkg: a new operator
-syntax infix 45 left
-  {left: expr int} max {right: expr int} -> int
-
-emit
-  @binop
-  cmp rax, rbx
-  cmovl rax, rbx
-```
-
-## The `std` language
-
-```
-use std
-
-fn is_prime(n)              // functions: int parameters, int result
-  if n < 2
-    return 0
-  end
-  let d = 2                 // declare
-  while d * d <= n
-    if n % d == 0
-      return 0
-    end
-    d = d + 1               // assign
-  end
-  return 1
-end
-
-let count = 0
-for n = 1 to 100000
-  if is_prime(n)
-    count = count + 1
-  end
-end
-print "primes below 100000:"   // print ints and strings
-print count
-return 0                       // top-level return = exit code
-```
-
-Operators, from lowest to highest precedence: `||`, `&&`, `== !=`,
-`< <= > >=`, `+ -`, `* / %`, and the prefix operators `! -`. Comments start
-with `//`. Statements end at a newline, except inside parentheses.
-
-## Usage
-
-```
-go build -o bin/packenger ./cmd/packenger
-
-packenger run   examples/primes.pkg
-packenger build examples/fib.pkg -o fib    # native executable
-packenger asm   examples/fib.pkg           # show the NASM
-packenger tree  examples/primes.pkg        # which packages built it
-```
-
-Flags: `--registry URL` (or `PACKENGER_REGISTRY`), `--target TRUCK`
-(default `bintables`), `-o FILE`, and `-vb` for a verbose build. Program
-arguments for `run` go after `--`.
-
-`-vb` reports the build on stderr as it happens:
-- every package downloaded, in parallel rounds, with its size, time and why
-  it was needed (`used by fib.pkg`, `member of truck std`,
-  `included by bintables/add`, ...);
-- the grammar the syntax packages produced (keywords, symbols, operators);
-- the parse result and each function's stack frame;
-- which `emit` variant every bintables package used;
-- the `nasm` and `ld` steps and the final executable size.
-
-```
-$ packenger build examples/fib.pkg -vb
-[uses] fib.pkg: std
-[syntax] round 1: downloading 1 package(s) in parallel
-  ↓ std                    245B  238ms  used by fib.pkg
-[syntax] round 2: downloading 25 package(s) in parallel
-  ↓ std/fn                 148B   85ms  member of truck std
-  ...
-[bintables] round 2: downloading 1 package(s) in parallel
-  ↓ bintables/binop        136B   74ms  included by bintables/add
-[emit] 98 line(s) of NASM in 722µs; variants chosen:
-        bintables/if when cond has jfalse                ×1
-        bintables/lt jfalse when right simple            ×1
-  ...
-[done] fib: 5.1K executable
-```
-Building requires `nasm` and `ld`.
-
-By default packages come from
-`https://raw.githubusercontent.com/DominicThemiya/Packenger/main/registry`.
-Fetches run level by level in parallel and are kept in memory only.
-Backend packages are fetched only for the constructs a program uses. For
-local work on the registry itself:
-
-```
-PACKENGER_REGISTRY=file://$PWD/registry packenger run examples/hello.pkg
-```
-
-## Known limits / next steps
-
-- **Codegen** keeps every value on the stack, with expression results in
-  `rax` (roughly `gcc -O0`). Register allocation would close most of the
-  gap to `-O2`, and could live in bintables as more `when` variants.
-- **Types**: only `int` and `str`. Functions take and return `int`.
-- **Syntax**: no `else if` chain yet (nest `if`s). Expansions paste source
-  tokens, so `for`'s upper bound is re-evaluated every iteration.
-- **Reproducibility**: packages are fetched from a moving branch. A lockfile
-  or `use std@v1` pins would fix that.
-- **Platform**: x86-64 Linux only, which is what bintables targets.
+Go to build the compiler, `nasm` and `ld` to assemble programs, and x86-64
+Linux.

@@ -1,3 +1,6 @@
+doc Loop with the condition tested at the top.
+  Uses the condition's `jfalse` section when it has one, like `if`.
+
 emit when cond has jfalse
   {L.top}:
   {cond!jfalse L.end}

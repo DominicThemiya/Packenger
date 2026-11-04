@@ -1,3 +1,5 @@
+doc ! : `test` and `sete`; produces 0 or 1.
+
 emit
   {operand}
   test rax, rax

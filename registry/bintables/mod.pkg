@@ -1,3 +1,6 @@
+doc % : signed remainder with `idiv` (remainder from rdx).
+  Same as `div`, then moves the remainder from `rdx` into `rax`.
+
 emit when right simple
   {left}
   mov rbx, {right.operand}

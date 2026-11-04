@@ -1,3 +1,5 @@
+doc || : short-circuit with a conditional jump; produces 0 or 1.
+
 emit
   {left}
   test rax, rax

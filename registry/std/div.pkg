@@ -1,3 +1,13 @@
-doc / : integer division
+doc / : integer division, rounding toward zero (like C)
+  Integer division, rounding toward zero (like C). Dividing by zero crashes the program.
+
+  ```
+  print 7 / 2     // 3
+  print -7 / 2    // -3
+  ```
+
+  Infix, precedence 60, left-associative. Both operands must be `int`; the
+  result is `int`.
+
 syntax infix 60 left
   {left: expr int} / {right: expr int} -> int

@@ -1,3 +1,17 @@
-doc Declare a variable; its type is the type of its initial value.
+doc Declare a variable: let name = value
+  Declares a variable in the current block. Its type is the type of its
+  initial value (`int` or `str`).
+
+  ```
+  let count = 0
+  let greeting = "hello"
+  ```
+
+  - Declaring the same name twice in one block is an error; an inner block
+    may shadow an outer variable.
+  - Variables are visible from their declaration to the end of the block.
+  - The name is in scope inside its own initializer, as in C, so
+    `let x = x + 1` reads the new, uninitialized `x`.
+
 syntax statement
   let {name: newvar of value} = {value: expr}

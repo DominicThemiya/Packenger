@@ -1,0 +1,15 @@
+# Packenger documentation
+
+| guide | what it covers |
+|---|---|
+| [Getting started](getting-started.md) | install, build the compiler, compile and run a program |
+| [The std language](language.md) | writing programs with the standard truck |
+| [Packages and trucks](packages.md) | the package file format: syntax, expansion, NASM templates, docs |
+| [Publishing packages](publishing.md) | the registry, adding packages and trucks, keeping docs current |
+| [Command line](cli.md) | every command and flag, including the `-vb` build report |
+| [How the compiler works](architecture.md) | the pipeline, and where each part lives in the code |
+| [Package reference](registry/README.md) | generated: every truck and package in the registry |
+
+The package reference is generated from the packages themselves. Don't
+edit `docs/registry/` by hand; see
+[Publishing packages](publishing.md#documentation).

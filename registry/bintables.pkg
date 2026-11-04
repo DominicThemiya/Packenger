@@ -1,4 +1,48 @@
 doc Backend truck: translates Packenger packages to NASM for x86-64 Linux.
+  `bintables` is the back-end truck. For every node kind in a program the
+  compiler fetches `bintables/<kind>` and renders its `emit` section; packages
+  that expand into others (like `std/for`) never reach it. Only the packages a
+  program actually uses are downloaded.
+
+  The output is a static ELF executable that talks to Linux through syscalls;
+  there is no libc.
+
+  ## Conventions
+
+  These are agreements between the packages in this truck; the compiler does
+  not enforce them.
+
+  | what | where |
+  |---|---|
+  | result of any expression | `rax` |
+  | right operand of a binary operator | `rbx` (see `binop`) |
+  | frame pointer | `rbp`; every function has a standard frame |
+  | local variable *k* | `qword [rbp-8(k+1)]` |
+  | parameter *i* | `qword [rbp+16+8i]` |
+  | arguments | pushed right to left by the caller, popped by the caller |
+  | integers | 64-bit signed, two's complement (overflow wraps) |
+  | booleans | 0 is false, anything else is true; comparisons produce 0 or 1 |
+  | strings | pointer to a `qword` length followed by the bytes |
+  | exit code | the value returned by the top-level code |
+
+  ## Optimizations
+
+  All optimizations live in these packages as `emit when ...` variants:
+
+  - arithmetic and comparisons use the right operand directly as an
+    instruction operand when it is a small integer or a variable
+    (`when right simple`), avoiding a push/pop;
+  - comparisons provide an `emit jfalse` section, and `if`/`while` use it
+    (`when cond has jfalse`) to branch on the CPU flags instead of
+    materializing 0/1 first;
+  - calls with no arguments skip the stack cleanup.
+
+  Register allocation is the main thing still missing; values otherwise live
+  on the stack.
+
+  To target another platform, write another truck with the same package
+  names and pass `--target <truck>`.
+
 truck
   add
   and

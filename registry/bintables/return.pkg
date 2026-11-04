@@ -1,3 +1,5 @@
+doc Return: value in rax, tear down the frame, ret.
+
 emit
   {value}
   leave

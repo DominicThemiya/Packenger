@@ -1,3 +1,20 @@
-doc Conditional. Any non-zero int is true.
+doc Conditional: if cond ... [else ...] end
+  Runs the first block if the condition is non-zero, otherwise the `else`
+  block, if there is one.
+
+  ```
+  if n % 15 == 0
+    print "FizzBuzz"
+  else
+    if n % 3 == 0
+      print "Fizz"
+    else
+      print n
+    end
+  end
+  ```
+
+  There is no `else if` chain yet; nest `if` inside `else` instead.
+
 syntax statement
   if {cond: expr int} {then: block} [else {else: block}] end

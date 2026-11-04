@@ -1,4 +1,41 @@
 doc The standard language: C-style statements, closed with end instead of braces.
+  `std` is the front-end truck. Its packages define what Packenger source looks
+  like; none of them contains machine code. Each one declares a pattern, the
+  types of its slots and the type it produces, and the compiler builds its
+  grammar from whatever `std` packages are loaded.
+
+  ```
+  use std
+
+  fn fib(n)
+    if n < 2
+      return n
+    end
+    return fib(n - 1) + fib(n - 2)
+  end
+
+  print fib(35)
+  ```
+
+  | group | packages |
+  |---|---|
+  | functions | `fn`, `call`, `return` |
+  | variables | `let`, `assign` |
+  | control flow | `if`, `while`, `for` |
+  | output | `print` |
+  | statements | `exprstmt` |
+  | arithmetic | `add` `+`, `sub` `-`, `mul` `*`, `div` `/`, `mod` `%`, `neg` `-x` |
+  | comparison | `eq` `==`, `ne` `!=`, `lt` `<`, `le` `<=`, `gt` `>`, `ge` `>=` |
+  | logic | `and` `&&`, `or` `||`, `not` `!` |
+
+  Operator precedence, lowest first: `||` (10), `&&` (20), `== !=` (30),
+  `< <= > >=` (40), `+ -` (50), `* / %` (60), prefix `! -` (70). All infix
+  operators are left-associative.
+
+  Use the whole truck with `use std`, or pick packages, e.g. `use std/print`.
+  Every package except `for` is translated by the `bintables` package of the
+  same name; `for` expands into other `std` packages.
+
 truck
   fn
   call

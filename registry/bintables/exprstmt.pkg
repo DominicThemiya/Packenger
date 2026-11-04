@@ -1,2 +1,4 @@
+doc Expression statement: compute the expression and ignore rax.
+
 emit
   {e}

@@ -1,3 +1,14 @@
-doc Assign to an existing variable.
+doc Assign to an existing variable: name = value
+  ```
+  let total = 0
+  total = total + 5
+  ```
+
+  The variable must already be declared with `let`, `for` or as a function
+  parameter.
+
+  **Limitation:** the value's type is not yet checked against the variable's
+  type, so assigning a string to an `int` variable is not caught.
+
 syntax statement
   {name: var} = {value: expr}

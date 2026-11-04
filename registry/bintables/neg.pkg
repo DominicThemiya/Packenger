@@ -1,3 +1,5 @@
+doc - : `neg rax`.
+
 emit
   {operand}
   neg rax
