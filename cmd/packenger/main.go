@@ -13,13 +13,14 @@ import (
 
 	"github.com/DominicThemiya/Packenger/internal/lang"
 	"github.com/DominicThemiya/Packenger/internal/registry"
+	"github.com/DominicThemiya/Packenger/internal/ui"
 )
 
 const usage = `packenger: a language where everything is a package.
 
 Usage:
   packenger build <file.pkg> [-o exe]   compile to a native executable
-  packenger run   <file.pkg> [args]     compile and run
+  packenger run   <file.pkg> [-- args]  compile and run
   packenger asm   <file.pkg> [-o file]  print the generated NASM
   packenger tree  <file.pkg>            show which packages built the program
 
@@ -29,21 +30,24 @@ Flags:
   --target TRUCK   backend truck that translates packages to assembly
                    (default bintables)
   -o FILE          output file
-  -v               log every package fetched
+  -vb              verbose build: every package downloaded (and why), the
+                   grammar, parse results, chosen backend variants, and the
+                   nasm/ld steps, all with sizes and timings (-v is an alias)
 
 Requires nasm and ld for build and run.
 `
 
 func main() {
-	code, err := run(os.Args[1:])
+	var src string
+	code, err := run(os.Args[1:], &src)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		ui.Error(os.Stderr, ui.Colors(os.Stderr), err, src)
 		os.Exit(1)
 	}
 	os.Exit(code)
 }
 
-func run(args []string) (int, error) {
+func run(args []string, srcOut *string) (int, error) {
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
 		fmt.Print(usage)
 		return 0, nil
@@ -58,29 +62,43 @@ func run(args []string) (int, error) {
 	regURL := fs.String("registry", defReg, "")
 	target := fs.String("target", "bintables", "")
 	out := fs.String("o", "", "")
-	verbose := fs.Bool("v", false, "")
+	verbose := fs.Bool("vb", false, "")
+	fs.BoolVar(verbose, "v", false, "")
 	rest := args[1:]
 	var progArgs []string
 	if cmd == "run" {
-		// everything after the source file goes to the program
+		// arguments after "--" go to the program
 		for i, a := range rest {
-			if strings.HasSuffix(a, ".pkg") {
-				progArgs, rest = rest[i+1:], rest[:i+1]
+			if a == "--" {
+				progArgs, rest = rest[i+1:], rest[:i]
 				break
 			}
 		}
 	}
-	if err := fs.Parse(flagsFirst(rest, map[string]bool{"v": true})); err != nil {
+	if err := fs.Parse(flagsFirst(rest, map[string]bool{"v": true, "vb": true})); err != nil {
 		return 1, err
 	}
 	if fs.NArg() != 1 {
 		return 1, fmt.Errorf("%s expects one source file (see packenger --help)", cmd)
 	}
 	src := fs.Arg(0)
+	*srcOut = src
 
+	exe := *out
+	if cmd == "build" && exe == "" {
+		exe = strings.TrimSuffix(filepath.Base(src), ".pkg")
+	}
 	c := &lang.Compiler{Registry: registry.New(*regURL), Target: *target}
+	var rep *ui.Reporter
 	if *verbose {
-		c.Log = func(f string, a ...any) { fmt.Fprintf(os.Stderr, f+"\n", a...) }
+		rep = ui.NewReporter(os.Stderr, ui.Colors(os.Stderr))
+		rep.Header(cmd, src, exe, *regURL, *target)
+		c.Report = rep
+	}
+	done := func(note string) {
+		if rep != nil {
+			rep.Done(note)
+		}
 	}
 	res, err := c.CompileFile(context.Background(), src)
 	if err != nil {
@@ -89,30 +107,33 @@ func run(args []string) (int, error) {
 
 	switch cmd {
 	case "asm":
+		done("")
 		if *out == "" {
 			fmt.Print(res.Asm)
 			return 0, nil
 		}
 		return 0, os.WriteFile(*out, []byte(res.Asm), 0o644)
 	case "tree":
+		done("")
 		res.Tree(os.Stdout, *target)
 		return 0, nil
 	case "build":
-		exe := *out
-		if exe == "" {
-			exe = strings.TrimSuffix(filepath.Base(src), ".pkg")
+		if err := lang.Assemble(res.Asm, exe, c.Report); err != nil {
+			return 1, err
 		}
-		return 0, lang.Assemble(res.Asm, exe)
+		done("")
+		return 0, nil
 	case "run":
 		dir, err := os.MkdirTemp("", "packenger-run-*")
 		if err != nil {
 			return 1, err
 		}
 		defer os.RemoveAll(dir)
-		exe := filepath.Join(dir, "prog")
-		if err := lang.Assemble(res.Asm, exe); err != nil {
+		exe = filepath.Join(dir, "prog")
+		if err := lang.Assemble(res.Asm, exe, c.Report); err != nil {
 			return 1, err
 		}
+		done("running")
 		p := exec.Command(exe, progArgs...)
 		p.Stdin, p.Stdout, p.Stderr = os.Stdin, os.Stdout, os.Stderr
 		if err := p.Run(); err != nil {

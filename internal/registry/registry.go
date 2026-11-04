@@ -5,8 +5,10 @@ package registry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -97,7 +99,11 @@ func (r *Registry) fetch(ctx context.Context, name string) (string, string, erro
 	req.Header.Set("User-Agent", "packenger")
 	resp, err := r.Client.Do(req)
 	if err != nil {
-		return "", u, fmt.Errorf("fetching package %q: %w", name, err)
+		var dns *net.DNSError
+		if errors.As(err, &dns) {
+			return "", u, fmt.Errorf("can't download package %q: cannot resolve %s (offline, or a DNS problem)", name, dns.Name)
+		}
+		return "", u, fmt.Errorf("can't download package %q: can't reach %s: %w", name, req.URL.Host, errors.Unwrap(err))
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {

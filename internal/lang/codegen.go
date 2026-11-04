@@ -20,10 +20,11 @@ type Gen struct {
 	support  []string
 	used     map[string]bool
 	dataDone map[int]bool
+	Chosen   map[VariantUse]int // emit section -> uses (Count left zero)
 }
 
 func NewGen(target string, back map[string]*pkgfile.File, prog *Program) *Gen {
-	g := &Gen{Target: target, Back: back, funcs: map[string]*Node{}, used: map[string]bool{}, dataDone: map[int]bool{}}
+	g := &Gen{Target: target, Back: back, funcs: map[string]*Node{}, used: map[string]bool{}, dataDone: map[int]bool{}, Chosen: map[VariantUse]int{}}
 	for _, f := range prog.Funcs {
 		for _, c := range f.Slots {
 			if c.Kind == "newfunc" {
@@ -183,6 +184,18 @@ func (g *Gen) choose(pkg *pkgfile.File, section string, n *Node) (*pkgfile.Emit,
 			return nil, fmt.Errorf("%s:%d: %v", pkg.Origin, e.Line, err)
 		}
 		if ok {
+			v := VariantUse{Package: pkg.Name, Section: e.Section}
+			if c := e.Cond; c != nil {
+				switch c.Op {
+				case "type":
+					v.When = c.Slot + " " + c.Arg
+				case "simple", "empty":
+					v.When = c.Slot + " " + c.Op
+				default:
+					v.When = c.Slot + " " + c.Op + " " + c.Arg
+				}
+			}
+			g.Chosen[v]++
 			return e, nil
 		}
 	}

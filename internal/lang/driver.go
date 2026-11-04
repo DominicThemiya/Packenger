@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/DominicThemiya/Packenger/internal/pkgfile"
 	"github.com/DominicThemiya/Packenger/internal/registry"
@@ -18,8 +19,8 @@ import (
 
 type Compiler struct {
 	Registry *registry.Registry
-	Target   string // backend truck, e.g. "bintables"
-	Log      func(format string, args ...any)
+	Target   string   // backend truck, e.g. "bintables"
+	Report   Reporter // optional
 }
 
 type Result struct {
@@ -57,55 +58,65 @@ func scanUses(src string) ([]string, string, error) {
 	return uses, strings.Join(lines, "\n"), nil
 }
 
-func (c *Compiler) log(format string, args ...any) {
-	if c.Log != nil {
-		c.Log(format, args...)
-	}
-}
+func (c *Compiler) report() Reporter { return orNop(c.Report) }
+
+// dep is a package to fetch and the reason it is needed.
+type dep struct{ name, why string }
 
 // fetchAll downloads packages level by level, in parallel. next returns the
-// further package names a loaded package asks for.
-func (c *Compiler) fetchAll(ctx context.Context, names []string, next func(*pkgfile.File) []string) (map[string]*pkgfile.File, error) {
+// further packages a loaded package asks for.
+func (c *Compiler) fetchAll(ctx context.Context, phase string, first []dep, next func(*pkgfile.File) []dep) (map[string]*pkgfile.File, error) {
 	got := map[string]*pkgfile.File{}
 	seen := map[string]bool{}
-	var pending []string
-	queue := func(ns []string) {
-		for _, n := range ns {
-			if !seen[n] {
-				seen[n] = true
-				pending = append(pending, n)
+	var pending []dep
+	queue := func(ds []dep) {
+		for _, d := range ds {
+			if !seen[d.name] {
+				seen[d.name] = true
+				pending = append(pending, d)
 			}
 		}
 	}
-	queue(names)
-	for len(pending) > 0 {
-		level := pending
+	queue(first)
+	start, bytes := time.Now(), 0
+	for level := 1; len(pending) > 0; level++ {
+		batch := pending
 		pending = nil
-		files := make([]*pkgfile.File, len(level))
-		errs := make([]error, len(level))
+		type result struct {
+			f    *pkgfile.File
+			size int
+			took time.Duration
+			err  error
+		}
+		results := make([]result, len(batch))
 		var wg sync.WaitGroup
-		for i, name := range level {
+		for i, d := range batch {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				src, origin, err := c.Registry.Fetch(ctx, name)
-				if err != nil {
-					errs[i] = err
-					return
+				t0 := time.Now()
+				src, origin, err := c.Registry.Fetch(ctx, d.name)
+				r := result{size: len(src), took: time.Since(t0), err: err}
+				if err == nil {
+					r.f, r.err = pkgfile.Parse(d.name, origin, src)
 				}
-				files[i], errs[i] = pkgfile.Parse(name, origin, src)
+				results[i] = r
 			}()
 		}
 		wg.Wait()
-		for i, f := range files {
-			if errs[i] != nil {
-				return nil, errs[i]
+		fetches := make([]Fetch, 0, len(results))
+		for i, r := range results {
+			if r.err != nil {
+				return nil, r.err
 			}
-			c.log("fetched %-22s %s", f.Name, f.Origin)
-			got[f.Name] = f
-			queue(next(f))
+			bytes += r.size
+			fetches = append(fetches, Fetch{Name: r.f.Name, Why: batch[i].why, Origin: r.f.Origin, Size: r.size, Took: r.took})
+			got[r.f.Name] = r.f
+			queue(next(r.f))
 		}
+		c.report().Round(phase, level, fetches)
 	}
+	c.report().PhaseDone(phase, len(got), bytes, time.Since(start))
 	return got, nil
 }
 
@@ -124,12 +135,20 @@ func (c *Compiler) Compile(ctx context.Context, file, src string) (*Result, erro
 	}
 
 	// 1. front end: the packages that define the language
-	front, err := c.fetchAll(ctx, uses, func(f *pkgfile.File) []string {
-		var out []string
+	c.report().Uses(file, uses)
+	var first []dep
+	for _, u := range uses {
+		first = append(first, dep{u, "used by " + file})
+	}
+	front, err := c.fetchAll(ctx, "syntax", first, func(f *pkgfile.File) []dep {
+		var out []dep
 		for _, m := range f.Truck {
-			out = append(out, f.Name+"/"+m)
+			out = append(out, dep{f.Name + "/" + m, "member of truck " + f.Name})
 		}
-		return append(out, f.Needs...)
+		for _, n := range f.Needs {
+			out = append(out, dep{n, "needed by " + f.Name})
+		}
+		return out
 	})
 	if err != nil {
 		return nil, err
@@ -145,29 +164,47 @@ func (c *Compiler) Compile(ctx context.Context, file, src string) (*Result, erro
 	if err != nil {
 		return nil, err
 	}
+	c.report().Grammar(GrammarInfo{
+		Packages: len(syntaxPkgs), Forms: L.forms(), Infix: len(L.infix), Prefix: len(L.prefix),
+		Keywords: sortedKeys(L.keywords), Symbols: L.Puncts,
+	})
 
 	// 2. parse with the grammar those packages define
 	toks, err := Lex(body, file, L.Puncts, false)
 	if err != nil {
 		return nil, err
 	}
+	t0 := time.Now()
 	prog, err := NewParser(L, toks).ParseProgram()
 	if err != nil {
 		return nil, err
 	}
+	kinds := Kinds(prog)
+	nodes := 0
+	Walk(prog.Main, func(*Node) { nodes++ })
+	for _, f := range prog.Funcs {
+		Walk(f, func(*Node) { nodes++ })
+	}
+	info := ParseInfo{File: file, Tokens: len(toks), Nodes: nodes, Statements: len(prog.Main.Items), Took: time.Since(t0)}
+	for _, f := range prog.Funcs {
+		info.Functions = append(info.Functions, FrameInfo{f.Frame.Name, f.Frame.Params, f.Frame.Slots, f.Frame.Size()})
+	}
+	c.report().Parsed(info)
 
 	// 3. back end: fetch only the target packages this program uses
-	var need []string
-	for k := range Kinds(prog) {
-		need = append(need, c.Target+"/"+k)
+	var need []dep
+	for _, k := range sortedKeys(kinds) {
+		need = append(need, dep{c.Target + "/" + k, "translates " + k})
 	}
-	sort.Strings(need)
-	backByName, err := c.fetchAll(ctx, need, func(f *pkgfile.File) []string {
-		var out []string
+	backByName, err := c.fetchAll(ctx, c.Target, need, func(f *pkgfile.File) []dep {
+		var out []dep
 		for _, inc := range Includes(f) {
-			out = append(out, c.Target+"/"+inc)
+			out = append(out, dep{c.Target + "/" + inc, "included by " + f.Name})
 		}
-		return append(out, f.Needs...)
+		for _, n := range f.Needs {
+			out = append(out, dep{n, "needed by " + f.Name})
+		}
+		return out
 	})
 	if err != nil {
 		return nil, err
@@ -178,15 +215,41 @@ func (c *Compiler) Compile(ctx context.Context, file, src string) (*Result, erro
 	}
 
 	// 4. render
-	asm, err := NewGen(c.Target, back, prog).Program(prog)
+	t0 = time.Now()
+	g := NewGen(c.Target, back, prog)
+	asm, err := g.Program(prog)
 	if err != nil {
 		return nil, err
 	}
+	var variants []VariantUse
+	for v, n := range g.Chosen {
+		v.Count = n
+		variants = append(variants, v)
+	}
+	sort.Slice(variants, func(i, j int) bool {
+		a, b := variants[i], variants[j]
+		if a.Package != b.Package {
+			return a.Package < b.Package
+		}
+		return a.Section+a.When < b.Section+b.When
+	})
+	c.report().Emitted(strings.Count(asm, "\n"), time.Since(t0), variants)
 	return &Result{Asm: asm, Uses: uses, Front: front, Back: back, Program: prog, File: file}, nil
 }
 
-// Assemble turns NASM source into an executable with nasm and ld.
-func Assemble(asm, out string) error {
+func sortedKeys[V any](m map[string]V) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Assemble turns NASM source into an executable with nasm and ld. r may be
+// nil.
+func Assemble(asm, out string, r Reporter) error {
+	r = orNop(r)
 	dir, err := os.MkdirTemp("", "packenger-*")
 	if err != nil {
 		return err
@@ -203,9 +266,14 @@ func Assemble(asm, out string) error {
 		if _, err := exec.LookPath(tool[0]); err != nil {
 			return fmt.Errorf("%s is not installed (packenger needs nasm and ld)", tool[0])
 		}
+		t0 := time.Now()
 		if b, err := exec.Command(tool[0], tool[1:]...).CombinedOutput(); err != nil {
 			return fmt.Errorf("%s failed: %v\n%s", tool[0], err, b)
 		}
+		r.Tool(tool[0], time.Since(t0))
+	}
+	if st, err := os.Stat(out); err == nil {
+		r.Built(out, st.Size())
 	}
 	return nil
 }

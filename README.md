@@ -218,7 +218,34 @@ packenger tree  examples/primes.pkg        # which packages built it
 ```
 
 Flags: `--registry URL` (or `PACKENGER_REGISTRY`), `--target TRUCK`
-(default `bintables`), `-o FILE`, `-v` (log fetches).
+(default `bintables`), `-o FILE`, and `-vb` for a verbose build. Program
+arguments for `run` go after `--`.
+
+`-vb` reports the build on stderr as it happens:
+- every package downloaded, in parallel rounds, with its size, time and why
+  it was needed (`used by fib.pkg`, `member of truck std`,
+  `included by bintables/add`, ...);
+- the grammar the syntax packages produced (keywords, symbols, operators);
+- the parse result and each function's stack frame;
+- which `emit` variant every bintables package used;
+- the `nasm` and `ld` steps and the final executable size.
+
+```
+$ packenger build examples/fib.pkg -vb
+[uses] fib.pkg: std
+[syntax] round 1: downloading 1 package(s) in parallel
+  ↓ std                    245B  238ms  used by fib.pkg
+[syntax] round 2: downloading 25 package(s) in parallel
+  ↓ std/fn                 148B   85ms  member of truck std
+  ...
+[bintables] round 2: downloading 1 package(s) in parallel
+  ↓ bintables/binop        136B   74ms  included by bintables/add
+[emit] 98 line(s) of NASM in 722µs; variants chosen:
+        bintables/if when cond has jfalse                ×1
+        bintables/lt jfalse when right simple            ×1
+  ...
+[done] fib: 5.1K executable
+```
 Building requires `nasm` and `ld`.
 
 By default packages come from

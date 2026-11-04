@@ -138,6 +138,18 @@ func NewLang(pkgs []*pkgfile.File) (*Lang, error) {
 	return L, nil
 }
 
+// forms counts the statement and expression patterns.
+func (L *Lang) forms() int {
+	n := len(L.stmtSlot) + len(L.exprSlot)
+	for _, rs := range L.stmtLit {
+		n += len(rs)
+	}
+	for _, rs := range L.exprLit {
+		n += len(rs)
+	}
+	return n
+}
+
 func (L *Lang) lexTemplate(r *Rule) error {
 	if r.Pkg.Expand == nil || r.tmpl != nil {
 		return nil
