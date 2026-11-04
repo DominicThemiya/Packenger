@@ -5,7 +5,8 @@ itself, developed alongside the Go compiler, with both producing identical
 output.
 
 Status: **phases 0–3 done** (parity infrastructure, type system, core
-language features, runtime library). Phases 4–5 are planned.
+language features, runtime library); **phase 4 in progress**. Phase 5 is
+planned.
 
 ## Where we start
 
@@ -194,7 +195,40 @@ The original plan:
 **Done when:** every package has tests written in Packenger, and a small
 program can run `curl --parallel` and `nasm` and report their timings.
 
-## Phase 4: the compiler in Packenger (`pkc` truck)
+## Phase 4: the compiler in Packenger (`pkc` truck) — in progress
+
+`pkc` lives in the registry as the [pkc truck](registry/pkc.md); the program
+is [bootstrap/pkc.pkg](../bootstrap/pkc.pkg). Build and check it with:
+
+```sh
+packenger build bootstrap/pkc.pkg -o bin/pkc
+PKC=$PWD/bin/pkc PKC_STAGES=pkg,tokens go test ./bootstrap/
+```
+
+| stage | modules | status |
+|---|---|---|
+| `pkg` | `pkc/util`, `pkc/fetch`, `pkc/pkgfile`, `pkc/ui` (errors), `pkc/main` | ✓ matches on every registry package, a corpus of broken packages, and command-line errors |
+| `tokens` | `pkc/lexer`, `pkc/lang`, `pkc/driver` (use lines, fetch rounds) | ✓ matches on every program, example, `rt` test and error case |
+| `ast` | parser, types | next |
+| `asm` | codegen | |
+| `run` | build, run, assembling | |
+| `-vb`, `tree` | report, tree | |
+
+Notes from the port so far:
+
+- Errors are values: a failing function sets the global `pk_err` and
+  returns `null` or `false`, and every message is built to match Go's
+  byte for byte, including `%q` quoting.
+- The lexer works on code points like Go's. Letters and spaces outside
+  ASCII follow an approximation of Go's `unicode` tables, which is exact for
+  ASCII programs.
+- `curl` is used for `http(s)://` registries, one package at a time so far;
+  the harness uses a `file://` registry.
+- Porting found a bug in `rt/str`: `str_parse_int` didn't detect overflow.
+- Keywords are global (`to`, `next`, `argv`), so the port avoids them as
+  names; this is the main friction of writing real code in Packenger.
+
+The plan:
 
 Ported module by module, each checked against the Go compiler with the
 phase 0 harness before moving on:

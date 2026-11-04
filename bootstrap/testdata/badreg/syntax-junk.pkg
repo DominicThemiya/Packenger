@@ -1,0 +1,2 @@
+syntax infix 10 weird
+  {a: expr} + {b: expr}

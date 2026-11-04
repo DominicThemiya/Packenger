@@ -153,6 +153,8 @@ as ` -> type`.
 ```sh
 go test ./bootstrap/                  # Go compiler against itself
 PKC=/path/to/pkc go test ./bootstrap/ # Go compiler against pkc
+PKC=/path/to/pkc PKC_STAGES=pkg,tokens go test ./bootstrap/
+                                      # only the stages pkc supports so far
 ```
 
 It builds the Go compiler, then runs every compiler under test **three
@@ -164,6 +166,8 @@ differing line:
 | `bootstrap/testdata/programs/*.pkg`, `examples/*.pkg` and `tests/rt/*.pkg` | `dump tokens`, `dump ast`, `dump asm`, then running the program (skipped for files containing `// output: varies`) |
 | `bootstrap/testdata/errors/*.pkg` | the same dumps, which must include a failure: error text and exit code |
 | every package in `registry/` | `dump pkg` |
+| `bootstrap/testdata/badreg/*.pkg` | `dump pkg` of broken packages: the error messages |
+| a few command lines | `--help`, a bad `dump` stage, a missing argument |
 
 The output of each run includes stdout, stderr and the exit status, with
 `NO_COLOR=1` and a `file://` registry. Running each compiler more than once

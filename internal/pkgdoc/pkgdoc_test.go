@@ -53,7 +53,8 @@ func TestLinksResolve(t *testing.T) {
 	for p, content := range files {
 		for _, part := range strings.Split(content, "](")[1:] {
 			target := part[:strings.IndexByte(part, ')')]
-			if strings.HasPrefix(target, "http") {
+			target, _, _ = strings.Cut(target, "#")
+			if strings.HasPrefix(target, "http") || target == "" {
 				continue
 			}
 			resolved := filepath.ToSlash(filepath.Join(filepath.Dir(p), target))

@@ -1,0 +1,2 @@
+syntax prefix 10
+  {a: expr} !

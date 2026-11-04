@@ -9,6 +9,15 @@ format.
 
 ## The package tree
 
+- **[pkc](pkc.md)** (truck) — pkc: the Packenger compiler, written in Packenger.
+  - [pkc/util](pkc/util.md) — pkc helpers: string and vector utilities the compiler uses everywhere (prefix u_).
+  - [pkc/fetch](pkc/fetch.md) — pkc: downloading packages from the registry (port of internal/registry).
+  - [pkc/pkgfile](pkc/pkgfile.md) — pkc: package files — parse sections, patterns and emit headers (port of internal/pkgfile).
+  - [pkc/lexer](pkc/lexer.md) — pkc: the tokenizer (port of internal/lang/lexer.go).
+  - [pkc/lang](pkc/lang.md) — pkc: the grammar assembled from the loaded syntax packages (port of NewLang).
+  - [pkc/driver](pkc/driver.md) — pkc: the compile pipeline (port of internal/lang/driver.go).
+  - [pkc/ui](pkc/ui.md) — pkc: errors and the -vb report on stderr (port of internal/ui).
+  - [pkc/main](pkc/main.md) — pkc: the command line — the same commands, flags and messages as the Go compiler.
 - **[rt](rt.md)** (truck) — The runtime truck: memory, vectors, strings, maps, files, processes, time and terminals.
   - [rt/mem](rt/mem.md) — Raw memory: an allocator on mmap, plus copy, fill, compare and pointer arithmetic.
   - [rt/vec](rt/vec.md) — Growable arrays of 64-bit words (ints, or pointers and strings with as).

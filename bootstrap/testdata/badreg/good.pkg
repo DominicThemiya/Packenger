@@ -1,0 +1,11 @@
+doc A valid package, with  a control byte and é.
+needs a b
+type t 8
+syntax statement loop
+  x [ y {a: expr} ]* {b: block} end -> [T]
+expand
+  {$t}
+emit when a size 1
+  nop
+data
+  d

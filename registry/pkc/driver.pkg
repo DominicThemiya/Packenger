@@ -1,0 +1,158 @@
+doc pkc: the compile pipeline (port of internal/lang/driver.go).
+  So far: reading `use` lines, fetching packages in rounds, building the
+  grammar and tokenizing (`dr_lex`).
+
+needs std rt pkc/util pkc/fetch pkc/pkgfile pkc/lexer pkc/lang
+code
+  // a package to fetch, and why it is needed (for the -vb report)
+  struct DrDep
+    name: str
+    why: str
+  end
+
+  struct DrFront
+    toks: ptr Vec
+    lang: ptr Lang
+    front: ptr Map
+    uses: ptr Vec
+  end
+
+  // dr_scan_uses reads the use lines, which must come before any code, and
+  // blanks them out (keeping line numbers).
+  fn dr_scan_uses(src: str, uses: ptr Vec, body: ptr str) -> bool
+    let lines = u_split(src, '\n')
+    for i = 0 to vec_len(lines) - 1
+      let t = u_trim(u_get(lines, i))
+      if t == "" || str_starts(t, "//")
+        continue
+      end
+      if !(str_starts(t, "use") && len(t) > 3 && u_is_space(t[3]))
+        break
+      end
+      let j = 3
+      while j < len(t) && u_is_space(t[j])
+        j = j + 1
+      end
+      let k = j
+      while k < len(t) && !u_is_space(t[k])
+        k = k + 1
+      end
+      let rest = u_trim(str_slice(t, k, len(t)))
+      if rest != "" && !str_starts(rest, "//")
+        break
+      end
+      u_push(uses, str_slice(t, j, k))
+      vec_set(lines, i, "" as int)
+    end
+    if vec_len(uses) == 0
+      return u_fail("the file does not use any packages, so it has no syntax; start it with 'use std'")
+    end
+    *body = u_join(lines, "\n")
+    return true
+  end
+
+  fn dr_dep(name: str, why: str) -> ptr DrDep
+    let d = new DrDep
+    d.name = name
+    d.why = why
+    return d
+  end
+
+  // dr_fetch_all downloads packages level by level. mode "syntax" follows
+  // truck members and needs; any other mode is a backend truck name, and
+  // follows @includes and needs.
+  fn dr_fetch_all(reg: str, mode: str, first: ptr Vec) -> ptr Map
+    let got = map_new()
+    let seen = map_new()
+    let pending = vec_new()
+    for i = 0 to vec_len(first) - 1
+      let d = vec_get(first, i) as ptr DrDep
+      if !map_has(seen, d.name)
+        map_set(seen, d.name, 1)
+        vec_push(pending, d as int)
+      end
+    end
+    while vec_len(pending) > 0
+      let batch = pending
+      pending = vec_new()
+      for i = 0 to vec_len(batch) - 1
+        let d = vec_get(batch, i) as ptr DrDep
+        let origin = ""
+        let ok = false
+        let src = fe_fetch(reg, d.name, &origin, &ok)
+        if !ok
+          return null
+        end
+        let f = pf_parse(d.name, origin, src)
+        if f == null
+          return null
+        end
+        map_set(got, f.name, f as int)
+        let next_ = dr_next(f, mode)
+        for k = 0 to vec_len(next_) - 1
+          let nd = vec_get(next_, k) as ptr DrDep
+          if !map_has(seen, nd.name)
+            map_set(seen, nd.name, 1)
+            vec_push(pending, nd as int)
+          end
+        end
+      end
+    end
+    return got
+  end
+
+  fn dr_next(f: ptr PfFile, mode: str) -> ptr Vec
+    let out = vec_new()
+    if mode == "syntax"
+      for i = 0 to vec_len(f.truck) - 1
+        vec_push(out, dr_dep(u_cat3(f.name, "/", u_get(f.truck, i)), u_cat("member of truck ", f.name)) as int)
+      end
+    end
+    for i = 0 to vec_len(f.needs) - 1
+      vec_push(out, dr_dep(u_get(f.needs, i), u_cat("needed by ", f.name)) as int)
+    end
+    return out
+  end
+
+  // dr_lex runs the pipeline up to tokenizing.
+  fn dr_lex(reg: str, file: str, src: str) -> ptr DrFront
+    let uses = vec_new()
+    let body = ""
+    if !dr_scan_uses(src, uses, &body)
+      pk_err = u_cat3(file, ": ", pk_err)
+      return null
+    end
+    let first = vec_new()
+    for i = 0 to vec_len(uses) - 1
+      vec_push(first, dr_dep(u_get(uses, i), u_cat("used by ", file)) as int)
+    end
+    let front = dr_fetch_all(reg, "syntax", first)
+    if front == null
+      return null
+    end
+    let names = vec_new()
+    for i = 0 to map_len(front) - 1
+      if !(map_value(front, i) as ptr PfFile).is_truck
+        u_push(names, map_key(front, i))
+      end
+    end
+    u_sort_strs(names)
+    let pkgs = vec_new()
+    for i = 0 to vec_len(names) - 1
+      vec_push(pkgs, map_get(front, u_get(names, i)))
+    end
+    let L = lg_new(pkgs)
+    if L == null
+      return null
+    end
+    let toks = lx_lex(body, file, L.puncts, false)
+    if toks == null
+      return null
+    end
+    let r = new DrFront
+    r.toks = toks
+    r.lang = L
+    r.front = front
+    r.uses = uses
+    return r
+  end

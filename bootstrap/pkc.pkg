@@ -1,0 +1,6 @@
+use std
+use rt
+use pkc
+
+// pkc, the Packenger compiler written in Packenger: see registry/pkc.pkg.
+return pkc_main()

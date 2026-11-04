@@ -1,0 +1,2 @@
+syntax postfix 10
+  . {a: expr}

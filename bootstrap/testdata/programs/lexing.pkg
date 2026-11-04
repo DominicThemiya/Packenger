@@ -1,0 +1,7 @@
+use std
+// escapes and unicode: é ü ✓
+print "tab\there \x41\101 \u00e9 \U0001F600 \\ \" end"
+print 'é'
+print '\x7f'
+print '\''
+print 1_000_000

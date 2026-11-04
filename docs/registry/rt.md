@@ -51,3 +51,7 @@ Each package's tests are in [tests/rt](../../tests/rt).
 | [rt/time](rt/time.md) | Time: a monotonic clock in nanoseconds, and durations as text. |
 | [rt/term](rt/term.md) | Terminals: detecting one, and ANSI colors that respect NO_COLOR. |
 | [rt/test](rt/test.md) | A tiny test library: checks that print FAIL lines, and a final PASS or FAILED. |
+
+## Used by
+
+[pkc/driver](pkc/driver.md), [pkc/fetch](pkc/fetch.md), [pkc/lang](pkc/lang.md), [pkc/lexer](pkc/lexer.md), [pkc/main](pkc/main.md), [pkc/pkgfile](pkc/pkgfile.md), [pkc/ui](pkc/ui.md), [pkc/util](pkc/util.md)

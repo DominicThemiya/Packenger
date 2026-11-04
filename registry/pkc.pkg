@@ -1,0 +1,25 @@
+doc pkc: the Packenger compiler, written in Packenger.
+  The self-hosted compiler, ported module by module from the Go compiler
+  and checked against it by the comparison harness
+  ([docs/dumps.md](../dumps.md#the-comparison-harness)). Build it with the
+  Go compiler, then let it build itself:
+
+  ```sh
+  packenger build bootstrap/pkc.pkg -o pkc
+  PKC=$PWD/pkc go test ./bootstrap/
+  ```
+
+  Its packages use short prefixes, since library names share one
+  namespace: `u_` (util), `fe_` (fetch), `pf_` (package files), `lx_`
+  (lexer), `lg_` (grammar), `dr_` (driver), `ui_` (errors and the build
+  report) and `pkc_` (the command line).
+
+truck
+  util
+  fetch
+  pkgfile
+  lexer
+  lang
+  driver
+  ui
+  main

@@ -1,0 +1,2 @@
+syntax postfix 90
+  {a: expr} . {f: field}

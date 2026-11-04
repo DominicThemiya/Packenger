@@ -5,7 +5,9 @@
 // Compilers under test:
 //
 //   - the Go compiler, built from this repository;
-//   - pkc, if the PKC environment variable names its executable.
+//   - pkc, if the PKC environment variable names its executable. While pkc
+//     is being ported, PKC_STAGES limits it to the stages it supports, as a
+//     comma-separated list of pkg, tokens, ast, asm and run.
 //
 // The corpus is the test programs here, the examples and the rt truck's
 // tests. A program containing the line "// output: varies" is compiled but
@@ -28,7 +30,10 @@ import (
 
 const runs = 3
 
-type compiler struct{ name, bin string }
+type compiler struct {
+	name, bin string
+	stages    map[string]bool // nil: every stage
+}
 
 var (
 	compilers []compiler
@@ -45,9 +50,16 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "building the Go compiler: %v\n%s", err, out)
 		os.Exit(1)
 	}
-	compilers = append(compilers, compiler{"go", goBin})
+	compilers = append(compilers, compiler{name: "go", bin: goBin})
 	if pkc := os.Getenv("PKC"); pkc != "" {
-		compilers = append(compilers, compiler{"pkc", pkc})
+		c := compiler{name: "pkc", bin: pkc}
+		if st := os.Getenv("PKC_STAGES"); st != "" {
+			c.stages = map[string]bool{}
+			for _, s := range strings.Split(st, ",") {
+				c.stages[strings.TrimSpace(s)] = true
+			}
+		}
+		compilers = append(compilers, c)
 	}
 	reg, _ := filepath.Abs("../registry")
 	registry = "file://" + reg
@@ -87,7 +99,19 @@ func agree(t *testing.T, args ...string) outcome {
 	t.Helper()
 	var first outcome
 	var firstName string
+	stage := args[0]
+	if stage == "dump" && len(args) > 1 {
+		stage = args[1]
+	}
+	switch stage {
+	case "tokens", "ast", "asm", "run":
+	default:
+		stage = "pkg" // package files and command-line handling
+	}
 	for _, c := range compilers {
+		if c.stages != nil && !c.stages[stage] {
+			continue
+		}
 		for i := 1; i <= runs; i++ {
 			o := run(t, c.bin, args...)
 			name := fmt.Sprintf("%s run %d", c.name, i)
@@ -192,4 +216,24 @@ func TestPackages(t *testing.T) {
 			t.Errorf("dump pkg %s failed:\n%s", n, o)
 		}
 	}
+}
+
+// Broken packages must be rejected with the same message by every compiler.
+func TestPackageErrors(t *testing.T) {
+	dir, _ := filepath.Abs("testdata/badreg")
+	files := corpus(t, "testdata/badreg/*.pkg")
+	for _, f := range files {
+		name := strings.TrimSuffix(filepath.Base(f), ".pkg")
+		o := agree(t, "dump", "pkg", "--registry", "file://"+dir, name)
+		if (o.exit == 0) != (name == "good") {
+			t.Errorf("%s: exit %d\n%s", name, o.exit, o)
+		}
+	}
+	// fetch errors: a missing package and an invalid name
+	agree(t, "dump", "pkg", "--registry", "file://"+dir, "missing")
+	agree(t, "dump", "pkg", "--registry", "file://"+dir, "9bad")
+	// command-line errors
+	agree(t, "dump", "nope", "x")
+	agree(t, "dump", "pkg")
+	agree(t, "--help")
 }

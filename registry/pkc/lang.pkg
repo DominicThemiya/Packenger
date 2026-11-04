@@ -1,0 +1,243 @@
+doc pkc: the grammar assembled from the loaded syntax packages (port of NewLang).
+  `lg_new(pkgs)` builds the statement, expression and operator tables, the
+  keywords, the symbols the lexer accepts and the block closers, from
+  syntax packages in name order. Nothing in it is built in.
+
+needs std rt pkc/util pkc/pkgfile pkc/lexer
+code
+  struct LgRule
+    pkg: ptr PfFile
+    kind: str
+    syn: ptr PfSyntax
+    pat: ptr PfPattern
+    tmpl: ptr Vec
+  end
+
+  struct Lang
+    pkgs: ptr Map
+    stmt_lit: ptr Map
+    stmt_slot: ptr Vec
+    expr_lit: ptr Map
+    expr_slot: ptr Vec
+    infix: ptr Map
+    prefix: ptr Map
+    postfix: ptr Map
+    prims: ptr Map
+    closers: ptr Map
+    keywords: ptr Map
+    puncts: ptr Vec
+  end
+
+  fn lg_rule(v: ptr Vec, i: int) -> ptr LgRule
+    return vec_get(v, i) as ptr LgRule
+  end
+
+  // lg_rules is the list of rules stored under key, or null.
+  fn lg_rules(m: ptr Map, key: str) -> ptr Vec
+    if !map_has(m, key)
+      return null
+    end
+    return map_get(m, key) as ptr Vec
+  end
+
+  fn lg_add_rule(m: ptr Map, key: str, r: ptr LgRule)
+    let v = lg_rules(m, key)
+    if v == null
+      v = vec_new()
+      map_set(m, key, v as int)
+    end
+    vec_push(v, r as int)
+  end
+
+  fn lg_core_kind(k: str) -> bool
+    return k == "block" || k == "int" || k == "str" || k == "var" || k == "ident" || k == "func" || k == "newfunc" || k == "args" || k == "params" || k == "program" || k == "type" || k == "field" || k == "fields" || k == "fielddecl" || k == "newtype" || k == "newconst" || k == "group" || k == "groups"
+  end
+
+  fn lg_is_word(s: str) -> bool
+    if s == ""
+      return false
+    end
+    let rs = lx_decode(s)
+    for i = 0 to vec_len(rs) - 1
+      let r = vec_get(rs, i)
+      if !(lx_letter(r) || lx_digit(r) || r == 95)
+        return false
+      end
+    end
+    return true
+  end
+
+  // u_sort_strs sorts strings by bytes (insertion sort: the lists are short).
+  fn u_sort_strs(v: ptr Vec)
+    for i = 1 to vec_len(v) - 1
+      let x = vec_get(v, i)
+      let j = i - 1
+      while j >= 0 && str_cmp(vec_get(v, j) as str, x as str) > 0
+        vec_set(v, j + 1, vec_get(v, j))
+        j = j - 1
+      end
+      vec_set(v, j + 1, x)
+    end
+  end
+
+  fn lg_fail(msg: str) -> ptr Lang
+    pk_err = msg
+    return null
+  end
+
+  fn lg_new(pkgs: ptr Vec) -> ptr Lang
+    let L = new Lang
+    L.pkgs = map_new()
+    L.stmt_lit = map_new()
+    L.stmt_slot = vec_new()
+    L.expr_lit = map_new()
+    L.expr_slot = vec_new()
+    L.infix = map_new()
+    L.prefix = map_new()
+    L.postfix = map_new()
+    L.prims = map_new()
+    L.closers = map_new()
+    L.keywords = map_new()
+    L.puncts = vec_new()
+    let type_owner = map_new()
+    let punct = map_new()
+    for pi = 0 to vec_len(pkgs) - 1
+      let f = vec_get(pkgs, pi) as ptr PfFile
+      let kind = pf_kind(f.name)
+      if vec_len(f.syntax) > 0
+        if lg_core_kind(kind)
+          return lg_fail(u_cat4(f.origin, ": package name ", u_quote(kind), " is reserved by the compiler"))
+        end
+        if map_has(L.pkgs, kind)
+          let other = map_get(L.pkgs, kind) as ptr PfFile
+          return lg_fail(u_cat4("two loaded packages both define ", u_quote(kind), ": ", u_cat3(other.name, " and ", f.name)))
+        end
+        map_set(L.pkgs, kind, f as int)
+      end
+      for ti = 0 to vec_len(f.types) - 1
+        let t = vec_get(f.types, ti) as ptr PfType
+        if map_has(type_owner, t.name)
+          return lg_fail(u_cat4("type ", t.name, " is declared by both ", u_cat3(map_get(type_owner, t.name) as str, " and ", f.name)))
+        end
+        map_set(type_owner, t.name, f.name as int)
+        map_set(L.prims, t.name, t.size)
+      end
+      for si = 0 to vec_len(f.syntax) - 1
+        let s = vec_get(f.syntax, si) as ptr PfSyntax
+        for qi = 0 to vec_len(s.patterns) - 1
+          let p = vec_get(s.patterns, qi) as ptr PfPattern
+          let r = new LgRule
+          r.pkg = f
+          r.kind = kind
+          r.syn = s
+          r.pat = p
+          let lits = pf_literals(p)
+          for li = 0 to vec_len(lits) - 1
+            let lit = u_get(lits, li)
+            if lg_is_word(lit)
+              map_set(L.keywords, lit, 1)
+            else
+              map_set(punct, lit, 1)
+            end
+          end
+          let cl = pf_closers(p)
+          for ci = 0 to vec_len(cl) - 1
+            map_set(L.closers, u_get(cl, ci), 1)
+          end
+          let first = pf_elem(p.elems, 0)
+          if s.kind == "infix" || s.kind == "prefix" || s.kind == "postfix"
+            let table = L.infix
+            let op = ""
+            if vec_len(p.elems) > 1
+              op = pf_elem(p.elems, 1).lit
+            end
+            if s.kind == "prefix"
+              table = L.prefix
+              op = first.lit
+            elif s.kind == "postfix"
+              table = L.postfix
+            end
+            let o = lg_rules(table, op)
+            if o != null && vec_len(o) > 0
+              let o0 = lg_rule(o, 0)
+              if o0.pkg != f || o0.syn.prec != s.prec
+                return lg_fail(u_cat4(s.kind, " operator ", u_quote(op), u_cat4(" is defined by both ", o0.pkg.name, " and ", f.name)))
+              end
+            end
+            lg_add_rule(table, op, r)
+          elif s.kind == "expr"
+            if first.lit != ""
+              lg_add_rule(L.expr_lit, first.lit, r)
+            else
+              vec_push(L.expr_slot, r as int)
+            end
+          else
+            if first.lit != ""
+              lg_add_rule(L.stmt_lit, first.lit, r)
+            else
+              vec_push(L.stmt_slot, r as int)
+            end
+          end
+        end
+      end
+    end
+    // longer slot-first statement patterns are tried first (stable)
+    for i = 1 to vec_len(L.stmt_slot) - 1
+      let x = lg_rule(L.stmt_slot, i)
+      let j = i - 1
+      while j >= 0 && vec_len(lg_rule(L.stmt_slot, j).pat.elems) < vec_len(x.pat.elems)
+        vec_set(L.stmt_slot, j + 1, vec_get(L.stmt_slot, j))
+        j = j - 1
+      end
+      vec_set(L.stmt_slot, j + 1, x as int)
+    end
+    for i = 0 to map_len(punct) - 1
+      u_push(L.puncts, map_key(punct, i))
+    end
+    u_sort_strs(L.puncts)
+    if !lg_lex_all(L, L.stmt_slot) || !lg_lex_all(L, L.expr_slot)
+      return null
+    end
+    let tables = vec_new()
+    vec_push(tables, L.stmt_lit as int)
+    vec_push(tables, L.expr_lit as int)
+    vec_push(tables, L.infix as int)
+    vec_push(tables, L.prefix as int)
+    vec_push(tables, L.postfix as int)
+    for ti = 0 to vec_len(tables) - 1
+      let m = vec_get(tables, ti) as ptr Map
+      for k = 0 to map_len(m) - 1
+        if !lg_lex_all(L, map_value(m, k) as ptr Vec)
+          return null
+        end
+      end
+    end
+    return L
+  end
+
+  fn lg_lex_all(L: ptr Lang, rules: ptr Vec) -> bool
+    for i = 0 to vec_len(rules) - 1
+      let r = lg_rule(rules, i)
+      if r.pkg.expand != null && r.tmpl == null
+        let toks = lx_lex(u_join(r.pkg.expand, "\n"), u_cat(r.pkg.name, " (expand)"), L.puncts, true)
+        if toks == null
+          return false
+        end
+        vec_pop(toks)
+        r.tmpl = toks
+      end
+    end
+    return true
+  end
+
+  // lg_forms counts the statement and expression patterns.
+  fn lg_forms(L: ptr Lang) -> int
+    let n = vec_len(L.stmt_slot) + vec_len(L.expr_slot)
+    for i = 0 to map_len(L.stmt_lit) - 1
+      n = n + vec_len(map_value(L.stmt_lit, i) as ptr Vec)
+    end
+    for i = 0 to map_len(L.expr_lit) - 1
+      n = n + vec_len(map_value(L.expr_lit, i) as ptr Vec)
+    end
+    return n
+  end

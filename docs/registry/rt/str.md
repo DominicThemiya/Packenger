@@ -35,7 +35,7 @@ print sb_str(b)                        // x = 7
 | `str_cmp(a: str, b: str) -> int` | negative, zero or positive, comparing bytes |
 | `str_hash(s: str) -> int` | FNV-1a hash of the bytes |
 | `str_from_int(n: int) -> str` | decimal digits, with `-` if negative |
-| `str_parse_int(s: str, ok: ptr bool) -> int` | parse an optionally negative decimal; `*ok` is false if `s` isn't one |
+| `str_parse_int(s: str, ok: ptr bool) -> int` | parse an optionally negative decimal; `*ok` is false if `s` isn't one or doesn't fit in an `int` |
 | `str_pad(s: str, width: int) -> str` | add spaces on the right up to `width` bytes |
 | `str_lpad(s: str, width: int) -> str` | add spaces on the left up to `width` bytes |
 
@@ -180,16 +180,27 @@ fn str_parse_int(s: str, ok: ptr bool) -> int
     *ok = false
     return 0
   end
+  // accumulate negatively, so the most negative value fits
   let n = 0
+  let min = -9223372036854775807 - 1
   while i < len(s)
     let c = s[i]
     if c < '0' || c > '9'
       *ok = false
       return 0
     end
-    n = n * 10 - ((c as int) - 48)
+    let d = (c as int) - 48
+    if n < (min + d) / 10
+      *ok = false
+      return 0
+    end
+    n = n * 10 - d
   next
     i = i + 1
+  end
+  if !neg && n == min
+    *ok = false
+    return 0
   end
   *ok = true
   if neg

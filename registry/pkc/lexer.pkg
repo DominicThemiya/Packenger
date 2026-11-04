@@ -1,0 +1,535 @@
+doc pkc: the tokenizer (port of internal/lang/lexer.go).
+  `lx_lex(src, file, puncts, holes)` returns a `Vec` of `ptr Tok`, or `null`
+  with `pk_err` set. Like the Go lexer it works on Unicode code points:
+  columns count code points, and invalid UTF-8 bytes become U+FFFD.
+  String and character literals are unquoted with Go's rules.
+
+  Letters and spaces outside ASCII follow a close approximation of Go's
+  `unicode.IsLetter` and `unicode.IsSpace`; identifiers in real programs
+  are ASCII.
+
+needs std rt pkc/util pkc/pkgfile
+code
+  const TK_EOF = 0
+  const TK_NL = 1
+  const TK_IDENT = 2
+  const TK_INT = 3
+  const TK_STR = 4
+  const TK_PUNCT = 5
+  const TK_HOLE = 6
+  const TK_CHAR = 7
+
+  struct Tok
+    kind: int
+    text: str
+    ival: int
+    file: str
+    line: int
+    col: int
+  end
+
+  fn lx_tok(v: ptr Vec, i: int) -> ptr Tok
+    return vec_get(v, i) as ptr Tok
+  end
+
+  fn lx_pos(t: ptr Tok) -> str
+    return u_cat4(t.file, ":", str_from_int(t.line), u_cat(":", str_from_int(t.col)))
+  end
+
+  // lx_describe renders a token for error messages, like Token.String.
+  fn lx_describe(t: ptr Tok) -> str
+    if t.kind == TK_EOF
+      return "end of file"
+    elif t.kind == TK_NL
+      return "end of line"
+    elif t.kind == TK_STR
+      return u_quote(t.text)
+    elif t.kind == TK_CHAR
+      return lx_quote_rune(t.ival)
+    elif t.kind == TK_HOLE
+      return u_cat3("{", t.text, "}")
+    end
+    return u_cat3("'", t.text, "'")
+  end
+
+  fn lx_quote_rune(r: int) -> str
+    if r == 39
+      return "'\\''"
+    elif r == 92
+      return "'\\\\'"
+    elif r == 10
+      return "'\\n'"
+    elif r == 9
+      return "'\\t'"
+    elif r == 13
+      return "'\\r'"
+    elif r == 0
+      return "'\\x00'"
+    elif r < 32 || r == 127
+      let b = sb_new()
+      sb_add(b, "'\\x")
+      u_hex(b, r)
+      sb_byte(b, '\'')
+      return sb_str(b)
+    end
+    return u_cat3("'", lx_encode_one(r), "'")
+  end
+
+  // ---------------------------------------------------------------- UTF-8
+
+  // lx_decode turns s into code points; invalid bytes become U+FFFD.
+  fn lx_decode(s: str) -> ptr Vec
+    let out = vec_new()
+    let i = 0
+    let n = len(s)
+    while i < n
+      let c = s[i] as int
+      let r = 65533
+      let size = 1
+      if c < 128
+        r = c
+      elif c >= 194 && c <= 223 && i + 1 < n && lx_cont(s[i + 1])
+        r = ((c & 31) << 6) | ((s[i + 1] as int) & 63)
+        size = 2
+      elif c >= 224 && c <= 239 && i + 2 < n && lx_cont(s[i + 1]) && lx_cont(s[i + 2])
+        let v = ((c & 15) << 12) | (((s[i + 1] as int) & 63) << 6) | ((s[i + 2] as int) & 63)
+        if v >= 2048 && (v < 55296 || v > 57343)
+          r = v
+          size = 3
+        end
+      elif c >= 240 && c <= 244 && i + 3 < n && lx_cont(s[i + 1]) && lx_cont(s[i + 2]) && lx_cont(s[i + 3])
+        let v = ((c & 7) << 18) | (((s[i + 1] as int) & 63) << 12) | (((s[i + 2] as int) & 63) << 6) | ((s[i + 3] as int) & 63)
+        if v >= 65536 && v <= 1114111
+          r = v
+          size = 4
+        end
+      end
+      vec_push(out, r)
+      i = i + size
+    end
+    return out
+  end
+
+  fn lx_cont(c: u8) -> bool
+    return ((c as int) & 192) == 128
+  end
+
+  fn lx_encode_into(b: ptr StrBuf, r: int)
+    if r < 128
+      sb_byte(b, r as u8)
+    elif r < 2048
+      sb_byte(b, (192 | (r >> 6)) as u8)
+      sb_byte(b, (128 | (r & 63)) as u8)
+    elif r < 65536
+      sb_byte(b, (224 | (r >> 12)) as u8)
+      sb_byte(b, (128 | ((r >> 6) & 63)) as u8)
+      sb_byte(b, (128 | (r & 63)) as u8)
+    else
+      sb_byte(b, (240 | (r >> 18)) as u8)
+      sb_byte(b, (128 | ((r >> 12) & 63)) as u8)
+      sb_byte(b, (128 | ((r >> 6) & 63)) as u8)
+      sb_byte(b, (128 | (r & 63)) as u8)
+    end
+  end
+
+  fn lx_encode_one(r: int) -> str
+    let b = sb_new()
+    lx_encode_into(b, r)
+    return sb_str(b)
+  end
+
+  fn lx_encode(rs: ptr Vec, from: int, stop: int) -> str
+    let b = sb_new()
+    for i = from to stop - 1
+      lx_encode_into(b, vec_get(rs, i))
+    end
+    return sb_str(b)
+  end
+
+  // ---------------------------------------------------------------- classes
+
+  fn lx_space(r: int) -> bool
+    if r == 32 || r >= 9 && r <= 13 || r == 133 || r == 160
+      return true
+    end
+    return r == 5760 || r >= 8192 && r <= 8202 || r == 8232 || r == 8233 || r == 8239 || r == 8287 || r == 12288
+  end
+
+  fn lx_letter(r: int) -> bool
+    if r < 128
+      return r >= 97 && r <= 122 || r >= 65 && r <= 90
+    end
+    if r < 192
+      return r == 170 || r == 181 || r == 186
+    end
+    if r == 215 || r == 247 || r == 65533 || lx_space(r)
+      return false
+    end
+    // punctuation, symbols, arrows, box drawing, dingbats, emoji
+    if r >= 8192 && r <= 11263 || r >= 11776 && r <= 11903 || r >= 12288 && r <= 12351 || r >= 65024 && r <= 65103 || r >= 126976
+      return false
+    end
+    return true
+  end
+
+  fn lx_digit(r: int) -> bool
+    return r >= 48 && r <= 57
+  end
+
+  // ---------------------------------------------------------------- unquoting
+
+  fn lx_hexval(r: int) -> int
+    if r >= 48 && r <= 57
+      return r - 48
+    elif r >= 97 && r <= 102
+      return r - 87
+    elif r >= 65 && r <= 70
+      return r - 55
+    end
+    return -1
+  end
+
+  // lx_unquote follows Go's strconv.Unquote for "..." and '...'. For a
+  // character literal, *rune is set to the character's value.
+  fn lx_unquote(rs: ptr Vec, from: int, stop: int, ok: ptr bool, rune_: ptr int) -> str
+    *ok = false
+    let quote = vec_get(rs, from)
+    let b = sb_new()
+    let i = from + 1
+    let count = 0
+    let last = 0
+    while i < stop - 1
+      let c = vec_get(rs, i)
+      if c == quote && quote == 34
+        return ""
+      end
+      if c == 10
+        return ""
+      end
+      if c != 92
+        lx_encode_into(b, c)
+        last = c
+        count = count + 1
+        i = i + 1
+        continue
+      end
+      if i + 1 >= stop - 1
+        return ""
+      end
+      let e = vec_get(rs, i + 1)
+      i = i + 2
+      let v = -1
+      let raw_byte = false
+      if e == 97
+        v = 7
+      elif e == 98
+        v = 8
+      elif e == 102
+        v = 12
+      elif e == 110
+        v = 10
+      elif e == 114
+        v = 13
+      elif e == 116
+        v = 9
+      elif e == 118
+        v = 11
+      elif e == 92
+        v = 92
+      elif e == 39 || e == 34
+        if e != quote
+          return ""
+        end
+        v = e
+      elif e == 120 || e == 117 || e == 85
+        let digits = 2
+        if e == 117
+          digits = 4
+        elif e == 85
+          digits = 8
+        end
+        if i + digits > stop - 1
+          return ""
+        end
+        v = 0
+        for k = 0 to digits - 1
+          let h = lx_hexval(vec_get(rs, i + k))
+          if h < 0
+            return ""
+          end
+          v = v * 16 + h
+        end
+        i = i + digits
+        if e == 120
+          raw_byte = true
+        elif v > 1114111 || v >= 55296 && v <= 57343
+          return ""
+        end
+      elif e >= 48 && e <= 55
+        if i + 2 > stop - 1
+          return ""
+        end
+        v = e - 48
+        for k = 0 to 1
+          let d = vec_get(rs, i + k)
+          if d < 48 || d > 55
+            return ""
+          end
+          v = v * 8 + d - 48
+        end
+        i = i + 2
+        if v > 255
+          return ""
+        end
+        raw_byte = true
+      else
+        return ""
+      end
+      if raw_byte && quote == 34
+        sb_byte(b, v as u8)
+      else
+        lx_encode_into(b, v)
+      end
+      last = v
+      count = count + 1
+    end
+    if quote == 39
+      if count != 1
+        return ""
+      end
+      *rune_ = last
+    end
+    *ok = true
+    return sb_str(b)
+  end
+
+  // ---------------------------------------------------------------- lexing
+
+  fn lx_new(kind: int, text: str, file: str, line: int, col: int) -> ptr Tok
+    let t = new Tok
+    t.kind = kind
+    t.text = text
+    t.file = file
+    t.line = line
+    t.col = col
+    return t
+  end
+
+  fn lx_err(file: str, line: int, col: int, msg: str) -> ptr Vec
+    pk_err = u_cat4(file, ":", str_from_int(line), u_cat4(":", str_from_int(col), ": ", msg))
+    return null
+  end
+
+  // lx_emit appends a token; newlines are dropped inside parentheses, at the
+  // start and after another newline.
+  fn lx_emit(toks: ptr Vec, t: ptr Tok, depth: int)
+    if t.kind == TK_NL && (depth > 0 || vec_len(toks) == 0 || lx_tok(toks, vec_len(toks) - 1).kind == TK_NL)
+      return
+    end
+    vec_push(toks, t as int)
+  end
+
+  fn lx_starts(rs: ptr Vec, i: int, op: ptr Vec) -> bool
+    if i + vec_len(op) > vec_len(rs)
+      return false
+    end
+    for k = 0 to vec_len(op) - 1
+      if vec_get(rs, i + k) != vec_get(op, k)
+        return false
+      end
+    end
+    return true
+  end
+
+  fn lx_lex(src: str, file: str, puncts: ptr Vec, holes: bool) -> ptr Vec
+    // ( ) , and the type syntax : [ ] are core; the rest come from packages.
+    // Longer operators are tried first.
+    let all = vec_new()
+    u_push(all, "(")
+    u_push(all, ")")
+    u_push(all, ",")
+    u_push(all, ":")
+    u_push(all, "[")
+    u_push(all, "]")
+    for i = 0 to vec_len(puncts) - 1
+      u_push(all, u_get(puncts, i))
+    end
+    let ops = vec_new()
+    let opr = vec_new()
+    let longest = 0
+    for i = 0 to vec_len(all) - 1
+      if len(u_get(all, i)) > longest
+        longest = len(u_get(all, i))
+      end
+    end
+    let size = longest
+    while size > 0
+      for i = 0 to vec_len(all) - 1
+        let o = u_get(all, i)
+        if len(o) == size
+          u_push(ops, o)
+          vec_push(opr, lx_decode(o) as int)
+        end
+      end
+      size = size - 1
+    end
+
+    let toks = vec_new()
+    let rs = lx_decode(src)
+    let n = vec_len(rs)
+    let line = 1
+    let col = 1
+    let depth = 0
+    let i = 0
+    while i < n
+      let r = vec_get(rs, i)
+      let pl = line
+      let pc = col
+      let adv = 0
+      if r == 10
+        lx_emit(toks, lx_new(TK_NL, "", file, pl, pc), depth)
+        adv = 1
+      elif lx_space(r)
+        adv = 1
+      elif r == 47 && i + 1 < n && vec_get(rs, i + 1) == 47
+        let j = i
+        while j < n && vec_get(rs, j) != 10
+          j = j + 1
+        end
+        adv = j - i
+      elif holes && r == 123
+        let j = i + 1
+        while j < n && vec_get(rs, j) != 125
+          j = j + 1
+        end
+        if j >= n
+          return lx_err(file, pl, pc, "unterminated {hole}")
+        end
+        lx_emit(toks, lx_new(TK_HOLE, u_trim(lx_encode(rs, i + 1, j)), file, pl, pc), depth)
+        adv = j + 1 - i
+      elif lx_letter(r) || r == 95
+        let j = i
+        while j < n && (lx_letter(vec_get(rs, j)) || lx_digit(vec_get(rs, j)) || vec_get(rs, j) == 95)
+          j = j + 1
+        end
+        lx_emit(toks, lx_new(TK_IDENT, lx_encode(rs, i, j), file, pl, pc), depth)
+        adv = j - i
+      elif lx_digit(r)
+        let j = i
+        while j < n && (lx_digit(vec_get(rs, j)) || vec_get(rs, j) == 95)
+          j = j + 1
+        end
+        let text = u_replace(lx_encode(rs, i, j), "_", "")
+        let ok = false
+        let v = str_parse_int(text, &ok)
+        if !ok
+          return lx_err(file, pl, pc, u_cat3("number ", text, " does not fit in 64 bits"))
+        end
+        let t = lx_new(TK_INT, text, file, pl, pc)
+        t.ival = v
+        lx_emit(toks, t, depth)
+        adv = j - i
+      elif r == 39
+        let j = i + 1
+        while j < n && vec_get(rs, j) != 39 && vec_get(rs, j) != 10
+          if vec_get(rs, j) == 92
+            j = j + 1
+          end
+          j = j + 1
+        end
+        if j >= n || vec_get(rs, j) != 39
+          return lx_err(file, pl, pc, "unterminated character literal")
+        end
+        let ok = false
+        let v = 0
+        lx_unquote(rs, i, j + 1, &ok, &v)
+        if !ok || v > 255
+          return lx_err(file, pl, pc, "a character literal must be one byte, e.g. 'a' or '\\n'")
+        end
+        let t = lx_new(TK_CHAR, str_from_int(v), file, pl, pc)
+        t.ival = v
+        lx_emit(toks, t, depth)
+        adv = j + 1 - i
+      elif r == 34
+        let j = i + 1
+        while j < n && vec_get(rs, j) != 34 && vec_get(rs, j) != 10
+          if vec_get(rs, j) == 92
+            j = j + 1
+          end
+          j = j + 1
+        end
+        if j >= n || vec_get(rs, j) != 34
+          return lx_err(file, pl, pc, "unterminated string")
+        end
+        let ok = false
+        let unused = 0
+        let s = lx_unquote(rs, i, j + 1, &ok, &unused)
+        if !ok
+          return lx_err(file, pl, pc, "bad string literal: invalid syntax")
+        end
+        lx_emit(toks, lx_new(TK_STR, s, file, pl, pc), depth)
+        adv = j + 1 - i
+      else
+        let op = -1
+        for k = 0 to vec_len(ops) - 1
+          if lx_starts(rs, i, vec_get(opr, k) as ptr Vec)
+            op = k
+            break
+          end
+        end
+        if op < 0
+          return lx_err(file, pl, pc, u_cat3("unknown symbol ", lx_quote_rune(r), " (no loaded package defines it)"))
+        end
+        let text = u_get(ops, op)
+        if text == "("
+          depth = depth + 1
+        elif text == ")" && depth > 0
+          depth = depth - 1
+        end
+        lx_emit(toks, lx_new(TK_PUNCT, text, file, pl, pc), depth)
+        adv = vec_len(vec_get(opr, op) as ptr Vec)
+      end
+      for k = 1 to adv
+        if vec_get(rs, i) == 10
+          line = line + 1
+          col = 1
+        else
+          col = col + 1
+        end
+        i = i + 1
+      end
+    end
+    lx_emit(toks, lx_new(TK_NL, "", file, line, col), depth)
+    vec_push(toks, lx_new(TK_EOF, "", file, line, col) as int)
+    return toks
+  end
+
+  fn lx_dump(toks: ptr Vec) -> str
+    let b = sb_new()
+    for i = 0 to vec_len(toks) - 1
+      let t = lx_tok(toks, i)
+      sb_int(b, t.line)
+      sb_byte(b, ':')
+      sb_int(b, t.col)
+      let names = make([str], 8)
+      names[0] = "eof"
+      names[1] = "newline"
+      names[2] = "ident"
+      names[3] = "int"
+      names[4] = "str"
+      names[5] = "punct"
+      names[6] = "hole"
+      names[7] = "char"
+      sb_byte(b, ' ')
+      sb_add(b, names[t.kind])
+      if t.kind == TK_IDENT || t.kind == TK_PUNCT || t.kind == TK_INT || t.kind == TK_CHAR
+        sb_byte(b, ' ')
+        sb_add(b, t.text)
+      elif t.kind == TK_STR
+        sb_byte(b, ' ')
+        sb_add(b, pf_dquote(t.text))
+      end
+      sb_byte(b, '\n')
+    end
+    return sb_str(b)
+  end

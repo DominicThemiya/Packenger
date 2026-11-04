@@ -1,0 +1,6 @@
+syntax statement
+  x
+expand
+  y
+expand
+  z

@@ -1,0 +1,210 @@
+doc pkc: the command line — the same commands, flags and messages as the Go compiler.
+  `pkc_main()` is the whole program; [bootstrap/pkc.pkg](../../../bootstrap/pkc.pkg)
+  just calls it. The commands are implemented as their modules are ported:
+  see [the self-hosting plan](../../self-hosting.md).
+
+needs std rt pkc/util pkc/fetch pkc/pkgfile pkc/ui pkc/lexer pkc/driver
+code
+  const PKC_DEFAULT_REGISTRY = "https://raw.githubusercontent.com/DominicThemiya/Packenger/main/registry"
+
+  fn pkc_usage() -> str
+    let b = sb_new()
+    sb_add(b, "packenger: a language where everything is a package.\n\nUsage:\n")
+    sb_add(b, "  packenger build <file.pkg> [-o exe]   compile to a native executable\n")
+    sb_add(b, "  packenger run   <file.pkg> [-- args]  compile and run\n")
+    sb_add(b, "  packenger asm   <file.pkg> [-o file]  print the generated NASM\n")
+    sb_add(b, "  packenger tree  <file.pkg>            show which packages built the program\n")
+    sb_add(b, "  packenger dump  tokens|ast|asm <file.pkg>\n")
+    sb_add(b, "                                        print a compiler stage in a stable text\n")
+    sb_add(b, "                                        format (see docs/dumps.md)\n")
+    sb_add(b, "  packenger dump  pkg <package>         print a registry package as parsed\n\n")
+    sb_add(b, "Flags:\n")
+    sb_add(b, "  --registry URL   where packages are hosted (env PACKENGER_REGISTRY;\n")
+    sb_add(b, u_cat3("                   default ", PKC_DEFAULT_REGISTRY, ")\n"))
+    sb_add(b, "  --target TRUCK   backend truck that translates packages to assembly\n")
+    sb_add(b, "                   (default bintables)\n")
+    sb_add(b, "  -o FILE          output file\n")
+    sb_add(b, "  -vb              verbose build: every package downloaded (and why), the\n")
+    sb_add(b, "                   grammar, parse results, chosen backend variants, and the\n")
+    sb_add(b, "                   nasm/ld steps, all with sizes and timings (-v is an alias)\n\n")
+    sb_add(b, "Requires nasm and ld for build and run.\n")
+    return sb_str(b)
+  end
+
+  // the parsed command line
+  struct PkcArgs
+    cmd: str
+    registry: str
+    target: str
+    out: str
+    verbose: bool
+    pos: ptr Vec
+    prog_args: ptr Vec
+  end
+
+  fn pkc_is_bool_flag(name: str) -> bool
+    return name == "v" || name == "vb"
+  end
+
+  // pkc_parse_args mirrors the Go tool: flags may come before or after the
+  // positional arguments; for run, arguments after -- go to the program.
+  fn pkc_parse_args(argv_: [str], a: ptr PkcArgs) -> bool
+    a.cmd = argv_[1]
+    a.registry = os_getenv("PACKENGER_REGISTRY")
+    if a.registry == ""
+      a.registry = PKC_DEFAULT_REGISTRY
+    end
+    a.target = "bintables"
+    a.out = ""
+    a.pos = vec_new()
+    a.prog_args = vec_new()
+    let stop = len(argv_)
+    if a.cmd == "run"
+      for i = 2 to len(argv_) - 1
+        if argv_[i] == "--"
+          for j = i + 1 to len(argv_) - 1
+            u_push(a.prog_args, argv_[j])
+          end
+          stop = i
+          break
+        end
+      end
+    end
+    let i = 2
+    while i < stop
+      let arg = argv_[i]
+      if arg == "--"
+        for j = i + 1 to stop - 1
+          u_push(a.pos, argv_[j])
+        end
+        break
+      end
+      if len(arg) > 1 && arg[0] == '-'
+        let name = arg
+        while len(name) > 0 && name[0] == '-'
+          name = str_slice(name, 1, len(name))
+        end
+        let value = ""
+        let has_value = false
+        let eq = str_find_byte(name, '=', 0)
+        if eq >= 0
+          value = str_slice(name, eq + 1, len(name))
+          name = str_slice(name, 0, eq)
+          has_value = true
+        end
+        if pkc_is_bool_flag(name)
+          a.verbose = !has_value || value == "true" || value == "1"
+        elif name == "registry" || name == "target" || name == "o"
+          if !has_value
+            if i + 1 >= stop
+              io_err(pkc_usage())
+              return u_fail(u_cat("flag needs an argument: -", name))
+            end
+            i = i + 1
+            value = argv_[i]
+          end
+          if name == "registry"
+            a.registry = value
+          elif name == "target"
+            a.target = value
+          else
+            a.out = value
+          end
+        else
+          io_err(pkc_usage())
+          return u_fail(u_cat("flag provided but not defined: -", name))
+        end
+      else
+        u_push(a.pos, arg)
+      end
+      i = i + 1
+    end
+    return true
+  end
+
+  // pkc_main runs the compiler and returns the process exit status.
+  fn pkc_main() -> int
+    let args = argv
+    if len(args) < 2 || args[1] == "-h" || args[1] == "--help" || args[1] == "help"
+      io_out(pkc_usage())
+      io_flush()
+      return 0
+    end
+    let a = new PkcArgs
+    let src = ""
+    let code = pkc_run(args, a, &src)
+    io_flush()
+    if code < 0
+      ui_error(pk_err, src)
+      return 1
+    end
+    return code
+  end
+
+  // pkc_run returns the exit status, or -1 with pk_err set.
+  fn pkc_run(args: [str], a: ptr PkcArgs, src: ptr str) -> int
+    if !pkc_parse_args(args, a)
+      return -1
+    end
+    let stage = ""
+    if a.cmd == "dump"
+      if vec_len(a.pos) != 2
+        u_fail("usage: packenger dump tokens|ast|asm <file.pkg>, or packenger dump pkg <package>")
+        return -1
+      end
+      stage = u_get(a.pos, 0)
+      if stage != "tokens" && stage != "ast" && stage != "asm" && stage != "pkg"
+        u_fail(u_cat3("unknown dump ", u_quote(stage), " (tokens, ast, asm or pkg)"))
+        return -1
+      end
+    elif vec_len(a.pos) != 1
+      u_fail(u_cat(a.cmd, " expects one source file (see packenger --help)"))
+      return -1
+    end
+    *src = u_get(a.pos, vec_len(a.pos) - 1)
+    if a.cmd == "dump" && stage == "pkg"
+      return pkc_dump_pkg(a, *src)
+    end
+    if a.cmd == "dump" && stage == "tokens"
+      let text = ""
+      if !pkc_read(*src, &text)
+        return -1
+      end
+      let r = dr_lex(a.registry, ui_base(*src), text)
+      if r == null
+        return -1
+      end
+      io_out(lx_dump(r.toks))
+      return 0
+    end
+    u_fail(u_cat3("pkc: ", a.cmd, " is not implemented yet"))
+    return -1
+  end
+
+  // pkc_read reads a source file, with Go's error message if it's missing.
+  fn pkc_read(path: str, text: ptr str) -> bool
+    if !io_exists(path)
+      return u_fail(u_cat3("open ", path, ": no such file or directory"))
+    end
+    let ok = false
+    *text = io_read_file(path, &ok)
+    if !ok
+      return u_fail(u_cat3("read ", path, ": can't read the file"))
+    end
+    return true
+  end
+
+  fn pkc_dump_pkg(a: ptr PkcArgs, name: str) -> int
+    let origin = ""
+    let ok = false
+    let src = fe_fetch(a.registry, name, &origin, &ok)
+    if !ok
+      return -1
+    end
+    let f = pf_parse(name, origin, src)
+    if f == null
+      return -1
+    end
+    io_out(pf_dump(f))
+    return 0
+  end

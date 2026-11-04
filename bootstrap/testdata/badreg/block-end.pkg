@@ -1,0 +1,2 @@
+syntax statement
+  x {b: block}
