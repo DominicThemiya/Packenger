@@ -6,9 +6,9 @@
 
 truck [bintables](../bintables.md) · [source](../../../registry/bintables/var.pkg)
 
-`{addr}` is `qword [rbp-…]` for locals and `qword [rbp+…]` for
-parameters (see the truck's conventions). The `addr` section gives the
-slot's address, for `&x`.
+`{addr}` is the memory operand given by [storage](storage.md):
+`[rbp-…]` for locals, `[rbp+…]` for parameters and `[rel pk_g_…]` for
+globals. The `addr` section gives the slot's address, for `&x`.
 
 ## Emit variants
 
@@ -23,5 +23,5 @@ mov rax, {addr}
 ### `emit addr`
 
 ```nasm
-lea rax, {mem}
+lea rax, {addr}
 ```

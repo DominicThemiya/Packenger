@@ -1,0 +1,5 @@
+doc Allocation: `new T`, a zeroed struct from `__pk_alloc`.
+
+emit
+  __pk_alloc({t.alloc})
+  @alloc

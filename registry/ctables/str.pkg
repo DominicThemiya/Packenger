@@ -1,0 +1,9 @@
+doc String literal: a static length-prefixed byte array.
+    The `data` section declares a struct with the length (a word) followed by
+    the bytes and a terminating 0, the same layout as bintables. The value is
+    its address.
+
+emit
+  ((W)&{D.s})
+data
+  static struct { W n; B b[{len} + 2]; } {D.s} = { {len}, { {bytes}, 0 } };

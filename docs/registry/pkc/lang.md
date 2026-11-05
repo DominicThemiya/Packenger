@@ -263,4 +263,4 @@ end
 
 ## Used by
 
-[pkc/driver](driver.md), [pkc/parser](parser.md)
+[pkc/driver](driver.md), [pkc/lock](lock.md), [pkc/parser](parser.md)

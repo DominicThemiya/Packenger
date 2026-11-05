@@ -105,7 +105,11 @@ code
   // cg_kinds lists the backend packages a program needs.
   fn cg_kinds(prog: ptr PProg) -> ptr Vec
     let kinds = map_new()
+    // every target has a program skeleton, a storage package (where
+    // variables live) and a toolchain package (how to build the output)
     map_set(kinds, "program", 1)
+    map_set(kinds, "storage", 1)
+    map_set(kinds, "toolchain", 1)
     cg_kinds_walk(prog.main, kinds)
     let funcs = cg_reachable(prog)
     for i = 0 to vec_len(funcs) - 1
@@ -148,7 +152,11 @@ code
   fn cg_program(g: ptr Gen, prog: ptr PProg) -> str
     for i = 0 to vec_len(prog.globals) - 1
       let v = vec_get(prog.globals, i) as ptr PVar
-      u_push(g.data, u_cat3("pk_g_", v.name, ": dq 0"))
+      let d = ""
+      if !cg_storage(g, v, "decl", &d)
+        return ""
+      end
+      u_push(g.data, d)
     end
     let main_ = cg_gen(g, prog.main, "", null)
     if main_ == null
@@ -654,6 +662,59 @@ code
     return cg_code(code)
   end
 
+  fn cg_one(s: str) -> ptr Vec
+    let v = vec_new()
+    u_push(v, s)
+    return v
+  end
+
+  // cg_storage renders where variable v lives (section local, param or
+  // global), or declares a global (decl), with the target's storage
+  // package; see Gen.storage in codegen.go.
+  fn cg_storage(g: ptr Gen, v: ptr PVar, section: str, out: ptr str) -> bool
+    if !map_has(g.back, "storage")
+      return u_fail(u_cat4("target ", g.target, " has no package for \"storage\" (expected ", u_cat(g.target, "/storage.pkg)")))
+    end
+    let pkg = map_get(g.back, "storage") as ptr PfFile
+    let offset = 0
+    if section == "local"
+      offset = 8 * (v.index + 1)
+    elif section == "param"
+      offset = 16 + 8 * v.index
+    end
+    let params = map_new()
+    map_set(params, "name", cg_one(v.name) as int)
+    map_set(params, "index", cg_one(str_from_int(v.index)) as int)
+    map_set(params, "offset", cg_one(str_from_int(offset)) as int)
+    for i = 0 to vec_len(pkg.emits) - 1
+      let e = vec_get(pkg.emits, i) as ptr PfEmit
+      if e.section == section
+        let n = new PNode
+        n.kind = ""
+        n.ty = ""
+        n.ident = ""
+        n.sval = ""
+        n.snames = vec_new()
+        n.svals = vec_new()
+        n.items = vec_new()
+        let lines = cg_render(g, pkg, e.lines, n, params, null)
+        if lines == null
+          return false
+        end
+        let parts = vec_new()
+        for k = 0 to vec_len(lines) - 1
+          let t = u_trim(u_get(lines, k))
+          if t != ""
+            u_push(parts, t)
+          end
+        end
+        *out = u_join(parts, " ")
+        return true
+      end
+    end
+    return u_fail(u_cat4(pkg.name, " has no 'emit ", section, "' section"))
+  end
+
   fn cg_attr_fail(n: ptr PNode, a: str) -> bool
     pk_err = u_cat4(n.kind, " has no attribute or slot ", u_quote(a), "")
     return false
@@ -665,13 +726,11 @@ code
         return cg_attr_fail(n, a)
       end
       if n.vr.global
-        *out = u_cat3("qword [rel pk_g_", n.vr.name, "]")
+        return cg_storage(g, n.vr, "global", out)
       elif n.vr.param
-        *out = u_cat3("qword [rbp+", str_from_int(16 + 8 * n.vr.index), "]")
-      else
-        *out = u_cat3("qword [rbp-", str_from_int(8 * (n.vr.index + 1)), "]")
+        return cg_storage(g, n.vr, "param", out)
       end
-      return true
+      return cg_storage(g, n.vr, "local", out)
     elif a == "label"
       if n.kind == "func"
         if !map_has(g.funcs, n.ident)
@@ -761,13 +820,6 @@ code
     elif a == "offset"
       if n.field != null
         *out = str_from_int(n.field.offset)
-        return true
-      end
-    elif a == "mem"
-      if n.vr != null
-        let full = ""
-        cg_attr(g, n, "addr", &full)
-        *out = u_after(full, "qword ")
         return true
       end
     elif a == "frame"

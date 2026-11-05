@@ -236,8 +236,7 @@ with placeholders.
 | placeholder | becomes |
 |---|---|
 | `{slot}` (alone on a line) | the slot's generated code; expressions leave their value in `rax` |
-| `{slot.addr}` | a variable's stack slot, e.g. `qword [rbp-8]` |
-| `{slot.mem}` | the same without the size, e.g. `[rbp-8]`, for `lea` |
+| `{slot.addr}` | where a variable lives, from the target's `storage` package: e.g. `[rbp-8]` in bintables, `L[0]` in ctables |
 | `{slot.operand}` | a simple operand: the integer, or the variable's address |
 | `{slot.value}` | an integer literal's value |
 | `{slot.label}` | a function's label, e.g. `pk_fib` |
@@ -302,6 +301,21 @@ literals), `str` (string literals), `var` (variable reads; its `emit addr`
 section serves `&x` and assignment) and `program` (the skeleton around
 everything). See [bintables/program](registry/bintables/program.md).
 
+Two more packages are fetched for every program, and make the compiler
+independent of what it generates:
+
+- **`storage`** says where variables live. Its `emit local`, `emit param`
+  and `emit global` sections render a variable's `{addr}`, and `emit decl`
+  declares a global. They see `{name}`, `{index}` (the slot or parameter
+  number) and `{offset}` (the slot's distance from the frame pointer in a
+  bintables-style frame). See [bintables/storage](registry/bintables/storage.md)
+  and [ctables/storage](registry/ctables/storage.md).
+- **`toolchain`** says how to build an executable. `emit file` names the
+  source file and each line of `emit` is a command, run in a temporary
+  directory; `{out}` is the executable's absolute path. See
+  [bintables/toolchain](registry/bintables/toolchain.md) (`nasm` and `ld`)
+  and [ctables/toolchain](registry/ctables/toolchain.md) (`cc`).
+
 The slot kinds `type`, `field`, `newtype`, `fields`, `newconst`, `ident`,
 `func`, `newfunc`, `args` and `params`, and the `group`/`groups` nodes of
 repeated groups, are data for their parent's template, not code; use their
@@ -309,7 +323,19 @@ attributes. These names are reserved and can't be package names.
 
 The conventions the `bintables` packages agree on (registers, stack layout,
 calling convention) are listed on the
-[bintables truck page](registry/bintables.md).
+[bintables truck page](registry/bintables.md), and those of the C backend
+on the [ctables truck page](registry/ctables.md).
+
+## Writing a backend
+
+A backend truck has a package for every node kind a program can contain,
+plus `program`, `storage` and `toolchain`; select it with
+`--target <truck>`. [ctables](registry/ctables.md) is the second one: it
+translates the same `std` programs to C. Its templates produce C
+expressions, using GCC statement expressions `({ ... })` wherever
+bintables would push a value, so that operands are evaluated in the same
+order. The harness runs every test program with both backends and requires
+the same output.
 
 ## Trucks
 

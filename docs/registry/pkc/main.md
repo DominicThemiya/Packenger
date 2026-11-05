@@ -17,6 +17,7 @@ just calls it. Every command of the Go tool is supported: `build`, `run`,
 - [rt](../rt.md)
 - [pkc/util](util.md)
 - [pkc/fetch](fetch.md)
+- [pkc/lock](lock.md)
 - [pkc/pkgfile](pkgfile.md)
 - [pkc/ui](ui.md)
 - [pkc/lexer](lexer.md)
@@ -40,6 +41,9 @@ fn pkc_usage() -> str
   sb_add(b, "  packenger run   <file.pkg> [-- args]  compile and run\n")
   sb_add(b, "  packenger asm   <file.pkg> [-o file]  print the generated NASM\n")
   sb_add(b, "  packenger tree  <file.pkg>            show which packages built the program\n")
+  sb_add(b, "  packenger lock  <file.pkg>            pin the exact version of every package\n")
+  sb_add(b, "                                        the program is built from, in\n")
+  sb_add(b, "                                        <file>.lock (see docs/publishing.md)\n")
   sb_add(b, "  packenger dump  tokens|ast|asm <file.pkg>\n")
   sb_add(b, "                                        print a compiler stage in a stable text\n")
   sb_add(b, "                                        format (see docs/dumps.md)\n")
@@ -61,6 +65,7 @@ end
 struct PkcArgs
   cmd: str
   registry: str
+  registry_set: bool
   target: str
   out: str
   verbose: bool
@@ -131,6 +136,7 @@ fn pkc_parse_args(argv_: [str], a: ptr PkcArgs) -> bool
         end
         if name == "registry"
           a.registry = value
+          a.registry_set = true
         elif name == "target"
           a.target = value
         else
@@ -195,8 +201,30 @@ fn pkc_run(args: [str], a: ptr PkcArgs, src: ptr str) -> int
       exe = str_slice(exe, 0, len(exe) - 4)
     end
   end
+  // A lock file next to the source pins the registry (unless --registry
+  // is given) and the version of every package. "lock" itself ignores it
+  // and pins the registry as it is now.
+  let lock_path = lk_path_of(*src)
+  if a.cmd == "lock"
+    let pinned = ""
+    if !lk_pin(a.registry, &pinned)
+      return -1
+    end
+    a.registry = pinned
+    lk_collect = map_new()
+  elif !(a.cmd == "dump" && stage == "pkg")
+    if !lk_read(lock_path, *src)
+      return -1
+    end
+    if lk_sums != null && !a.registry_set
+      a.registry = lk_registry
+    end
+  end
   if a.verbose
     rp_header(a.cmd, *src, exe, a.registry, a.target)
+    if lk_sums != null
+      rp_lock(lock_path, map_len(lk_sums))
+    end
   end
   if a.cmd == "dump"
     return pkc_dump(a, stage, *src)
@@ -224,8 +252,16 @@ fn pkc_run(args: [str], a: ptr PkcArgs, src: ptr str) -> int
     rp_done("")
     io_out(tr_tree(r, ui_base(*src), a.target))
     return 0
+  elif a.cmd == "lock"
+    if !io_write_file(lock_path, lk_format(ui_base(*src), a.registry, lk_collect))
+      u_fail(u_cat3("open ", lock_path, ": can't write the file"))
+      return -1
+    end
+    rp_done("")
+    pkc_locked(lock_path, map_len(lk_collect), a.registry)
+    return 0
   elif a.cmd == "build"
-    if !dr_assemble(r.asm, exe)
+    if !dr_assemble(r.asm, exe, map_get(r.back, "toolchain") as ptr PfFile)
       return -1
     end
     rp_done("")
@@ -237,7 +273,7 @@ fn pkc_run(args: [str], a: ptr PkcArgs, src: ptr str) -> int
       return -1
     end
     let prog = u_cat(dir, "/prog")
-    if !dr_assemble(r.asm, prog)
+    if !dr_assemble(r.asm, prog, map_get(r.back, "toolchain") as ptr PfFile)
       dr_rmdir(dir)
       return -1
     end
@@ -249,6 +285,14 @@ fn pkc_run(args: [str], a: ptr PkcArgs, src: ptr str) -> int
   end
   u_fail(u_cat3("unknown command ", u_quote(a.cmd), " (see packenger --help)"))
   return -1
+end
+
+// pkc_locked reports a lock file that was written.
+fn pkc_locked(path: str, packages: int, registry: str)
+  let on = term_colors(1)
+  io_out(u_cat4("  ", ui_c(on, "✓ locked", u_cat(UI_BOLD, UI_GREEN)), " ", rp_plural(packages, "package", "packages")))
+  io_out(u_cat4(" ", ui_c(on, "in", UI_DIM), " ", u_cat(path, "\n")))
+  io_out(u_cat4("    ", ui_c(on, "registry", UI_DIM), " ", u_cat(registry, "\n")))
 end
 
 fn pkc_dump(a: ptr PkcArgs, stage: str, src: str) -> int

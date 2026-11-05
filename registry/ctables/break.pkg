@@ -1,0 +1,4 @@
+doc `break`: jumps to the end of the innermost loop.
+
+emit
+  goto {loop.L.end};

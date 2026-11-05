@@ -1,0 +1,6 @@
+doc Negation: unary `-`. The most negative number stays as it is.
+
+emit
+  (-(
+  {operand}
+  ))

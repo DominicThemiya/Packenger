@@ -5,6 +5,7 @@ packenger build <file.pkg> [-o exe]     compile to a native executable
 packenger run   <file.pkg> [-- args]    compile and run
 packenger asm   <file.pkg> [-o file]    print the generated NASM
 packenger tree  <file.pkg>              show which packages built the program
+packenger lock  <file.pkg>              pin every package version in <file>.lock
 packenger dump  tokens|ast|asm <file>   print a compiler stage as stable text
 packenger dump  pkg <package>           print a registry package as parsed
 ```
@@ -15,13 +16,17 @@ Flags can go before or after the file name.
 
 | flag | meaning |
 |---|---|
-| `--registry URL` | where packages are hosted. Default: the env var `PACKENGER_REGISTRY`, else `https://raw.githubusercontent.com/DominicThemiya/Packenger/main/registry`. `file://` URLs work too. |
-| `--target TRUCK` | backend truck that translates packages to NASM (default `bintables`) |
+| `--registry URL` | where packages are hosted. Default: the registry in the program's [lock file](publishing.md#lock-files) if it has one, else the env var `PACKENGER_REGISTRY`, else `https://raw.githubusercontent.com/DominicThemiya/Packenger/main/registry`. `file://` URLs work too. |
+| `--target TRUCK` | backend truck that translates the program (default `bintables`, NASM; `ctables` generates C and builds it with `cc -O2`) |
 | `-o FILE` | output file for `build` (default: the source name without `.pkg`) and `asm` (default: stdout) |
 | `-vb` | verbose build report on stderr (`-v` does the same) |
 
 `run` passes arguments after `--` to the program, and exits with the
 program's exit code.
+
+`lock` compiles the program and writes `<file>.lock` next to it, pinning
+the registry and the SHA-256 of every package; every later command on that
+file uses it. See [lock files](publishing.md#lock-files).
 
 ## `-vb`: the build report
 
@@ -60,7 +65,7 @@ $ packenger build examples/fib.pkg -vb
      bintables/lt          ×1 jfalse when right simple
      ...
 
-  6 assemble    NASM to a native executable
+  6 assemble    the target's toolchain builds the executable
      ⚙ nasm   13 ms
      ⚙ ld     10 ms
      ✓ fib 5.1 KB executable
@@ -75,7 +80,7 @@ $ packenger build examples/fib.pkg -vb
 | parse | token and node counts, and each function's parameters, locals and frame size |
 | bintables | each backend package downloaded, and why (`translates <kind>`, `included by`) |
 | emit | which `emit` variant of each backend package was used, and how often |
-| assemble | the `nasm` and `ld` steps and the executable's size |
+| assemble | the commands of the target's `toolchain` package (`nasm` and `ld`, or `cc`) and the executable's size |
 
 Colors are used when stderr is a terminal and `NO_COLOR` isn't set. The
 report goes to stderr, so `asm` and `tree` output can still be piped.

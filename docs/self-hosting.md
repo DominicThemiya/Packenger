@@ -228,8 +228,18 @@ Notes from the port so far:
 - The lexer works on code points like Go's. Letters and spaces outside
   ASCII follow an approximation of Go's `unicode` tables, which is exact for
   ASCII programs.
-- `curl` is used for `http(s)://` registries, one package at a time so far;
-  the harness uses a `file://` registry.
+- `curl` is used for `http(s)://` registries: each round is one
+  `curl --parallel`, and if it fails every package is fetched again on its
+  own to get the Go compiler's exact error. That took building `fib.pkg`
+  from GitHub from 24 s to 1.5 s. The harness uses a `file://` registry.
+- pkc builds through the C backend too: `packenger build --target ctables
+  bootstrap/pkc.pkg` gives a pkc that builds the same pkc, byte for byte,
+  as the NASM one, and reaches its own fixed point (`TestCBootstrap`). It
+  generates code 2.6× faster than pkc built with bintables.
+- Lock files (`pkc/lock`) hash packages with `rt/sha256`, written in
+  Packenger, and pin GitHub registries by asking the API with `curl`.
+  `TestLock` checks both compilers write the same lock and reject the same
+  changes.
 - Porting found a bug in `rt/str`: `str_parse_int` didn't detect overflow.
 - Porting the parser found a bug in the Go compiler: a struct field holding
   a struct declared later *by value* escaped the check, because the first
@@ -252,6 +262,7 @@ phase 0 harness before moving on:
 | package | Go source | must match |
 |---|---|---|
 | `pkc/fetch` | `registry.go` | same package bytes; same errors |
+| `pkc/lock` | `lock.go` | same lock files; same errors |
 | `pkc/pkgfile` | `pkgfile.go` | same parsed structure for every registry package |
 | `pkc/lexer` | `lexer.go` | `dump tokens` |
 | `pkc/parser` | `parser.go` | `dump ast` |

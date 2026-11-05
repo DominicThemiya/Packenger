@@ -293,4 +293,4 @@ end
 
 ## Used by
 
-[rt/io](io.md), [rt/map](map.md), [rt/os](os.md), [rt/term](term.md), [rt/time](time.md)
+[rt/io](io.md), [rt/map](map.md), [rt/os](os.md), [rt/sha256](sha256.md), [rt/term](term.md), [rt/time](time.md)

@@ -1,0 +1,8 @@
+doc Helper: string equality, `__pk_streq(a, b)`: the lengths, then the bytes.
+
+emit
+support
+  static W __pk_streq(W a, W b) {
+    W n = *(W *)a;
+    return n == *(W *)b && memcmp((char *)a + 8, (char *)b + 8, n) == 0;
+  }

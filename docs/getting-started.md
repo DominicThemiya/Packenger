@@ -5,6 +5,7 @@
 - Go 1.23 or newer, to build the compiler
 - `nasm` and `ld` (from binutils), to assemble and link programs
 - x86-64 Linux, the platform the `bintables` backend targets
+- optionally `gcc` or `clang` as `cc`, for the C backend (`--target ctables`)
 - network access to the registry (or a local copy, see below)
 
 ```sh

@@ -1,0 +1,8 @@
+doc Subtraction: `-` on two `int`s.
+  Evaluates the left operand, then the right, through [binop](binop.md),
+  then applies `-`. Overflow wraps: programs are compiled with
+  `-fwrapv`.
+
+emit
+  @binop
+  {L.a} - {L.b}; })

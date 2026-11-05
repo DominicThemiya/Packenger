@@ -1,0 +1,189 @@
+doc pkc: lock files (port of internal/registry/lock.go).
+  A lock file, `<file>.lock` next to `<file>.pkg`, pins the registry and
+  the SHA-256 of every package the program is built from; see
+  [publishing](../../publishing.md#lock-files). `lk_read` loads one,
+  `lk_check` verifies a fetched package against it, `lk_format` writes one
+  and `lk_pin` resolves a GitHub branch or tag to its commit with `curl`.
+  Hashes come from [rt/sha256](../rt/sha256.md).
+
+needs std rt rt/sha256 pkc/util pkc/fetch pkc/lang
+code
+  // the lock being checked against, or null; name -> sha256
+  global lk_sums: ptr Map
+  global lk_file: str
+  global lk_source: str
+  global lk_registry: str
+  // while making a lock: every package fetched, name -> sha256; else null
+  global lk_collect: ptr Map
+
+  fn lk_path_of(src: str) -> str
+    if str_ends(src, ".pkg")
+      return u_cat(str_slice(src, 0, len(src) - 4), ".lock")
+    end
+    return u_cat(src, ".lock")
+  end
+
+  fn lk_is_sum(s: str) -> bool
+    if len(s) != 64
+      return false
+    end
+    for i = 0 to 63
+      let c = s[i]
+      if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f')
+        return false
+      end
+    end
+    return true
+  end
+
+  // lk_read loads the lock file at path, which locks source file src. A
+  // missing file is not an error: lk_sums stays null.
+  fn lk_read(path: str, src: str) -> bool
+    lk_sums = null
+    if !io_exists(path)
+      return true
+    end
+    let ok = false
+    let text = io_read_file(path, &ok)
+    if !ok
+      return u_fail(u_cat3("read ", path, ": can't read the file"))
+    end
+    let sums = map_new()
+    let reg = ""
+    let lines = u_split(text, '\n')
+    for i = 0 to vec_len(lines) - 1
+      let t = u_trim(u_get(lines, i))
+      if t == "" || str_starts(t, "//")
+        continue
+      end
+      let f = u_fields(t)
+      let good = false
+      if vec_len(f) == 2
+        let a = u_get(f, 0)
+        let b = u_get(f, 1)
+        if a == "registry" && reg == ""
+          reg = b
+          good = true
+        elif fe_valid_name(a) && lk_is_sum(b) && !map_has(sums, a)
+          map_set(sums, a, b as int)
+          good = true
+        end
+      end
+      if !good
+        return u_fail(u_cat4(path, ":", str_from_int(i + 1), ": expected 'registry <url>' or '<package> <sha256>'"))
+      end
+    end
+    if reg == ""
+      return u_fail(u_cat(path, ": no 'registry' line"))
+    end
+    lk_sums = sums
+    lk_file = path
+    lk_source = src
+    lk_registry = reg
+    return true
+  end
+
+  // lk_check verifies package name, whose file has hash sum, against the lock.
+  fn lk_check(name: str, sum: str) -> bool
+    if !map_has(lk_sums, name)
+      return u_fail(u_cat4("package ", u_quote(name), " is not in ", u_cat4(lk_file, "; run 'packenger lock ", lk_source, "' to add it")))
+    end
+    let want = map_get(lk_sums, name) as str
+    if sum != want
+      let b = sb_new()
+      sb_add(b, u_cat4("package ", u_quote(name), " does not match ", lk_file))
+      sb_add(b, u_cat4(": it has sha256 ", str_slice(sum, 0, 12), ", but ", str_slice(want, 0, 12)))
+      sb_add(b, u_cat3(" was locked; run 'packenger lock ", lk_source, "' to accept the new version"))
+      return u_fail(sb_str(b))
+    end
+    return true
+  end
+
+  fn lk_format(src: str, registry: str, sums: ptr Map) -> str
+    let b = sb_new()
+    sb_add(b, u_cat4("// Packenger lock file for ", src, ", written by 'packenger lock ", u_cat(src, "'.\n")))
+    sb_add(b, "// Builds fetch exactly these package versions. Don't edit it: run\n")
+    sb_add(b, "// 'packenger lock' again to update it.\n")
+    sb_add(b, u_cat3("registry ", registry, "\n"))
+    let names = vec_new()
+    for i = 0 to map_len(sums) - 1
+      u_push(names, map_key(sums, i))
+    end
+    u_sort_strs(names)
+    for i = 0 to vec_len(names) - 1
+      let n = u_get(names, i)
+      sb_add(b, u_cat4(n, " ", map_get(sums, n) as str, "\n"))
+    end
+    return sb_str(b)
+  end
+
+  fn lk_is_commit(s: str) -> bool
+    if len(s) != 40
+      return false
+    end
+    for i = 0 to 39
+      let c = s[i]
+      if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f')
+        return false
+      end
+    end
+    return true
+  end
+
+  // lk_pin makes a registry URL immutable where it can: a GitHub raw URL
+  // on a branch or tag becomes the URL of the commit it points at now.
+  fn lk_pin(base: str, out: ptr str) -> bool
+    *out = base
+    let prefix = "https://raw.githubusercontent.com/"
+    if !str_starts(base, prefix)
+      return true
+    end
+    let rest = str_slice(base, len(prefix), len(base))
+    let s1 = str_find_byte(rest, '/', 0)
+    if s1 <= 0
+      return true
+    end
+    let s2 = str_find_byte(rest, '/', s1 + 1)
+    if s2 <= s1 + 1
+      return true
+    end
+    let s3 = str_find_byte(rest, '/', s2 + 1)
+    if s3 < 0
+      s3 = len(rest)
+    end
+    if s3 == s2 + 1
+      return true
+    end
+    let owner = str_slice(rest, 0, s1)
+    let repo = str_slice(rest, s1 + 1, s2)
+    let ref = str_slice(rest, s2 + 1, s3)
+    let tail = str_slice(rest, s3, len(rest))
+    if lk_is_commit(ref)
+      return true
+    end
+    let what = u_cat4(owner, "/", repo, u_cat(" ", ref))
+    let args = vec_new()
+    u_push(args, "--silent")
+    u_push(args, "--fail")
+    u_push(args, "--location")
+    u_push(args, "--user-agent")
+    u_push(args, "packenger")
+    u_push(args, "--max-time")
+    u_push(args, "30")
+    u_push(args, "--header")
+    u_push(args, "Accept: application/vnd.github.sha")
+    u_push(args, u_cat4("https://api.github.com/repos/", owner, "/", u_cat4(repo, "/commits/", ref, "")))
+    let text = ""
+    let status = os_run_output("curl", args, &text)
+    let sha = u_trim(text)
+    if status == 0 && lk_is_commit(sha)
+      *out = u_cat4(prefix, owner, "/", u_cat4(repo, "/", sha, tail))
+      return true
+    end
+    if status == -1
+      return u_fail(u_cat3("can't find the commit of ", what, ": curl is not installed"))
+    elif status == 22 || status == 0
+      return u_fail(u_cat3("can't find the commit of ", what, " on GitHub"))
+    end
+    return u_fail(u_cat3("can't find the commit of ", what, ": can't reach api.github.com"))
+  end

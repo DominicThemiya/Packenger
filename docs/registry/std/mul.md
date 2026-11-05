@@ -4,7 +4,7 @@
 
 > * : multiplication
 
-truck [std](../std.md) · [source](../../../registry/std/mul.pkg) · translated by [bintables/mul](../bintables/mul.md)
+truck [std](../std.md) · [source](../../../registry/std/mul.pkg) · translated by [bintables/mul](../bintables/mul.md) · translated by [ctables/mul](../ctables/mul.md)
 
 Multiplication. Overflow wraps around (two's complement).
 

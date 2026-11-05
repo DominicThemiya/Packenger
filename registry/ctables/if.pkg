@@ -1,0 +1,21 @@
+doc Conditional: `if`, `elif`, `else`, with `goto`.
+    Each condition jumps past its block when false, like bintables, so the
+    labels and the order of evaluation are the same.
+
+emit
+  if (!(
+  {cond}
+  )) goto {L.next};
+  {then}
+  goto {L.end};
+  {L.next}:;
+  {each elif}
+  if (!(
+  {it.cond}
+  )) goto {it.L.next};
+  {it.then}
+  goto {L.end};
+  {it.L.next}:;
+  {end}
+  {else}
+  {L.end}:;

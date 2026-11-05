@@ -1,0 +1,4 @@
+doc Integer literal: a C `long long` constant.
+
+emit
+  ((W){value}LL)

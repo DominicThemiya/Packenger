@@ -4,7 +4,7 @@
 
 > Function definition: fn name(param: type, ...) [-> type] ... end
 
-truck [std](../std.md) · [source](../../../registry/std/fn.pkg) · translated by [bintables/fn](../bintables/fn.md)
+truck [std](../std.md) · [source](../../../registry/std/fn.pkg) · translated by [bintables/fn](../bintables/fn.md) · translated by [ctables/fn](../ctables/fn.md)
 
 ```
 fn add3(a: int, b: int, c: int) -> int

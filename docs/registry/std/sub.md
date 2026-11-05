@@ -4,7 +4,7 @@
 
 > - : subtraction
 
-truck [std](../std.md) · [source](../../../registry/std/sub.pkg) · translated by [bintables/sub](../bintables/sub.md)
+truck [std](../std.md) · [source](../../../registry/std/sub.pkg) · translated by [bintables/sub](../bintables/sub.md) · translated by [ctables/sub](../ctables/sub.md)
 
 Subtraction. Overflow wraps around (two's complement).
 

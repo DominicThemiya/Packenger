@@ -4,7 +4,7 @@
 
 > The boolean false.
 
-truck [std](../std.md) · [source](../../../registry/std/false.pkg) · translated by [bintables/false](../bintables/false.md)
+truck [std](../std.md) · [source](../../../registry/std/false.pkg) · translated by [bintables/false](../bintables/false.md) · translated by [ctables/false](../ctables/false.md)
 
 ```
 let found = false

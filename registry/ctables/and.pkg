@@ -1,0 +1,8 @@
+doc Logical and: `&&`, short-circuiting.
+
+emit
+  ((
+  {left}
+  ) && (
+  {right}
+  ))

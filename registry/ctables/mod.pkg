@@ -1,0 +1,5 @@
+doc Remainder: `%` on two `int`s, with the sign of the left operand.
+
+emit
+  @binop
+  {L.a} % {L.b}; })

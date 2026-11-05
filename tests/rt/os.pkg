@@ -2,6 +2,7 @@ use std
 use rt/os
 use rt/str
 use rt/vec
+use rt/io
 use rt/test
 
 test_true(os_getenv("PATH") != "", "PATH is set")
@@ -34,4 +35,16 @@ vec_push(pwd, "-c" as int)
 vec_push(pwd, "pwd" as int)
 test_int(os_run_in("/tmp", "sh", pwd, &out), 0, "run in a directory")
 test_str(out, "/tmp\n", "the working directory")
+test_int(os_run_output("pwd", none, &out), 0, "pwd")
+test_str(str_concat(os_cwd(), "\n"), out, "os_cwd")
+// a directory tree to remove
+let tree = vec_new()
+vec_push(tree, "-c" as int)
+vec_push(tree, "d=/tmp/rt-os-tree-$PPID; mkdir -p $d/sub/deeper && touch $d/a $d/sub/b $d/sub/deeper/c && echo $d" as int)
+test_int(os_run_output("sh", tree, &out), 0, "made a tree")
+let dir = str_slice(out, 0, len(out) - 1)
+test_true(io_exists(str_concat(dir, "/sub/deeper/c")), "the tree exists")
+test_true(os_remove_all(dir), "removed the tree")
+test_true(!io_exists(dir), "the tree is gone")
+test_true(!os_remove_all(dir), "removing it again fails")
 return test_done()

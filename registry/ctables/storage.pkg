@@ -1,0 +1,19 @@
+doc Where variables live: a local array, C parameters and C globals.
+    The compiler renders a section of this package wherever a template asks
+    for a variable's `{addr}`, and `decl` once per global.
+
+    | section | for | C |
+    |---|---|---|
+    | `local` | a local variable | `L[{index}]`: every function declares `W L[]` for its slots |
+    | `param` | a parameter | `p{index}`: functions take `W p0, W p1, ...` |
+    | `global` | a `global` | `pk_g_{name}` |
+    | `decl` | declaring a global | `static W pk_g_{name};` |
+
+emit local
+  L[{index}]
+emit param
+  p{index}
+emit global
+  pk_g_{name}
+emit decl
+  static W pk_g_{name};

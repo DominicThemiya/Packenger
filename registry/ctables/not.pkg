@@ -1,0 +1,6 @@
+doc Logical not: `!`.
+
+emit
+  (!(
+  {operand}
+  ))

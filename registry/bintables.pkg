@@ -101,8 +101,10 @@ truck
   shr
   str
   streq
+  storage
   sub
   syscall
+  toolchain
   true
   var
   while

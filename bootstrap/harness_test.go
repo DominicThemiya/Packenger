@@ -320,3 +320,136 @@ func TestReport(t *testing.T) {
 	agreeIn(t, "report", unTimed, "run", "-vb", "testdata/errors/type.pkg")
 	agreeIn(t, "report", unTimed, "frobnicate", "../examples/fib.pkg")
 }
+
+// Lock files: every compiler must write the same lock, build with it, and
+// reject packages that changed or are missing, with the same messages.
+func TestLock(t *testing.T) {
+	if _, err := exec.LookPath("nasm"); err != nil {
+		t.Skip("nasm not installed")
+	}
+	dir := t.TempDir()
+	// a copy of the registry, so that a package can change under the lock
+	reg := filepath.Join(dir, "reg")
+	if err := os.CopyFS(reg, os.DirFS("../registry")); err != nil {
+		t.Fatal(err)
+	}
+	prog := filepath.Join(dir, "prog.pkg")
+	src, err := os.ReadFile("../examples/fib.pkg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(prog, src, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(dir, "prog.lock")
+
+	// making the lock: the same file from every compiler
+	var lock []byte
+	for _, c := range compilers {
+		o := run(t, c.bin, "lock", "--registry", "file://"+reg, prog)
+		if o.exit != 0 {
+			t.Fatalf("%s lock failed:\n%s", c.name, o)
+		}
+		b, err := os.ReadFile(lockPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if lock != nil && !bytes.Equal(b, lock) {
+			t.Fatalf("%s wrote a different lock file:\n%s", c.name, diff(string(lock), string(b)))
+		}
+		lock = b
+	}
+	agree(t, "lock", "--registry", "file://"+reg, prog)
+	agreeIn(t, "report", unTimed, "lock", "-vb", "--registry", "file://"+reg, prog)
+
+	// building with it: the lock's registry wins over PACKENGER_REGISTRY
+	if o := agree(t, "run", prog); o.stdout != "9227465\n" {
+		t.Fatalf("run with the lock:\n%s", o)
+	}
+	agreeIn(t, "report", unTimed, "run", "-vb", prog)
+
+	// a package changed in the registry
+	ifPkg := filepath.Join(reg, "std", "if.pkg")
+	orig, _ := os.ReadFile(ifPkg)
+	os.WriteFile(ifPkg, append(orig, "// changed\n"...), 0o644)
+	if o := agree(t, "run", prog); o.exit == 0 || !strings.Contains(o.stderr, "does not match") {
+		t.Fatalf("a changed package was accepted:\n%s", o)
+	}
+	os.WriteFile(ifPkg, orig, 0o644)
+
+	// broken lock files
+	for _, text := range []string{
+		"registry file://" + reg + "\n", // std is missing
+		"std 0123\n",                    // not a sha256
+		"// no registry line\n",         // no registry
+		"registry a\nregistry b\n",      // two registries
+		"registry file://" + reg + "\nstd " + strings.Repeat("0", 64) + "\n", // wrong sum
+	} {
+		os.WriteFile(lockPath, []byte(text), 0o644)
+		if o := agree(t, "run", prog); o.exit == 0 {
+			t.Errorf("lock %q was accepted:\n%s", text, o)
+		}
+	}
+}
+
+// The C backend: every compiler must generate the same C, and every program
+// must behave the same as with bintables.
+func TestCTables(t *testing.T) {
+	for _, tool := range []string{"nasm", "cc"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skip(tool + " not installed")
+		}
+	}
+	for _, f := range corpus(t, "testdata/programs/*.pkg", "../examples/*.pkg", "../tests/rt/*.pkg") {
+		t.Run(filepath.Base(f), func(t *testing.T) {
+			if o := agree(t, "dump", "asm", "--target", "ctables", f); o.exit != 0 {
+				t.Fatalf("dump asm failed:\n%s", o)
+			}
+			src, _ := os.ReadFile(f)
+			if strings.Contains(string(src), "// output: varies") {
+				return
+			}
+			want := agree(t, "run", f)
+			if got := agree(t, "run", "--target", "ctables", f); got != want {
+				t.Fatalf("ctables and bintables differ:\n%s\nbintables:\n%s\nctables:\n%s", diff(want.String(), got.String()), want, got)
+			}
+		})
+	}
+}
+
+// pkc compiled to C by the Go compiler must build the same pkc as every
+// other stage.
+func TestCBootstrap(t *testing.T) {
+	for _, tool := range []string{"nasm", "cc"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skip(tool + " not installed")
+		}
+	}
+	if testing.Short() {
+		t.Skip("the C bootstrap takes about 20 seconds")
+	}
+	dir := t.TempDir()
+	build := func(compiler, out string, args ...string) []byte {
+		t.Helper()
+		o := run(t, compiler, append([]string{"build", "pkc.pkg", "-o", out}, args...)...)
+		if o.exit != 0 {
+			t.Fatalf("%s build pkc.pkg %v failed:\n%s", compiler, args, o)
+		}
+		b, err := os.ReadFile(out)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	asm := build(compilers[0].bin, filepath.Join(dir, "pkc-asm"))
+	build(compilers[0].bin, filepath.Join(dir, "pkc-c"), "--target", "ctables")
+	viaC := build(filepath.Join(dir, "pkc-c"), filepath.Join(dir, "stage2"))
+	if !bytes.Equal(asm, viaC) {
+		t.Errorf("pkc compiled to C builds a different pkc than pkc compiled to NASM")
+	}
+	c1 := build(filepath.Join(dir, "pkc-c"), filepath.Join(dir, "c1"), "--target", "ctables")
+	c2 := build(filepath.Join(dir, "c1"), filepath.Join(dir, "c2"), "--target", "ctables")
+	if !bytes.Equal(c1, c2) {
+		t.Errorf("pkc compiled to C has no fixed point")
+	}
+}

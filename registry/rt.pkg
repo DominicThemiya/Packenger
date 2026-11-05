@@ -24,6 +24,7 @@ doc The runtime truck: memory, vectors, strings, maps, files, processes, time an
   | `rt/os` | environment, `PATH` lookup, running programs, exit |
   | `rt/time` | monotonic clock and duration text |
   | `rt/term` | terminal detection and colors |
+  | `rt/sha256` | `sha256_hex`: SHA-256 of a string |
   | `rt/test` | checks for tests written in Packenger |
 
   Every name is prefixed with its package (`vec_push`, `str_find`), since
@@ -40,4 +41,5 @@ truck
   os
   time
   term
+  sha256
   test

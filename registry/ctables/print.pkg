@@ -1,0 +1,32 @@
+doc Print: writes an `int`, `u8`, `bool` or `str` and a newline to stdout.
+    Each print is one or two `write` calls, unbuffered, like bintables.
+
+emit when value str
+  __pk_print_str(
+  {value}
+  );
+emit when value bool
+  __pk_print_bool(
+  {value}
+  );
+emit
+  __pk_print_int(
+  {value}
+  );
+support
+  static void __pk_print_int(W v) {
+    char buf[24];
+    char *p = buf + sizeof buf;
+    uint64_t u = v < 0 ? -(uint64_t)v : (uint64_t)v;
+    *--p = '\n';
+    do { *--p = (char)('0' + u % 10); u /= 10; } while (u);
+    if (v < 0) *--p = '-';
+    write(1, p, buf + sizeof buf - p);
+  }
+  static void __pk_print_str(W s) {
+    write(1, (char *)s + 8, *(W *)s);
+    write(1, "\n", 1);
+  }
+  static void __pk_print_bool(W b) {
+    if (b) write(1, "true\n", 5); else write(1, "false\n", 6);
+  }

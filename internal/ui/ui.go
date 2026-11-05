@@ -134,7 +134,7 @@ var phaseInfo = map[string][2]string{
 	"grammar":  {"grammar", "assembled from those packages"},
 	"parse":    {"parse", "your program, read with that grammar"},
 	"emit":     {"emit", "packages rendered to NASM"},
-	"assemble": {"assemble", "NASM to a native executable"},
+	"assemble": {"assemble", "the target's toolchain builds the executable"},
 }
 
 func (r *Reporter) phase(name string) {
@@ -164,6 +164,20 @@ func (r *Reporter) Header(cmd, src, out, registry, target string) {
 	r.line("  %s", title)
 	r.line("  %s %s", r.p.c(pad("registry", 9), dim), reg)
 	r.line("  %s %s", r.p.c(pad("target", 9), dim), target)
+}
+
+// Lock notes that the build is checked against a lock file.
+func (r *Reporter) Lock(path string, packages int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.line("  %s %s %s", r.p.c(pad("lock", 9), dim), path, r.p.c("· "+plural(packages, "package", "packages")+" pinned", dim))
+}
+
+// Locked reports a lock file that was written.
+func Locked(w io.Writer, color bool, path string, packages int, registry string) {
+	p := painter{color}
+	fmt.Fprintf(w, "  %s %s %s\n", p.c("✓ locked", bold, green), plural(packages, "package", "packages"), p.c("in", dim)+" "+path)
+	fmt.Fprintf(w, "    %s %s\n", p.c("registry", dim), registry)
 }
 
 func (r *Reporter) Uses(file string, uses []string) {

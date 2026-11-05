@@ -4,7 +4,7 @@
 
 > != : not equal
 
-truck [std](../std.md) · [source](../../../registry/std/ne.pkg) · translated by [bintables/ne](../bintables/ne.md)
+truck [std](../std.md) · [source](../../../registry/std/ne.pkg) · translated by [bintables/ne](../bintables/ne.md) · translated by [ctables/ne](../ctables/ne.md)
 
 Not equal: compares two values of the same type and gives a `bool`.
 

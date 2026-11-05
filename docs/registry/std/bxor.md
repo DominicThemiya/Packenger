@@ -4,7 +4,7 @@
 
 > ^ : bitwise exclusive or
 
-truck [std](../std.md) · [source](../../../registry/std/bxor.pkg) · translated by [bintables/bxor](../bintables/bxor.md)
+truck [std](../std.md) · [source](../../../registry/std/bxor.pkg) · translated by [bintables/bxor](../bintables/bxor.md) · translated by [ctables/bxor](../ctables/bxor.md)
 
 ```
 print 12 ^ 10    // 6

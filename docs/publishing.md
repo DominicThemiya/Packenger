@@ -11,7 +11,9 @@ https://raw.githubusercontent.com/DominicThemiya/Packenger/main/registry
 
 Package `std/if` is fetched from `<registry>/std/if.pkg`, and a truck `std`
 from `<registry>/std.pkg`. Packages are downloaded at compile time and kept
-in memory only; nothing is cached on disk.
+in memory only; nothing is cached on disk. Each round of downloads (the
+packages named so far, then the ones they need, and so on) runs in
+parallel: goroutines in the Go compiler, one `curl --parallel` in `pkc`.
 
 Any static file host works. Point the compiler at it with `--registry URL`
 or `PACKENGER_REGISTRY`. For working on packages locally use a `file://`
@@ -21,6 +23,48 @@ URL:
 export PACKENGER_REGISTRY=file://$PWD/registry
 ```
 
+## Lock files
+
+Without a lock, a build uses whatever the registry serves at that moment:
+a push to `main` changes every program built afterwards, and since the
+compiler is itself packages, a bad push can break everyone. A lock file
+pins a program to exact package versions:
+
+```sh
+packenger lock app.pkg     # writes app.lock next to app.pkg
+packenger run app.pkg      # uses app.lock from now on
+```
+
+```
+// Packenger lock file for app.pkg, written by 'packenger lock app.pkg'.
+// Builds fetch exactly these package versions. Don't edit it: run
+// 'packenger lock' again to update it.
+registry https://raw.githubusercontent.com/DominicThemiya/Packenger/edb78a3e188290b5edf06e406c0e58451f51e737/registry
+bintables b9731a375e8113cdbd1a476f2c0891a4f3d713b428c522031978fe918ad3391d
+bintables/add dd39c7c9960213d9d3054d373579a7afbe90f8d6061888a50ac7cefaeb3626be
+...
+```
+
+- **The registry is pinned.** For a GitHub raw URL on a branch or tag
+  (such as the default, `.../main/registry`), `lock` asks the GitHub API
+  which commit that is now, and records the URL of that commit. Files at a
+  commit never change, so locked builds keep getting the same packages
+  even after new pushes. Other registries are recorded as they are.
+- **Every package is hashed.** Each package fetched is checked against its
+  SHA-256 ([rt/sha256](registry/rt/sha256.md) in `pkc`). A package that
+  differs, or one that isn't in the lock, stops the build with a message
+  saying to run `packenger lock` again.
+- **What is locked:** every front-end package the program loads, and the
+  *whole* backend truck, so editing the program to use another construct
+  doesn't need a new lock. Changing the `use` lines does.
+- **Which registry is used:** `--registry` if given, else the lock's, else
+  `PACKENGER_REGISTRY`, else the default. With `--registry` the hashes are
+  still checked, so a lock also catches a mirror serving different files.
+
+To update to the newest packages, run `packenger lock` again. It ignores
+the old lock, and `-vb` shows every package it fetches. Commit lock files
+with the program they belong to.
+
 ## Adding a package
 
 1. Write `registry/<truck>/<name>.pkg`, with a `doc` section (see
@@ -28,7 +72,8 @@ export PACKENGER_REGISTRY=file://$PWD/registry
 2. Add `<name>` to the truck's member list in `registry/<truck>.pkg`.
 3. If it is a syntax package without `expand`, add a backend package with
    the same name, `registry/bintables/<name>.pkg`, and list it in
-   `registry/bintables.pkg`.
+   `registry/bintables.pkg`. Do the same in `ctables`, the C backend; the
+   harness runs every test program with both.
 4. Try it with the local registry, then regenerate the docs and run the
    tests:
 

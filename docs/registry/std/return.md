@@ -4,7 +4,7 @@
 
 > Return from a function; at the top level, exit with that code.
 
-truck [std](../std.md) · [source](../../../registry/std/return.pkg) · translated by [bintables/return](../bintables/return.md)
+truck [std](../std.md) · [source](../../../registry/std/return.pkg) · translated by [bintables/return](../bintables/return.md) · translated by [ctables/return](../ctables/return.md)
 
 ```
 fn sign(x: int) -> int

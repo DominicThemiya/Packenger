@@ -1,0 +1,14 @@
+doc Helper: evaluates both operands of a binary operator into temporaries.
+    Included by the operator packages with `@binop`. It opens a GCC
+    statement expression and declares `{L.a}` (the left operand) and `{L.b}`
+    (the right one), in that order; the operator adds the result and closes
+    it with `})`. Declaring them as statements fixes the order of evaluation,
+    which plain C leaves open, so side effects happen in the same order as
+    with bintables. `cc -O2` keeps both in registers.
+
+emit
+  ({ W {L.a} =
+  {left}
+  ; W {L.b} =
+  {right}
+  ;

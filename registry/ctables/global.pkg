@@ -1,0 +1,8 @@
+doc Global variable: assigns the initial value, if any, where it is declared.
+    The variable itself is declared by [storage](storage.md)'s `decl`.
+
+emit when value missing
+emit
+  {name.addr} =
+  {value}
+  ;

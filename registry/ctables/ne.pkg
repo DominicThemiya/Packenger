@@ -1,0 +1,11 @@
+doc Inequality: `!=`, by value; strings by content.
+  Strings go through `__pk_streq` from [streq](streq.md); every other
+  type compares the words.
+
+emit when left str
+  @binop
+  !__pk_streq({L.a}, {L.b}); })
+  @streq
+emit
+  @binop
+  {L.a} != {L.b}; })

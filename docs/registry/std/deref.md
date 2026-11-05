@@ -4,7 +4,7 @@
 
 > Dereference a pointer: *p
 
-truck [std](../std.md) · [source](../../../registry/std/deref.pkg) · translated by [bintables/deref](../bintables/deref.md)
+truck [std](../std.md) · [source](../../../registry/std/deref.pkg) · translated by [bintables/deref](../bintables/deref.md) · translated by [ctables/deref](../ctables/deref.md)
 
 ```
 let n = 1

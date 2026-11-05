@@ -32,7 +32,7 @@ func run(t *testing.T, base, src string) (string, int) {
 		t.Fatal(err)
 	}
 	exe := filepath.Join(t.TempDir(), "prog")
-	if err := lang.Assemble(res.Asm, exe, nil); err != nil {
+	if err := lang.Assemble(res.Asm, exe, res.Back["toolchain"], nil); err != nil {
 		t.Fatalf("%v\n%s", err, res.Asm)
 	}
 	out, err := exec.Command(exe).Output()

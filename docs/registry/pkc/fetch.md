@@ -9,7 +9,10 @@ truck [pkc](../pkc.md) · [source](../../../registry/pkc/fetch.pkg)
 `fe_url(base, name)` builds a package's URL like the Go compiler, with
 path segments escaped like Go's `url.PathEscape`. `fe_fetch` reads a
 `file://` registry directly and downloads `http(s)://` packages with
-`curl`. Errors carry the same messages as the Go compiler.
+`curl`. `fe_fetch_batch` fetches a whole round at once: one
+`curl --parallel` for every `http(s)://` package, like the Go compiler's
+parallel downloads. If that fails, each package is fetched again on its
+own, so errors carry the same messages as the Go compiler.
 
 ## Needs
 
@@ -140,10 +143,12 @@ end
 
 global fe_tmp_count: int = 0
 
-// fe_curl downloads one URL with curl into a temporary file.
-fn fe_curl(name: str, u: str, ok: ptr bool) -> str
+fn fe_tmp() -> str
   fe_tmp_count = fe_tmp_count + 1
-  let tmp = u_cat4("/tmp/pkc-", str_from_int(syscall(39)), "-", str_from_int(fe_tmp_count))
+  return u_cat4("/tmp/pkc-", str_from_int(syscall(39)), "-", str_from_int(fe_tmp_count))
+end
+
+fn fe_curl_args() -> ptr Vec
   let args = vec_new()
   u_push(args, "--silent")
   u_push(args, "--fail")
@@ -152,6 +157,70 @@ fn fe_curl(name: str, u: str, ok: ptr bool) -> str
   u_push(args, "packenger")
   u_push(args, "--max-time")
   u_push(args, "30")
+  return args
+end
+
+// fe_fetch_batch fetches every package in names. For each, it pushes the
+// source to srcs, the URL to origins and the error ("" if none) to errs.
+fn fe_fetch_batch(base: str, names: ptr Vec, srcs: ptr Vec, origins: ptr Vec, errs: ptr Vec)
+  // which packages are downloaded over http(s), and where to
+  let remote = vec_new()
+  let tmps = vec_new()
+  for i = 0 to vec_len(names) - 1
+    let name = u_get(names, i)
+    let tmp = ""
+    if fe_valid_name(name) && !str_starts(fe_url(base, name), "file://")
+      tmp = fe_tmp()
+      vec_push(remote, i)
+    end
+    u_push(tmps, tmp)
+  end
+  let fast = false
+  if vec_len(remote) > 1
+    let args = fe_curl_args()
+    u_push(args, "--parallel")
+    u_push(args, "--parallel-max")
+    u_push(args, "16")
+    for k = 0 to vec_len(remote) - 1
+      let i = vec_get(remote, k)
+      u_push(args, "--output")
+      u_push(args, u_get(tmps, i))
+      u_push(args, fe_url(base, u_get(names, i)))
+    end
+    fast = os_run("curl", args) == 0
+  end
+  for i = 0 to vec_len(names) - 1
+    let name = u_get(names, i)
+    let tmp = u_get(tmps, i)
+    let src = ""
+    let origin = ""
+    let ok = false
+    if fast && tmp != ""
+      origin = fe_url(base, name)
+      src = io_read_file(tmp, &ok)
+      if !ok
+        u_fail(u_cat3("can't download package ", u_quote(name), ": the download disappeared"))
+      end
+    else
+      src = fe_fetch(base, name, &origin, &ok)
+    end
+    if tmp != ""
+      syscall(87, cstr(tmp))
+    end
+    u_push(srcs, src)
+    u_push(origins, origin)
+    if ok
+      u_push(errs, "")
+    else
+      u_push(errs, pk_err)
+    end
+  end
+end
+
+// fe_curl downloads one URL with curl into a temporary file.
+fn fe_curl(name: str, u: str, ok: ptr bool) -> str
+  let tmp = fe_tmp()
+  let args = fe_curl_args()
   u_push(args, "--output")
   u_push(args, tmp)
   u_push(args, u)
@@ -194,4 +263,4 @@ end
 
 ## Used by
 
-[pkc/driver](driver.md), [pkc/main](main.md)
+[pkc/driver](driver.md), [pkc/lock](lock.md), [pkc/main](main.md)

@@ -1,0 +1,23 @@
+doc Command-line arguments: a `[str]`, built once from `main`'s `argv`.
+
+emit
+  __pk_argv()
+  @alloc
+support
+  static W __pk_argv_cache;
+  static W __pk_argv(void) {
+    if (__pk_argv_cache) return __pk_argv_cache;
+    W h = __pk_alloc(24);
+    W d = __pk_alloc(8 * (W)__pk_argc);
+    ((W *)h)[0] = d;
+    ((W *)h)[1] = __pk_argc;
+    ((W *)h)[2] = __pk_argc;
+    for (int i = 0; i < __pk_argc; i++) {
+      W n = (W)strlen(__pk_argv0[i]);
+      W s = __pk_alloc(n + 9);
+      *(W *)s = n;
+      memcpy((char *)s + 8, __pk_argv0[i], n);
+      ((W *)d)[i] = s;
+    }
+    return __pk_argv_cache = h;
+  }

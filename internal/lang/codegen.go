@@ -68,7 +68,9 @@ func Reachable(prog *Program) []*Node {
 
 // Kinds lists the backend packages a program needs.
 func Kinds(prog *Program) map[string]bool {
-	kinds := map[string]bool{"program": true}
+	// every target has a program skeleton, a storage package (where
+	// variables live) and a toolchain package (how to build the output)
+	kinds := map[string]bool{"program": true, "storage": true, "toolchain": true}
 	add := func(n *Node) {
 		if !notCode[n.Kind] {
 			kinds[n.Kind] = true
@@ -104,7 +106,11 @@ func Includes(f *pkgfile.File) []string {
 
 func (g *Gen) Program(prog *Program) (string, error) {
 	for _, v := range prog.Globals {
-		g.data = append(g.data, "pk_g_"+v.Name+": dq 0")
+		d, err := g.storage(v, "decl")
+		if err != nil {
+			return "", err
+		}
+		g.data = append(g.data, d)
 	}
 	main, err := g.gen(prog.Main, "", nil)
 	if err != nil {
@@ -489,19 +495,57 @@ func (g *Gen) value(expr string, n *Node, params map[string][]string, it *Node) 
 	return "", code, true, err
 }
 
+// storage renders where variable v lives (section local, param or global),
+// or declares a global (section decl), with the target's storage package.
+// Its templates see {name}, {index} (the slot or parameter number) and
+// {offset} (the slot's distance from the frame pointer in bintables'
+// layout: 8(index+1) below it for locals, 16+8·index above it for
+// parameters).
+func (g *Gen) storage(v *Var, section string) (string, error) {
+	pkg := g.Back["storage"]
+	if pkg == nil {
+		return "", fmt.Errorf("target %s has no package for \"storage\" (expected %s/storage.pkg)", g.Target, g.Target)
+	}
+	offset := 0
+	switch section {
+	case "local":
+		offset = 8 * (v.Index + 1)
+	case "param":
+		offset = 16 + 8*v.Index
+	}
+	params := map[string][]string{"name": {v.Name}, "index": {strconv.Itoa(v.Index)}, "offset": {strconv.Itoa(offset)}}
+	for _, e := range pkg.Emits {
+		if e.Section != section {
+			continue
+		}
+		lines, err := g.render(pkg, e.Lines, &Node{Slots: map[string]*Node{}}, params, nil)
+		if err != nil {
+			return "", err
+		}
+		var parts []string
+		for _, l := range lines {
+			if t := strings.TrimSpace(l); t != "" {
+				parts = append(parts, t)
+			}
+		}
+		return strings.Join(parts, " "), nil
+	}
+	return "", fmt.Errorf("%s has no 'emit %s' section", pkg.Name, section)
+}
+
 func (g *Gen) attr(n *Node, a string) (string, error) {
 	switch a {
 	case "addr":
 		if n.Var == nil {
 			break
 		}
-		if n.Var.Global {
-			return "qword [rel pk_g_" + n.Var.Name + "]", nil
+		switch {
+		case n.Var.Global:
+			return g.storage(n.Var, "global")
+		case n.Var.Param:
+			return g.storage(n.Var, "param")
 		}
-		if n.Var.Param {
-			return fmt.Sprintf("qword [rbp+%d]", 16+8*n.Var.Index), nil
-		}
-		return fmt.Sprintf("qword [rbp-%d]", 8*(n.Var.Index+1)), nil
+		return g.storage(n.Var, "local")
 	case "label":
 		switch n.Kind {
 		case "func":
@@ -574,11 +618,6 @@ func (g *Gen) attr(n *Node, a string) (string, error) {
 	case "offset":
 		if n.Field != nil {
 			return strconv.Itoa(n.Field.Offset), nil
-		}
-	case "mem":
-		if n.Var != nil {
-			a, _ := g.attr(n, "addr")
-			return strings.TrimPrefix(a, "qword "), nil
 		}
 	case "frame":
 		if n.Frame != nil {

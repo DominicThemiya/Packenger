@@ -4,7 +4,7 @@
 
 > Print an int, u8, bool or str, followed by a newline.
 
-truck [std](../std.md) · [source](../../../registry/std/print.pkg) · translated by [bintables/print](../bintables/print.md)
+truck [std](../std.md) · [source](../../../registry/std/print.pkg) · translated by [bintables/print](../bintables/print.md) · translated by [ctables/print](../ctables/print.md)
 
 ```
 print 42

@@ -1,0 +1,8 @@
+doc Return: from a function, or from the top-level code with the exit code.
+
+emit when value missing
+  return 0;
+emit
+  return
+  {value}
+  ;

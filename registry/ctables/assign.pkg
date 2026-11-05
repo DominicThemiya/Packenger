@@ -1,0 +1,20 @@
+doc Assignment: to a variable, or through an address (fields, elements, `*p`).
+    The value is evaluated before the address, as in bintables. Targets of
+    size 1 (`u8`) store one byte.
+
+emit when target is var
+  {target.addr} =
+  {value}
+  ;
+emit when target size 1
+  { W {L.v} =
+  {value}
+  ; B *{L.p} = (B *)(
+  {target!addr}
+  ); *{L.p} = (B){L.v}; }
+emit
+  { W {L.v} =
+  {value}
+  ; W *{L.p} = (W *)(
+  {target!addr}
+  ); *{L.p} = {L.v}; }

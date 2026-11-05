@@ -4,7 +4,7 @@
 
 > Declare a variable: let name [: type] = value
 
-truck [std](../std.md) · [source](../../../registry/std/let.pkg) · translated by [bintables/let](../bintables/let.md)
+truck [std](../std.md) · [source](../../../registry/std/let.pkg) · translated by [bintables/let](../bintables/let.md) · translated by [ctables/let](../ctables/let.md)
 
 ```
 let count = 0             // int

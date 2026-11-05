@@ -1,0 +1,175 @@
+doc SHA-256: the hash that lock files pin packages with.
+  ```
+  print sha256_hex("abc")
+  // ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+  ```
+
+  | function | does |
+  |---|---|
+  | `sha256_hex(s: str) -> str` | the SHA-256 of the bytes of `s`, as 64 lowercase hex digits |
+
+  Written with 64-bit integers masked to 32 bits (FIPS 180-4). It copies
+  the input once into a padded buffer, so hashing needs about as much
+  memory as the input.
+
+needs std rt/str
+code
+  const SHA_MASK = 4294967295
+
+  global sha_k: [int]
+  global sha_ready: bool = false
+
+  fn sha_init()
+    if sha_ready
+      return
+    end
+    sha_ready = true
+    sha_k = make([int], 64)
+    sha_k[0] = 1116352408
+    sha_k[1] = 1899447441
+    sha_k[2] = 3049323471
+    sha_k[3] = 3921009573
+    sha_k[4] = 961987163
+    sha_k[5] = 1508970993
+    sha_k[6] = 2453635748
+    sha_k[7] = 2870763221
+    sha_k[8] = 3624381080
+    sha_k[9] = 310598401
+    sha_k[10] = 607225278
+    sha_k[11] = 1426881987
+    sha_k[12] = 1925078388
+    sha_k[13] = 2162078206
+    sha_k[14] = 2614888103
+    sha_k[15] = 3248222580
+    sha_k[16] = 3835390401
+    sha_k[17] = 4022224774
+    sha_k[18] = 264347078
+    sha_k[19] = 604807628
+    sha_k[20] = 770255983
+    sha_k[21] = 1249150122
+    sha_k[22] = 1555081692
+    sha_k[23] = 1996064986
+    sha_k[24] = 2554220882
+    sha_k[25] = 2821834349
+    sha_k[26] = 2952996808
+    sha_k[27] = 3210313671
+    sha_k[28] = 3336571891
+    sha_k[29] = 3584528711
+    sha_k[30] = 113926993
+    sha_k[31] = 338241895
+    sha_k[32] = 666307205
+    sha_k[33] = 773529912
+    sha_k[34] = 1294757372
+    sha_k[35] = 1396182291
+    sha_k[36] = 1695183700
+    sha_k[37] = 1986661051
+    sha_k[38] = 2177026350
+    sha_k[39] = 2456956037
+    sha_k[40] = 2730485921
+    sha_k[41] = 2820302411
+    sha_k[42] = 3259730800
+    sha_k[43] = 3345764771
+    sha_k[44] = 3516065817
+    sha_k[45] = 3600352804
+    sha_k[46] = 4094571909
+    sha_k[47] = 275423344
+    sha_k[48] = 430227734
+    sha_k[49] = 506948616
+    sha_k[50] = 659060556
+    sha_k[51] = 883997877
+    sha_k[52] = 958139571
+    sha_k[53] = 1322822218
+    sha_k[54] = 1537002063
+    sha_k[55] = 1747873779
+    sha_k[56] = 1955562222
+    sha_k[57] = 2024104815
+    sha_k[58] = 2227730452
+    sha_k[59] = 2361852424
+    sha_k[60] = 2428436474
+    sha_k[61] = 2756734187
+    sha_k[62] = 3204031479
+    sha_k[63] = 3329325298
+  end
+
+  fn sha_rotr(x: int, n: int) -> int
+    return ((x >> n) | (x << (32 - n))) & SHA_MASK
+  end
+
+  fn sha256_hex(s: str) -> str
+    sha_init()
+    let n = len(s)
+    let total = (n + 9 + 63) / 64 * 64
+    let m = make([u8], total)
+    for i = 0 to n - 1
+      m[i] = s[i]
+    end
+    m[n] = 128 as u8
+    let bits = n * 8
+    for i = 0 to 7
+      m[total - 1 - i] = ((bits >> (8 * i)) & 255) as u8
+    end
+    let h = make([int], 8)
+    h[0] = 1779033703
+    h[1] = 3144134277
+    h[2] = 1013904242
+    h[3] = 2773480762
+    h[4] = 1359893119
+    h[5] = 2600822924
+    h[6] = 528734635
+    h[7] = 1541459225
+    let w = make([int], 64)
+    let off = 0
+    while off < total
+      for t = 0 to 15
+        let j = off + t * 4
+        w[t] = ((m[j] as int) << 24) | ((m[j + 1] as int) << 16) | ((m[j + 2] as int) << 8) | (m[j + 3] as int)
+      end
+      for t = 16 to 63
+        let x = w[t - 15]
+        let y = w[t - 2]
+        let s0 = sha_rotr(x, 7) ^ sha_rotr(x, 18) ^ (x >> 3)
+        let s1 = sha_rotr(y, 17) ^ sha_rotr(y, 19) ^ (y >> 10)
+        w[t] = (w[t - 16] + s0 + w[t - 7] + s1) & SHA_MASK
+      end
+      let a = h[0]
+      let b = h[1]
+      let c = h[2]
+      let d = h[3]
+      let e = h[4]
+      let f = h[5]
+      let g = h[6]
+      let hh = h[7]
+      for t = 0 to 63
+        let big1 = sha_rotr(e, 6) ^ sha_rotr(e, 11) ^ sha_rotr(e, 25)
+        let ch = (e & f) ^ ((e ^ SHA_MASK) & g)
+        let t1 = (hh + big1 + ch + sha_k[t] + w[t]) & SHA_MASK
+        let big0 = sha_rotr(a, 2) ^ sha_rotr(a, 13) ^ sha_rotr(a, 22)
+        let maj = (a & b) ^ (a & c) ^ (b & c)
+        hh = g
+        g = f
+        f = e
+        e = (d + t1) & SHA_MASK
+        d = c
+        c = b
+        b = a
+        a = (t1 + big0 + maj) & SHA_MASK
+      end
+      h[0] = (h[0] + a) & SHA_MASK
+      h[1] = (h[1] + b) & SHA_MASK
+      h[2] = (h[2] + c) & SHA_MASK
+      h[3] = (h[3] + d) & SHA_MASK
+      h[4] = (h[4] + e) & SHA_MASK
+      h[5] = (h[5] + f) & SHA_MASK
+      h[6] = (h[6] + g) & SHA_MASK
+      h[7] = (h[7] + hh) & SHA_MASK
+      off = off + 64
+    end
+    let digits = "0123456789abcdef"
+    let out = sb_new()
+    for i = 0 to 7
+      for k = 0 to 7
+        sb_byte(out, digits[(h[i] >> (28 - 4 * k)) & 15])
+      end
+    end
+    return sb_str(out)
+  end

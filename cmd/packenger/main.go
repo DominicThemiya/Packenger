@@ -24,6 +24,9 @@ Usage:
   packenger run   <file.pkg> [-- args]  compile and run
   packenger asm   <file.pkg> [-o file]  print the generated NASM
   packenger tree  <file.pkg>            show which packages built the program
+  packenger lock  <file.pkg>            pin the exact version of every package
+                                        the program is built from, in
+                                        <file>.lock (see docs/publishing.md)
   packenger dump  tokens|ast|asm <file.pkg>
                                         print a compiler stage in a stable text
                                         format (see docs/dumps.md)
@@ -102,11 +105,41 @@ func run(args []string, srcOut *string) (int, error) {
 	if cmd == "build" && exe == "" {
 		exe = strings.TrimSuffix(filepath.Base(src), ".pkg")
 	}
-	c := &lang.Compiler{Registry: registry.New(*regURL), Target: *target}
+	explicitReg := false
+	fs.Visit(func(f *flag.Flag) { explicitReg = explicitReg || f.Name == "registry" })
+
+	// A lock file next to the source pins the registry (unless --registry
+	// is given) and the version of every package. "lock" itself ignores it
+	// and pins the registry as it is now.
+	var lock *registry.Lock
+	var sums map[string]string
+	lockPath := registry.LockPath(src)
+	switch {
+	case cmd == "lock":
+		pinned, _, err := registry.New(*regURL).Pin(context.Background())
+		if err != nil {
+			return 1, err
+		}
+		*regURL = pinned
+		sums = map[string]string{}
+	case !(cmd == "dump" && stage == "pkg"):
+		l, err := registry.ReadLock(lockPath, src)
+		if err != nil {
+			return 1, err
+		}
+		if l != nil && !explicitReg {
+			*regURL = l.Registry
+		}
+		lock = l
+	}
+	c := &lang.Compiler{Registry: registry.New(*regURL), Target: *target, Lock: lock, Sums: sums}
 	var rep *ui.Reporter
 	if *verbose {
 		rep = ui.NewReporter(os.Stderr, ui.Colors(os.Stderr))
 		rep.Header(cmd, src, exe, *regURL, *target)
+		if lock != nil {
+			rep.Lock(lockPath, len(lock.Sums))
+		}
 		c.Report = rep
 	}
 	done := func(note string) {
@@ -134,8 +167,16 @@ func run(args []string, srcOut *string) (int, error) {
 		done("")
 		res.Tree(os.Stdout, *target)
 		return 0, nil
+	case "lock":
+		text := registry.FormatLock(filepath.Base(src), *regURL, sums)
+		if err := os.WriteFile(lockPath, []byte(text), 0o644); err != nil {
+			return 1, err
+		}
+		done("")
+		ui.Locked(os.Stdout, ui.Colors(os.Stdout), lockPath, len(sums), *regURL)
+		return 0, nil
 	case "build":
-		if err := lang.Assemble(res.Asm, exe, c.Report); err != nil {
+		if err := lang.Assemble(res.Asm, exe, res.Back["toolchain"], c.Report); err != nil {
 			return 1, err
 		}
 		done("")
@@ -147,7 +188,7 @@ func run(args []string, srcOut *string) (int, error) {
 		}
 		defer os.RemoveAll(dir)
 		exe = filepath.Join(dir, "prog")
-		if err := lang.Assemble(res.Asm, exe, c.Report); err != nil {
+		if err := lang.Assemble(res.Asm, exe, res.Back["toolchain"], c.Report); err != nil {
 			return 1, err
 		}
 		done("running")

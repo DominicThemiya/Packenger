@@ -19,8 +19,8 @@ Rendered once per program. The compiler fills these placeholders:
 `_start` saves the initial stack pointer in `__pk_argp` (for `argv`),
 calls the top-level code as a function (`__pk_entry`), then passes its
 result to the `exit` system call, so a top-level `return` sets the exit
-code. Globals are reserved in the data section by the compiler, as
-`pk_g_<name>: dq 0`.
+code. Globals are reserved in the data section by
+[storage](storage.md)'s `decl` section, as `pk_g_<name>: dq 0`.
 
 ## Emit variants
 

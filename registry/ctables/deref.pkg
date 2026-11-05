@@ -1,0 +1,13 @@
+doc Dereference: `*p`, a word or (for `u8`) a byte.
+    The `addr` section is the pointer itself, for assignment.
+
+emit when self size 1
+  ((W)*(B *)(
+  {p}
+  ))
+emit
+  (*(W *)(
+  {p}
+  ))
+emit addr
+  {p}

@@ -1,0 +1,95 @@
+doc System call: `syscall(n, args...)` with up to six arguments.
+    Goes through the C library's `syscall`, and turns its `-1` and `errno`
+    back into the negative error number that Linux returns, so programs see
+    the same results as with bintables. The arguments are evaluated right to
+    left, like bintables. Syscall numbers are the x86-64 Linux ones.
+
+emit when args count 1
+  ({
+  {each args reverse}
+  W {it.L.v} =
+  {it}
+  ;
+  {end}
+  __pk_syscall(0
+  {each args}
+  , {it.L.v}
+  {end}
+  , 0, 0, 0, 0, 0, 0); })
+emit when args count 2
+  ({
+  {each args reverse}
+  W {it.L.v} =
+  {it}
+  ;
+  {end}
+  __pk_syscall(0
+  {each args}
+  , {it.L.v}
+  {end}
+  , 0, 0, 0, 0, 0); })
+emit when args count 3
+  ({
+  {each args reverse}
+  W {it.L.v} =
+  {it}
+  ;
+  {end}
+  __pk_syscall(0
+  {each args}
+  , {it.L.v}
+  {end}
+  , 0, 0, 0, 0); })
+emit when args count 4
+  ({
+  {each args reverse}
+  W {it.L.v} =
+  {it}
+  ;
+  {end}
+  __pk_syscall(0
+  {each args}
+  , {it.L.v}
+  {end}
+  , 0, 0, 0); })
+emit when args count 5
+  ({
+  {each args reverse}
+  W {it.L.v} =
+  {it}
+  ;
+  {end}
+  __pk_syscall(0
+  {each args}
+  , {it.L.v}
+  {end}
+  , 0, 0); })
+emit when args count 6
+  ({
+  {each args reverse}
+  W {it.L.v} =
+  {it}
+  ;
+  {end}
+  __pk_syscall(0
+  {each args}
+  , {it.L.v}
+  {end}
+  , 0); })
+emit when args count 7
+  ({
+  {each args reverse}
+  W {it.L.v} =
+  {it}
+  ;
+  {end}
+  __pk_syscall(0
+  {each args}
+  , {it.L.v}
+  {end}
+  ); })
+support
+  static W __pk_syscall(W _, W n, W a, W b, W c, W d, W e, W f) {
+    long r = syscall(n, a, b, c, d, e, f);
+    return r == -1 ? -(W)errno : (W)r;
+  }

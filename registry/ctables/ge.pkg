@@ -1,0 +1,5 @@
+doc Greater than or equal: `>=` on `int`s or `u8`s, giving a `bool`.
+
+emit
+  @binop
+  {L.a} >= {L.b}; })

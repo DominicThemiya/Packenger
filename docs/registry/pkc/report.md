@@ -157,7 +157,7 @@ fn rp_phase(name: str)
   elif name == "emit"
     what = "packages rendered to NASM"
   elif name == "assemble"
-    what = "NASM to a native executable"
+    what = "the target's toolchain builds the executable"
   end
   rp_line("")
   rp_line(u_cat4("  ", rp_c(str_from_int(rp_step), u_cat(UI_BOLD, UI_BLUE)), " ", u_cat3(rp_c(rp_pad(title, 10), UI_BOLD), "  ", rp_c(what, UI_DIM))))
@@ -176,6 +176,14 @@ fn rp_header(cmd: str, src: str, out: str, registry: str, target: str)
   rp_line(u_cat("  ", title))
   rp_line(u_cat4("  ", rp_c(rp_pad("registry", 9), UI_DIM), " ", reg))
   rp_line(u_cat4("  ", rp_c(rp_pad("target", 9), UI_DIM), " ", target))
+end
+
+// rp_lock notes that the build is checked against a lock file.
+fn rp_lock(path: str, packages: int)
+  if !rp_on
+    return
+  end
+  rp_line(u_cat4("  ", rp_c(rp_pad("lock", 9), UI_DIM), u_cat3(" ", path, " "), rp_c(u_cat3("· ", rp_plural(packages, "package", "packages"), " pinned"), UI_DIM)))
 end
 
 fn rp_uses(uses: ptr Vec)

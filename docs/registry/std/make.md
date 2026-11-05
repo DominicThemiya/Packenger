@@ -4,7 +4,7 @@
 
 > Make a slice of n zeroed elements: make([T], n)
 
-truck [std](../std.md) · [source](../../../registry/std/make.pkg) · translated by [bintables/make](../bintables/make.md)
+truck [std](../std.md) · [source](../../../registry/std/make.pkg) · translated by [bintables/make](../bintables/make.md) · translated by [ctables/make](../ctables/make.md)
 
 ```
 let squares = make([int], 10)

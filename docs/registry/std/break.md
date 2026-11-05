@@ -4,7 +4,7 @@
 
 > Leave the innermost loop: break
 
-truck [std](../std.md) · [source](../../../registry/std/break.pkg) · translated by [bintables/break](../bintables/break.md)
+truck [std](../std.md) · [source](../../../registry/std/break.pkg) · translated by [bintables/break](../bintables/break.md) · translated by [ctables/break](../ctables/break.md)
 
 ```
 let i = 0

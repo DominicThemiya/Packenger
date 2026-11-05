@@ -21,13 +21,14 @@ instruction comes from a package.
      │                         and type checking; expand packages are rewritten
      │                         and parsed again
      ▼  AST of node kinds (if, add, int, var, ...)
- 4. fetch backend packages ─ bintables/<kind> for each kind used (+ @includes)
+ 4. fetch backend packages ─ <target>/<kind> for each kind used (+ @includes),
+     │                         plus program, storage and toolchain
      │
      ▼
- 5. render ───────────────── each node through its emit template → NASM
+ 5. render ───────────────── each node through its emit template → NASM or C
      │
      ▼
- 6. nasm + ld ────────────── static x86-64 ELF executable
+ 6. toolchain ───────────── nasm + ld (bintables) or cc (ctables) → executable
 ```
 
 1. **`use` lines** are read before anything else, because the file can't be
@@ -62,7 +63,10 @@ instruction comes from a package.
    functions reachable from the top-level code are rendered, in definition
    order, so unused library functions cost nothing. Data and support
    sections are collected and placed by the `bintables/program` template.
-6. **Assembling** runs `nasm -f elf64` and `ld` in a temporary directory.
+6. **Assembling** runs the commands of the target's `toolchain` package in
+   a temporary directory: `nasm -f elf64` and `ld` for bintables, `cc -O2`
+   for ctables. Where variables live comes from the `storage` package, so
+   the compiler contains no assembly or C at all.
 
 ## Code map
 
@@ -82,7 +86,7 @@ instruction comes from a package.
 | [`bootstrap/`](../bootstrap) | the comparison harness and its corpus |
 | [`internal/ui`](../internal/ui) | the `-vb` report and error formatting |
 | [`internal/pkgdoc`](../internal/pkgdoc) | the package reference generator and registry checks |
-| [`registry/`](../registry) | the hosted packages: the `std` and `bintables` trucks |
+| [`registry/`](../registry) | the hosted packages: the `std`, `bintables`, `ctables`, `rt` and `pkc` trucks |
 
 ## Design notes
 
@@ -90,11 +94,14 @@ instruction comes from a package.
   so the lexer needs the loaded packages before it can split `<=` from `<`.
 - **Why syntax and backend are separate trucks.** The same `std` program can
   be compiled by a different backend truck (`--target`) without changing
-  any syntax package.
+  any syntax package. [ctables](registry/ctables.md) proves it: the same
+  programs, compiler included, build through C with identical behaviour.
 - **Why optimizations live in packages.** Variants such as
   `emit when right simple` and the `jfalse` sections keep instruction
   selection in `bintables`, where it can be changed without touching the
   compiler.
-- **Code quality.** Expression results always pass through `rax`, and
-  intermediate values through the stack. That is close to `gcc -O0`; register
-  allocation is the main missing piece.
+- **Code quality.** With bintables, expression results always pass through
+  `rax`, and intermediate values through the stack. That is close to
+  `gcc -O0`; register allocation is the main missing piece. ctables gets
+  register allocation from `cc -O2`: `fib(35)` runs in 0.019 s instead of
+  0.089 s.

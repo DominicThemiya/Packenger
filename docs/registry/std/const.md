@@ -4,7 +4,7 @@
 
 > Constant: const NAME = value
 
-truck [std](../std.md) · [source](../../../registry/std/const.pkg) · translated by [bintables/const](../bintables/const.md)
+truck [std](../std.md) · [source](../../../registry/std/const.pkg) · translated by [bintables/const](../bintables/const.md) · translated by [ctables/const](../ctables/const.md)
 
 ```
 const WIDTH = 80

@@ -4,7 +4,7 @@
 
 > / : integer division, rounding toward zero (like C)
 
-truck [std](../std.md) · [source](../../../registry/std/div.pkg) · translated by [bintables/div](../bintables/div.md)
+truck [std](../std.md) · [source](../../../registry/std/div.pkg) · translated by [bintables/div](../bintables/div.md) · translated by [ctables/div](../ctables/div.md)
 
 Integer division, rounding toward zero (like C). Dividing by zero crashes the program.
 

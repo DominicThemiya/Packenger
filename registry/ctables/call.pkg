@@ -1,0 +1,18 @@
+doc Function call: the arguments are evaluated right to left, then passed.
+    Right to left is the order bintables pushes them in, so side effects in
+    arguments happen in the same order with both backends.
+
+emit when args empty
+  {callee.label}(0)
+emit
+  ({
+  {each args reverse}
+  W {it.L.v} =
+  {it}
+  ;
+  {end}
+  {callee.label}(0
+  {each args}
+  , {it.L.v}
+  {end}
+  ); })

@@ -31,6 +31,7 @@ io_flush()
 | `rt/os` | environment, `PATH` lookup, running programs, exit |
 | `rt/time` | monotonic clock and duration text |
 | `rt/term` | terminal detection and colors |
+| `rt/sha256` | `sha256_hex`: SHA-256 of a string |
 | `rt/test` | checks for tests written in Packenger |
 
 Every name is prefixed with its package (`vec_push`, `str_find`), since
@@ -50,8 +51,9 @@ Each package's tests are in [tests/rt](../../tests/rt).
 | [rt/os](rt/os.md) | The process: environment variables, finding and running programs, exiting. |
 | [rt/time](rt/time.md) | Time: a monotonic clock in nanoseconds, and durations as text. |
 | [rt/term](rt/term.md) | Terminals: detecting one, and ANSI colors that respect NO_COLOR. |
+| [rt/sha256](rt/sha256.md) | SHA-256: the hash that lock files pin packages with. |
 | [rt/test](rt/test.md) | A tiny test library: checks that print FAIL lines, and a final PASS or FAILED. |
 
 ## Used by
 
-[pkc/codegen](pkc/codegen.md), [pkc/driver](pkc/driver.md), [pkc/fetch](pkc/fetch.md), [pkc/lang](pkc/lang.md), [pkc/lexer](pkc/lexer.md), [pkc/main](pkc/main.md), [pkc/parser](pkc/parser.md), [pkc/pkgfile](pkc/pkgfile.md), [pkc/report](pkc/report.md), [pkc/tree](pkc/tree.md), [pkc/types](pkc/types.md), [pkc/ui](pkc/ui.md), [pkc/util](pkc/util.md)
+[pkc/codegen](pkc/codegen.md), [pkc/driver](pkc/driver.md), [pkc/fetch](pkc/fetch.md), [pkc/lang](pkc/lang.md), [pkc/lexer](pkc/lexer.md), [pkc/lock](pkc/lock.md), [pkc/main](pkc/main.md), [pkc/parser](pkc/parser.md), [pkc/pkgfile](pkc/pkgfile.md), [pkc/report](pkc/report.md), [pkc/tree](pkc/tree.md), [pkc/types](pkc/types.md), [pkc/ui](pkc/ui.md), [pkc/util](pkc/util.md)

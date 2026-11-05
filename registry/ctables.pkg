@@ -1,0 +1,92 @@
+doc Backend truck: translates Packenger packages to C, compiled with `cc -O2`.
+  `ctables` is a second backend for the same front end: `--target ctables`
+  fetches `ctables/<kind>` for every node kind instead of
+  `bintables/<kind>`. Nothing in `std` or the compiler changes; the
+  [toolchain](ctables/toolchain.md) package runs `cc` instead of `nasm` and
+  `ld`.
+
+  ```sh
+  packenger run examples/fib.pkg --target ctables
+  packenger asm examples/fib.pkg --target ctables    # print the C
+  ```
+
+  ## Conventions
+
+  | what | how |
+  |---|---|
+  | every value | a `W` (`int64_t`), as in a bintables register |
+  | expressions | C expressions; operands that must be evaluated in order go into temporaries in GCC statement expressions `({ ... })` |
+  | order of evaluation | the same as bintables: operands left to right, call and syscall arguments right to left |
+  | local variables | `W L[]`, one slot per variable |
+  | parameters | `W p0, W p1, ...`, after an unused first parameter |
+  | control flow | `goto` and the same labels as bintables |
+  | memory layout | the same as bintables: strings, slices and structs are identical in memory |
+  | integers | `-fwrapv`: overflow wraps; shift counts are taken modulo 64 |
+  | runtime | `support` sections in C: allocation, printing, panics, `syscall` |
+
+  Because `cc -O2` allocates registers and optimizes across statements,
+  programs usually run faster than with bintables, which keeps every value
+  on the stack. The price is a C compiler at build time and a dynamically
+  linked executable.
+
+  Statement expressions need GCC or Clang; `cc` must be one of them.
+
+truck
+  add
+  addr
+  alloc
+  and
+  argv
+  as
+  assign
+  band
+  binop
+  bor
+  break
+  bxor
+  call
+  const
+  continue
+  cstr
+  deref
+  div
+  do
+  dot
+  eq
+  exprstmt
+  false
+  fn
+  ge
+  global
+  gt
+  if
+  index
+  int
+  le
+  len
+  let
+  lt
+  make
+  mod
+  mul
+  ne
+  neg
+  new
+  not
+  null
+  or
+  panic
+  print
+  program
+  return
+  shl
+  shr
+  storage
+  str
+  streq
+  sub
+  syscall
+  toolchain
+  true
+  var
+  while

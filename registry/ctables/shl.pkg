@@ -1,0 +1,7 @@
+doc Shift left: `<<`.
+    The count is taken modulo 64, like the x86 `shl` instruction, so every
+    count is defined.
+
+emit
+  @binop
+  {L.a} << ({L.b} & 63); })

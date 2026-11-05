@@ -1,0 +1,18 @@
+doc Slice allocation: `make([T], n)`: a 24-byte header and `n` zeroed elements.
+    A negative length calls `__pk_panic_len`.
+
+emit
+  __pk_make(
+  {n}
+  , {t.elemsize})
+  @alloc
+support
+  static W __pk_make(W n, W size) {
+    if (n < 0) __pk_panic_len();
+    W h = __pk_alloc(24);
+    W *hp = (W *)h;
+    hp[0] = __pk_alloc(n * size);
+    hp[1] = n;
+    hp[2] = n;
+    return h;
+  }

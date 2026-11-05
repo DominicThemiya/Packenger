@@ -4,7 +4,7 @@
 
 > Loop: while cond ... [next ...] end
 
-truck [std](../std.md) · [source](../../../registry/std/while.pkg) · translated by [bintables/while](../bintables/while.md)
+truck [std](../std.md) · [source](../../../registry/std/while.pkg) · translated by [bintables/while](../bintables/while.md) · translated by [ctables/while](../ctables/while.md)
 
 Runs the block for as long as the condition is `true`. The condition must
 be a `bool` and is checked before every iteration.

@@ -21,6 +21,13 @@ type Compiler struct {
 	Registry *registry.Registry
 	Target   string   // backend truck, e.g. "bintables"
 	Report   Reporter // optional
+
+	// Lock, if set, is checked against every package fetched.
+	Lock *registry.Lock
+	// Sums, if set, collects the SHA-256 of every package fetched, and the
+	// whole backend truck is fetched, not only what the program uses: this
+	// is how a lock file is made.
+	Sums map[string]string
 }
 
 type Result struct {
@@ -85,6 +92,7 @@ func (c *Compiler) fetchAll(ctx context.Context, phase string, first []dep, next
 		pending = nil
 		type result struct {
 			f    *pkgfile.File
+			sum  string
 			size int
 			took time.Duration
 			err  error
@@ -101,6 +109,12 @@ func (c *Compiler) fetchAll(ctx context.Context, phase string, first []dep, next
 				if err == nil {
 					r.f, r.err = pkgfile.Parse(d.name, origin, src)
 				}
+				if r.err == nil {
+					r.sum = registry.Sum(src)
+					if c.Lock != nil {
+						r.err = c.Lock.Check(d.name, src)
+					}
+				}
 				results[i] = r
 			}()
 		}
@@ -113,6 +127,9 @@ func (c *Compiler) fetchAll(ctx context.Context, phase string, first []dep, next
 			bytes += r.size
 			fetches = append(fetches, Fetch{Name: r.f.Name, Why: batch[i].why, Origin: r.f.Origin, Size: r.size, Took: r.took})
 			got[r.f.Name] = r.f
+			if c.Sums != nil {
+				c.Sums[r.f.Name] = r.sum
+			}
 			queue(next(r.f))
 		}
 		c.report().Round(phase, level, fetches)
@@ -213,8 +230,14 @@ func (c *Compiler) Compile(ctx context.Context, file, src string) (*Result, erro
 	for _, k := range sortedKeys(kinds) {
 		need = append(need, dep{c.Target + "/" + k, "translates " + k})
 	}
+	if c.Sums != nil {
+		need = append(need, dep{c.Target, "locked whole"})
+	}
 	backByName, err := c.fetchAll(ctx, c.Target, need, func(f *pkgfile.File) []dep {
 		var out []dep
+		for _, m := range f.Truck {
+			out = append(out, dep{f.Name + "/" + m, "member of truck " + f.Name})
+		}
 		for _, inc := range Includes(f) {
 			out = append(out, dep{c.Target + "/" + inc, "included by " + f.Name})
 		}
@@ -228,6 +251,9 @@ func (c *Compiler) Compile(ctx context.Context, file, src string) (*Result, erro
 	}
 	back := map[string]*pkgfile.File{}
 	for _, f := range backByName {
+		if f.IsTruck {
+			continue
+		}
 		back[f.Kind()] = f
 	}
 
@@ -285,36 +311,43 @@ func sortedKeys[V any](m map[string]V) []string {
 	return out
 }
 
-// Assemble turns NASM source into an executable with nasm and ld. r may be
-// nil.
-func Assemble(asm, out string, r Reporter) error {
+// Assemble turns the generated source into an executable with the
+// commands of the target's toolchain package: its "emit file" section names
+// the source file, and each line of its "emit" section is a command, run in
+// a temporary directory, with {out} replaced by the executable's absolute
+// path. r may be nil.
+func Assemble(asm, out string, tc *pkgfile.File, r Reporter) error {
 	r = orNop(r)
+	file, cmds, tools, err := Toolchain(tc)
+	if err != nil {
+		return err
+	}
+	absOut, err := filepath.Abs(out)
+	if err != nil {
+		return err
+	}
 	dir, err := os.MkdirTemp("", "packenger-*")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(dir)
-	asmPath, objPath := filepath.Join(dir, "prog.asm"), filepath.Join(dir, "prog.o")
-	if err := os.WriteFile(asmPath, []byte(asm), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, file), []byte(asm), 0o644); err != nil {
 		return err
 	}
-	// nasm runs inside the temporary directory with relative names, so the
-	// source file name it records is always "prog.asm": builds are
+	// The tools run inside the temporary directory with relative names, so
+	// the source file name they record is always the same: builds are
 	// reproducible.
-	for _, tool := range []struct {
-		dir  string
-		args []string
-	}{
-		{dir, []string{"nasm", "-f", "elf64", "-o", "prog.o", "prog.asm"}},
-		{"", []string{"ld", "-o", out, objPath}},
-	} {
-		name := tool.args[0]
+	for _, args := range cmds {
+		name := args[0]
 		if _, err := exec.LookPath(name); err != nil {
-			return fmt.Errorf("%s is not installed (packenger needs nasm and ld)", name)
+			return fmt.Errorf("%s is not installed (target %s needs %s)", name, strings.SplitN(tc.Name, "/", 2)[0], strings.Join(tools, " and "))
+		}
+		for i, a := range args {
+			args[i] = strings.ReplaceAll(a, "{out}", absOut)
 		}
 		t0 := time.Now()
-		cmd := exec.Command(name, tool.args[1:]...)
-		cmd.Dir = tool.dir
+		cmd := exec.Command(name, args[1:]...)
+		cmd.Dir = dir
 		if b, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("%s failed: %v\n%s", name, err, b)
 		}
@@ -324,6 +357,41 @@ func Assemble(asm, out string, r Reporter) error {
 		r.Built(out, st.Size())
 	}
 	return nil
+}
+
+// Toolchain reads a toolchain package: the source file name, the commands
+// (split into words) and the distinct tools they run.
+func Toolchain(tc *pkgfile.File) (file string, cmds [][]string, tools []string, err error) {
+	if tc == nil {
+		return "", nil, nil, fmt.Errorf("the target has no toolchain package")
+	}
+	for _, e := range tc.Emits {
+		switch e.Section {
+		case "file":
+			for _, l := range e.Lines {
+				if t := strings.TrimSpace(l); t != "" && file == "" {
+					file = t
+				}
+			}
+		case "":
+			for _, l := range e.Lines {
+				if f := strings.Fields(l); len(f) > 0 {
+					cmds = append(cmds, f)
+					seen := false
+					for _, t := range tools {
+						seen = seen || t == f[0]
+					}
+					if !seen {
+						tools = append(tools, f[0])
+					}
+				}
+			}
+		}
+	}
+	if file == "" || len(cmds) == 0 {
+		return "", nil, nil, fmt.Errorf("%s needs an 'emit file' section naming the source file and an 'emit' section of commands", tc.Name)
+	}
+	return file, cmds, tools, nil
 }
 
 // Tree prints which packages built the program.

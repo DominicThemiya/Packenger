@@ -1,0 +1,14 @@
+doc Field access: `p.f`, at the field's offset from the struct pointer.
+
+emit when self size 1
+  ((W)*(B *)((
+  {obj}
+  ) + {f.offset}))
+emit
+  (*(W *)((
+  {obj}
+  ) + {f.offset}))
+emit addr
+  ((
+  {obj}
+  ) + {f.offset})

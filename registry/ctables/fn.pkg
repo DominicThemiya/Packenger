@@ -1,0 +1,23 @@
+doc Function definition: a C function of words.
+    Every function takes a first, unused parameter, so that calls can always
+    be written `f(0, a, b)` without a trailing comma, then `W p0, W p1, ...`.
+    Local variables live in the array `L`. Falling off the end returns 0.
+    The `data` section is the function's prototype, so functions can call
+    each other in any order.
+
+emit
+  static W {name.label}(W _
+  {each params}
+  , W {it.addr}
+  {end}
+  ) {
+  W L[{frame} / 8 + 1];
+  {body}
+  return 0;
+  }
+data
+  static W {name.label}(W _
+  {each params}
+  , W {it.addr}
+  {end}
+  );

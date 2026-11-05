@@ -1,0 +1,6 @@
+doc Arithmetic shift right: `>>`, keeping the sign.
+    The count is taken modulo 64, like the x86 `sar` instruction.
+
+emit
+  @binop
+  {L.a} >> ({L.b} & 63); })

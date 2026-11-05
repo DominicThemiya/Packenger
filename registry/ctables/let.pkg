@@ -1,0 +1,6 @@
+doc Variable declaration: assigns the value to the variable's storage.
+
+emit
+  {name.addr} =
+  {value}
+  ;

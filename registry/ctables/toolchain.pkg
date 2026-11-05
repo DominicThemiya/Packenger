@@ -1,0 +1,16 @@
+doc How to build: compile the C with `cc -O2`.
+    The source is written to `prog.c` in a temporary directory, so builds
+    are reproducible. The flags matter:
+
+    - `-std=gnu11`: statement expressions `({ ... })` are a GNU extension,
+      supported by GCC and Clang;
+    - `-fwrapv`: integer overflow wraps, as Packenger defines it;
+    - `-fno-strict-aliasing`: memory is read and written through casts;
+    - `-w`: the generated code has unused labels and variables.
+
+    The executable links with the C library, dynamically.
+
+emit file
+  prog.c
+emit
+  cc -std=gnu11 -O2 -fwrapv -fno-strict-aliasing -w -o {out} prog.c

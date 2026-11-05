@@ -1,0 +1,6 @@
+doc C string: the address of a string's bytes, which end with a 0.
+
+emit
+  ((
+  {s}
+  ) + 8)

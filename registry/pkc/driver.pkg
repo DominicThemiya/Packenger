@@ -4,7 +4,7 @@ doc pkc: the compile pipeline (port of internal/lang/driver.go).
   (`dr_parse`), then fetching the backend packages and rendering NASM
   (`dr_compile`).
 
-needs std rt pkc/util pkc/fetch pkc/pkgfile pkc/lexer pkc/lang pkc/parser pkc/codegen pkc/report
+needs std rt pkc/util pkc/fetch pkc/lock pkc/pkgfile pkc/lexer pkc/lang pkc/parser pkc/codegen pkc/report
 code
   // a package to fetch, and why it is needed (for the -vb report)
   struct DrDep
@@ -83,24 +83,41 @@ code
       pending = vec_new()
       round = round + 1
       let fetches = vec_new()
+      let names = vec_new()
+      for i = 0 to vec_len(batch) - 1
+        u_push(names, (vec_get(batch, i) as ptr DrDep).name)
+      end
+      let srcs = vec_new()
+      let origins = vec_new()
+      let errs = vec_new()
+      let t0 = time_now()
+      fe_fetch_batch(reg, names, srcs, origins, errs)
+      let took = time_now() - t0
       for i = 0 to vec_len(batch) - 1
         let d = vec_get(batch, i) as ptr DrDep
-        let origin = ""
-        let ok = false
-        let t0 = time_now()
-        let src = fe_fetch(reg, d.name, &origin, &ok)
-        if !ok
+        if u_get(errs, i) != ""
+          pk_err = u_get(errs, i)
           return null
         end
-        let f = pf_parse(d.name, origin, src)
+        let src = u_get(srcs, i)
+        let f = pf_parse(d.name, u_get(origins, i), src)
         if f == null
           return null
+        end
+        if lk_sums != null || lk_collect != null
+          let sum = sha256_hex(src)
+          if lk_sums != null && !lk_check(d.name, sum)
+            return null
+          end
+          if lk_collect != null
+            map_set(lk_collect, f.name, sum as int)
+          end
         end
         let rf = new RpFetch
         rf.name = f.name
         rf.why = d.why
         rf.size = len(src)
-        rf.took = time_now() - t0
+        rf.took = took
         vec_push(fetches, rf as int)
         bytes = bytes + len(src)
         map_set(got, f.name, f as int)
@@ -121,10 +138,8 @@ code
 
   fn dr_next(f: ptr PfFile, mode: str) -> ptr Vec
     let out = vec_new()
-    if mode == "syntax"
-      for i = 0 to vec_len(f.truck) - 1
-        vec_push(out, dr_dep(u_cat3(f.name, "/", u_get(f.truck, i)), u_cat("member of truck ", f.name)) as int)
-      end
+    for i = 0 to vec_len(f.truck) - 1
+      vec_push(out, dr_dep(u_cat3(f.name, "/", u_get(f.truck, i)), u_cat("member of truck ", f.name)) as int)
     end
     if mode != "syntax"
       let incs = cg_includes(f)
@@ -278,6 +293,10 @@ code
       let k = u_get(kinds, i)
       vec_push(need, dr_dep(u_cat3(target, "/", k), u_cat("translates ", k)) as int)
     end
+    if lk_collect != null
+      // making a lock: pin the whole backend truck
+      vec_push(need, dr_dep(target, "locked whole") as int)
+    end
     let by_name = dr_fetch_all(reg, target, need)
     if by_name == null
       return null
@@ -285,7 +304,9 @@ code
     let back = map_new()
     for i = 0 to map_len(by_name) - 1
       let f = map_value(by_name, i) as ptr PfFile
-      map_set(back, pf_kind(f.name), f as int)
+      if !f.is_truck
+        map_set(back, pf_kind(f.name), f as int)
+      end
     end
     t0 = time_now()
     let g = cg_new(target, back, prog)
@@ -336,18 +357,59 @@ code
     syscall(84, cstr(dir))
   end
 
-  // dr_assemble turns NASM source into an executable with nasm and ld.
-  fn dr_assemble(asm: str, out: str) -> bool
+  // dr_toolchain reads a toolchain package: the source file name, the
+  // commands (each a Vec of words) and the distinct tools they run.
+  fn dr_toolchain(tc: ptr PfFile, file: ptr str, cmds: ptr Vec, tools: ptr Vec) -> bool
+    if tc == null
+      return u_fail("the target has no toolchain package")
+    end
+    *file = ""
+    for i = 0 to vec_len(tc.emits) - 1
+      let e = vec_get(tc.emits, i) as ptr PfEmit
+      for k = 0 to vec_len(e.lines) - 1
+        let l = u_get(e.lines, k)
+        if e.section == "file"
+          let t = u_trim(l)
+          if t != "" && *file == ""
+            *file = t
+          end
+        elif e.section == ""
+          let f = u_fields(l)
+          if vec_len(f) > 0
+            vec_push(cmds, f as int)
+            if !u_in(tools, u_get(f, 0))
+              u_push(tools, u_get(f, 0))
+            end
+          end
+        end
+      end
+    end
+    if *file == "" || vec_len(cmds) == 0
+      return u_fail(u_cat(tc.name, " needs an 'emit file' section naming the source file and an 'emit' section of commands"))
+    end
+    return true
+  end
+
+  // dr_assemble turns the generated source into an executable with the
+  // commands of the target's toolchain package, run in a temporary
+  // directory, with {out} replaced by the executable's absolute path.
+  fn dr_assemble(asm: str, out: str, tc: ptr PfFile) -> bool
+    let file = ""
+    let cmds = vec_new()
+    let tools = vec_new()
+    if !dr_toolchain(tc, &file, cmds, tools)
+      return false
+    end
+    let abs = out
+    if !str_starts(out, "/")
+      abs = u_cat3(os_cwd(), "/", out)
+    end
     let dir = dr_tmpdir("packenger-")
     if dir == ""
       return u_fail("can't create a temporary directory in /tmp")
     end
-    let asm_path = u_cat(dir, "/prog.asm")
-    let obj_path = u_cat(dir, "/prog.o")
-    let ok = dr_assemble_in(asm, out, asm_path, obj_path)
-    dr_rm(asm_path)
-    dr_rm(obj_path)
-    dr_rmdir(dir)
+    let ok = dr_assemble_in(asm, abs, dir, file, cmds, tools, tc)
+    os_remove_all(dir)
     if ok
       let read = false
       let exe = io_read_file(out, &read)
@@ -358,41 +420,36 @@ code
     return ok
   end
 
-  fn dr_assemble_in(asm: str, out: str, asm_path: str, obj_path: str) -> bool
-    if !io_write_file(asm_path, asm)
-      return u_fail(u_cat3("open ", asm_path, ": can't write the file"))
+  fn dr_assemble_in(asm: str, abs: str, dir: str, file: str, cmds: ptr Vec, tools: ptr Vec, tc: ptr PfFile) -> bool
+    let path = u_cat3(dir, "/", file)
+    if !io_write_file(path, asm)
+      return u_fail(u_cat3("open ", path, ": can't write the file"))
     end
-    // nasm runs inside the temporary directory with relative names, so the
-    // source name it records is always prog.asm: builds are reproducible
-    let nasm = vec_new()
-    u_push(nasm, "-f")
-    u_push(nasm, "elf64")
-    u_push(nasm, "-o")
-    u_push(nasm, "prog.o")
-    u_push(nasm, "prog.asm")
-    let dir = str_slice(asm_path, 0, len(asm_path) - 9)
-    if !dr_tool(dir, "nasm", nasm)
-      return false
+    // the tools run inside the temporary directory with relative names, so
+    // the source name they record is always the same: builds are
+    // reproducible
+    let target = u_get(u_split(tc.name, '/'), 0)
+    for i = 0 to vec_len(cmds) - 1
+      let words = vec_get(cmds, i) as ptr Vec
+      let name = u_get(words, 0)
+      if os_find(name) == ""
+        return u_fail(u_cat4(name, " is not installed (target ", target, u_cat3(" needs ", u_join(tools, " and "), ")")))
+      end
+      let args = vec_new()
+      for k = 1 to vec_len(words) - 1
+        u_push(args, u_replace(u_get(words, k), "{out}", abs))
+      end
+      if !dr_tool(dir, name, args)
+        return false
+      end
     end
-    let ld = vec_new()
-    u_push(ld, "-o")
-    u_push(ld, out)
-    u_push(ld, obj_path)
-    return dr_tool("", "ld", ld)
+    return true
   end
 
   fn dr_tool(dir: str, name: str, args: ptr Vec) -> bool
-    if os_find(name) == ""
-      return u_fail(u_cat(name, " is not installed (packenger needs nasm and ld)"))
-    end
     let output = ""
-    let status = 0
     let t0 = time_now()
-    if dir != ""
-      status = os_run_in(dir, name, args, &output)
-    else
-      status = os_run_output(name, args, &output)
-    end
+    let status = os_run_in(dir, name, args, &output)
     if status != 0
       return u_fail(u_cat4(name, " failed: exit status ", str_from_int(status), u_cat("\n", output)))
     end

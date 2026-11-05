@@ -111,8 +111,10 @@ names and pass `--target <truck>`.
 | [bintables/shr](bintables/shr.md) | >> : `sar`, by a constant or by cl. |
 | [bintables/str](bintables/str.md) | String literal: rax points at a length-prefixed byte string. |
 | [bintables/streq](bintables/streq.md) | Helper: `__pk_streq` compares the strings in rax and rbx; rax is 1 if equal. |
+| [bintables/storage](bintables/storage.md) | Where variables live: stack slots, parameters and globals. |
 | [bintables/sub](bintables/sub.md) | - : `sub`. |
 | [bintables/syscall](bintables/syscall.md) | syscall: evaluate the arguments, then load them into rax, rdi, rsi, rdx, r10, r8, r9. |
+| [bintables/toolchain](bintables/toolchain.md) | How to build: assemble with nasm, link with ld. |
 | [bintables/true](bintables/true.md) | true: 1 in rax. |
 | [bintables/var](bintables/var.md) | Variable read: loads the variable's stack slot into rax. |
 | [bintables/while](bintables/while.md) | Loop with the condition tested at the top; break and continue jump to its labels. |

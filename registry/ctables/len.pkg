@@ -1,0 +1,10 @@
+doc Length: of a `str` (its first word) or a slice (the header's second word).
+
+emit when x str
+  (*(W *)(
+  {x}
+  ))
+emit
+  (((W *)(
+  {x}
+  ))[1])

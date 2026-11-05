@@ -4,7 +4,7 @@
 
 > && : logical and
 
-truck [std](../std.md) · [source](../../../registry/std/and.pkg) · translated by [bintables/and](../bintables/and.md)
+truck [std](../std.md) · [source](../../../registry/std/and.pkg) · translated by [bintables/and](../bintables/and.md) · translated by [ctables/and](../ctables/and.md)
 
 Logical and, short-circuit: the right side is evaluated only if the left side is true.
 

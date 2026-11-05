@@ -4,7 +4,7 @@
 
 > >> : arithmetic shift right (keeps the sign)
 
-truck [std](../std.md) · [source](../../../registry/std/shr.pkg) · translated by [bintables/shr](../bintables/shr.md)
+truck [std](../std.md) · [source](../../../registry/std/shr.pkg) · translated by [bintables/shr](../bintables/shr.md) · translated by [ctables/shr](../ctables/shr.md)
 
 ```
 print -16 >> 2   // -4

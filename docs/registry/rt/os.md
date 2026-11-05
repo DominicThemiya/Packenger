@@ -24,6 +24,8 @@ print os_getenv("HOME")
 | `os_run(cmd: str, args: ptr Vec) -> int` | run `cmd` with the arguments (`str`s, not including the program name), wait, and return its exit status: 0–255, `128 + n` if killed by signal `n`, or -1 if it can't be started |
 | `os_run_output(cmd: str, args: ptr Vec, output: ptr str) -> int` | like `os_run`, but the program's stdout and stderr are captured into `*output` |
 | `os_run_in(dir: str, cmd: str, args: ptr Vec, output: ptr str) -> int` | like `os_run_output`, with `dir` as the program's working directory |
+| `os_cwd() -> str` | the current working directory, or `""` if it can't be read |
+| `os_remove_all(path: str) -> bool` | delete a file, or a directory and everything in it; false if something couldn't be removed |
 | `os_exit(code: int)` | flush `io_out`'s buffer and exit |
 
 `os_run` uses `fork`, `execve` and `wait4`. The child inherits the
@@ -42,6 +44,61 @@ environment and the standard input, output and error.
 Merged into every program that uses this package.
 
 ```
+fn os_cwd() -> str
+  let buf = make([u8], 4096)
+  // getcwd returns the length including the terminating NUL
+  let n = syscall(79, &buf[0], len(buf))
+  if n <= 1
+    return ""
+  end
+  let b = sb_new()
+  sb_bytes(b, &buf[0], n - 1)
+  return sb_str(b)
+end
+
+fn os_remove_all(path: str) -> bool
+  // unlink(path): done if it was a file
+  if syscall(87, cstr(path)) == 0
+    return true
+  end
+  // open(path, O_RDONLY | O_DIRECTORY)
+  let fd = syscall(2, cstr(path), 65536, 0)
+  if fd < 0
+    return false
+  end
+  let children = vec_new()
+  let buf = make([u8], 8192)
+  while true
+    // getdents64: records of inode (8), offset (8), length (2), type (1), name
+    let n = syscall(217, fd, &buf[0], len(buf))
+    if n <= 0
+      break
+    end
+    let off = 0
+    while off < n
+      let reclen = (buf[off + 16] as int) | ((buf[off + 17] as int) << 8)
+      let stop = off + 19
+      while buf[stop] != 0 as u8
+        stop = stop + 1
+      end
+      let b = sb_new()
+      sb_bytes(b, &buf[off + 19], stop - off - 19)
+      let name = sb_str(b)
+      if name != "." && name != ".."
+        vec_push(children, str_concat(str_concat(path, "/"), name) as int)
+      end
+      off = off + reclen
+    end
+  end
+  syscall(3, fd)
+  let ok = true
+  for i = 0 to vec_len(children) - 1
+    ok = os_remove_all(vec_get(children, i) as str) && ok
+  end
+  // rmdir(path)
+  return syscall(84, cstr(path)) == 0 && ok
+end
+
 global os_env: ptr Vec
 
 fn os_exit(code: int)

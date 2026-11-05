@@ -1,0 +1,8 @@
+doc Logical or: `||`, short-circuiting.
+
+emit
+  ((
+  {left}
+  ) || (
+  {right}
+  ))

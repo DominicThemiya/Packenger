@@ -1,0 +1,7 @@
+doc Variable read: the variable's storage.
+    The `addr` section gives its address, for `&x`.
+
+emit
+  {addr}
+emit addr
+  ((W)&{addr})

@@ -4,7 +4,7 @@
 
 > << : shift left
 
-truck [std](../std.md) · [source](../../../registry/std/shl.pkg) · translated by [bintables/shl](../bintables/shl.md)
+truck [std](../std.md) · [source](../../../registry/std/shl.pkg) · translated by [bintables/shl](../bintables/shl.md) · translated by [ctables/shl](../ctables/shl.md)
 
 ```
 print 1 << 10    // 1024

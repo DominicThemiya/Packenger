@@ -1,0 +1,13 @@
+doc Conversion: `x as T`. To `u8` keeps the low byte, to `bool` tests for non-zero.
+    Other conversions keep the word.
+
+emit when t u8
+  ((W)(B)(
+  {v}
+  ))
+emit when t bool
+  ((W)((
+  {v}
+  ) != 0))
+emit
+  {v}

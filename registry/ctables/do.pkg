@@ -1,0 +1,4 @@
+doc Block: `do ... end`. Scoping is resolved by the compiler, so it is just the body.
+
+emit
+  {body}

@@ -4,7 +4,7 @@
 
 > >= : greater than or equal
 
-truck [std](../std.md) · [source](../../../registry/std/ge.pkg) · translated by [bintables/ge](../bintables/ge.md)
+truck [std](../std.md) · [source](../../../registry/std/ge.pkg) · translated by [bintables/ge](../bintables/ge.md) · translated by [ctables/ge](../ctables/ge.md)
 
 Greater than or equal (signed for int).
 

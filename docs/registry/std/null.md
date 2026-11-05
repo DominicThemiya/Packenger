@@ -4,7 +4,7 @@
 
 > The null pointer: a pointer to nothing, compatible with every pointer type.
 
-truck [std](../std.md) · [source](../../../registry/std/null.pkg) · translated by [bintables/null](../bintables/null.md)
+truck [std](../std.md) · [source](../../../registry/std/null.pkg) · translated by [bintables/null](../bintables/null.md) · translated by [ctables/null](../ctables/null.md)
 
 ```
 struct Node

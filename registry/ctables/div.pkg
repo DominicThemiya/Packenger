@@ -1,0 +1,7 @@
+doc Division: `/` on two `int`s, rounding toward zero.
+    Dividing by zero, or the most negative number by -1, crashes the program
+    with `SIGFPE`, as with bintables' `idiv`.
+
+emit
+  @binop
+  {L.a} / {L.b}; })

@@ -1,0 +1,4 @@
+doc `continue`: jumps to the `next` block of the innermost loop.
+
+emit
+  goto {loop.L.next};

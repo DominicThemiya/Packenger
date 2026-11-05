@@ -1,0 +1,5 @@
+doc Expression statement: evaluates the expression for its effects.
+
+emit
+  {e}
+  ;
