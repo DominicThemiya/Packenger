@@ -1,0 +1,29 @@
+doc Bar charts: one row per value, scaled to the largest.
+  ```
+  print bars_row("apples", 30, 40, 20)
+  // apples    ███████████████      30
+  ```
+
+  | function | does |
+  |---|---|
+  | `bars_row(label: str, n: int, max: int, width: int) -> str` | the label padded to 10 characters, a bar of `n * width / max` blocks, then `n` |
+
+needs std rt/str
+code
+  fn bars_row(label: str, n: int, max: int, width: int) -> str
+    let b = sb_new()
+    sb_add(b, str_pad(label, 10))
+    let full = 0
+    if max > 0
+      full = n * width / max
+    end
+    for i = 1 to width
+      if i <= full
+        sb_add(b, "█")
+      else
+        sb_byte(b, ' ')
+      end
+    end
+    sb_add(b, str_lpad(str_from_int(n), 5))
+    return sb_str(b)
+  end

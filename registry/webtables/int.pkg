@@ -1,0 +1,4 @@
+doc Integer literal: an `i64.const`.
+
+emit
+  (i64.const {value})

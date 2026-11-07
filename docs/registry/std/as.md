@@ -4,7 +4,7 @@
 
 > Convert a value to another type: x as T
 
-truck [std](../std.md) · [source](../../../registry/std/as.pkg) · translated by [bintables/as](../bintables/as.md) · translated by [ctables/as](../ctables/as.md)
+truck [std](../std.md) · [source](../../../registry/std/as.pkg) · translated by [bintables/as](../bintables/as.md) · translated by [ctables/as](../ctables/as.md) · translated by [webtables/as](../webtables/as.md)
 
 ```
 let c = 'a'

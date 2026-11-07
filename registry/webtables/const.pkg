@@ -1,0 +1,3 @@
+doc Constant declaration: nothing at run time; uses are replaced by the value.
+
+emit

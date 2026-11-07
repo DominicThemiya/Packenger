@@ -4,7 +4,7 @@
 
 > Field access through a struct pointer: p.field
 
-truck [std](../std.md) · [source](../../../registry/std/dot.pkg) · translated by [bintables/dot](../bintables/dot.md) · translated by [ctables/dot](../ctables/dot.md)
+truck [std](../std.md) · [source](../../../registry/std/dot.pkg) · translated by [bintables/dot](../bintables/dot.md) · translated by [ctables/dot](../ctables/dot.md) · translated by [webtables/dot](../webtables/dot.md)
 
 ```
 let p = new Point

@@ -4,7 +4,7 @@
 
 > Global variable: global name: type [= value]
 
-truck [std](../std.md) · [source](../../../registry/std/global.pkg) · translated by [bintables/global](../bintables/global.md) · translated by [ctables/global](../ctables/global.md)
+truck [std](../std.md) · [source](../../../registry/std/global.pkg) · translated by [bintables/global](../bintables/global.md) · translated by [ctables/global](../ctables/global.md) · translated by [webtables/global](../webtables/global.md)
 
 ```
 global counter: int = 0

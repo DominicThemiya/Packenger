@@ -19,6 +19,7 @@ type Lock struct {
 	Path     string            // the lock file, for messages
 	Source   string            // the program it locks, for messages
 	Registry string            // registry base the lock was made against
+	Routes   []Route           // the package tree's routes, pinned
 	Sums     map[string]string // package name -> hex SHA-256
 }
 
@@ -56,14 +57,25 @@ func ReadLock(path, src string) (*Lock, error) {
 			l.Registry = f[1]
 		case len(f) == 2 && ValidName(f[0]) && sumRe.MatchString(f[1]) && l.Sums[f[0]] == "":
 			l.Sums[f[0]] = f[1]
+		case len(f) == 3 && f[0] == "route" && ValidName(f[1]) && !l.routed(f[1]):
+			l.Routes = append(l.Routes, Route{f[1], f[2]})
 		default:
-			return nil, fmt.Errorf("%s:%d: expected 'registry <url>' or '<package> <sha256>'", path, i+1)
+			return nil, fmt.Errorf("%s:%d: expected 'registry <url>', 'route <prefix> <url>' or '<package> <sha256>'", path, i+1)
 		}
 	}
 	if l.Registry == "" {
 		return nil, fmt.Errorf("%s: no 'registry' line", path)
 	}
 	return l, nil
+}
+
+func (l *Lock) routed(prefix string) bool {
+	for _, r := range l.Routes {
+		if r.Prefix == prefix {
+			return true
+		}
+	}
+	return false
 }
 
 // Check verifies that package name, with source text src, is the locked
@@ -81,12 +93,15 @@ func (l *Lock) Check(name, src string) error {
 }
 
 // FormatLock renders a lock file for source file src.
-func FormatLock(src, registry string, sums map[string]string) string {
+func FormatLock(src, registry string, routes []Route, sums map[string]string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "// Packenger lock file for %s, written by 'packenger lock %s'.\n", src, src)
 	b.WriteString("// Builds fetch exactly these package versions. Don't edit it: run\n")
 	b.WriteString("// 'packenger lock' again to update it.\n")
 	fmt.Fprintf(&b, "registry %s\n", registry)
+	for _, r := range routes {
+		fmt.Fprintf(&b, "route %s %s\n", r.Prefix, r.Base)
+	}
 	names := make([]string, 0, len(sums))
 	for n := range sums {
 		names = append(names, n)
@@ -107,9 +122,14 @@ var (
 // branch or tag is resolved to the commit it points at now. Other URLs are
 // returned unchanged. The second result is the commit, if one was resolved.
 func (r *Registry) Pin(ctx context.Context) (string, string, error) {
-	m := rawRe.FindStringSubmatch(r.Base)
+	return r.PinURL(ctx, r.Base)
+}
+
+// PinURL pins registry URL base like Pin.
+func (r *Registry) PinURL(ctx context.Context, base string) (string, string, error) {
+	m := rawRe.FindStringSubmatch(base)
 	if m == nil || commitRe.MatchString(m[3]) {
-		return r.Base, "", nil
+		return base, "", nil
 	}
 	owner, repo, ref, rest := m[1], m[2], m[3], m[4]
 	api := fmt.Sprintf("https://api.github.com/repos/%s/%s/commits/%s", owner, repo, ref)

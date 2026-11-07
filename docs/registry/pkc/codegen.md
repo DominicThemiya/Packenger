@@ -700,6 +700,8 @@ fn cg_storage(g: ptr Gen, v: ptr PVar, section: str, out: ptr str) -> bool
     offset = 8 * (v.index + 1)
   elif section == "param"
     offset = 16 + 8 * v.index
+  elif section == "global" || section == "decl"
+    offset = 8 * v.index
   end
   let params = map_new()
   map_set(params, "name", cg_one(v.name) as int)
@@ -800,6 +802,16 @@ fn cg_attr(g: ptr Gen, n: ptr PNode, a: str, out: ptr str) -> bool
           sb_byte(b, ',')
         end
         sb_int(b, n.sval[i] as int)
+      end
+      *out = sb_str(b)
+      return true
+    end
+  elif a == "hex"
+    if n.kind == "str"
+      let b = sb_new()
+      for i = 0 to len(n.sval) - 1
+        sb_byte(b, '\\')
+        u_hex(b, n.sval[i] as int)
       end
       *out = sb_str(b)
       return true

@@ -1,0 +1,14 @@
+doc Function definition: a WebAssembly function of no parameters returning an `i64`.
+  The arguments are on the memory stack, pushed by the caller as in
+  bintables. `$__pk_enter` sets the frame pointer `$fp` and reserves
+  `{frame}` bytes for locals; `$top` is where the stack pointer goes back
+  to on return, which also pops the arguments. Falling off the end returns
+  0.
+
+emit
+  (func ${name.label} (result i64) (local $fp i32) (local $top i32) (local $ret i64)
+  (local.set $top (i32.add (global.get $sp) (i32.const {params.stack})))
+  (local.set $fp (call $__pk_enter (i32.const {frame})))
+  {body}
+  (global.set $sp (local.get $top))
+  (i64.const 0))

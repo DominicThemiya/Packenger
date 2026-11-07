@@ -10,6 +10,7 @@ A lock file, `<file>.lock` next to `<file>.pkg`, pins the registry and
 the SHA-256 of every package the program is built from; see
 [publishing](../../publishing.md#lock-files). `lk_read` loads one,
 `lk_check` verifies a fetched package against it, `lk_format` writes one
+(with the package tree's routes, if any)
 and `lk_pin` resolves a GitHub branch or tag to its commit with `curl`.
 Hashes come from [rt/sha256](../rt/sha256.md).
 
@@ -32,6 +33,9 @@ global lk_sums: ptr Map
 global lk_file: str
 global lk_source: str
 global lk_registry: str
+// the package tree's routes, pinned: prefixes and registries (strs)
+global lk_route_prefixes: ptr Vec
+global lk_route_bases: ptr Vec
 // while making a lock: every package fetched, name -> sha256; else null
 global lk_collect: ptr Map
 
@@ -69,6 +73,8 @@ fn lk_read(path: str, src: str) -> bool
   end
   let sums = map_new()
   let reg = ""
+  let prefixes = vec_new()
+  let bases = vec_new()
   let lines = u_split(text, '\n')
   for i = 0 to vec_len(lines) - 1
     let t = u_trim(u_get(lines, i))
@@ -87,9 +93,13 @@ fn lk_read(path: str, src: str) -> bool
         map_set(sums, a, b as int)
         good = true
       end
+    elif vec_len(f) == 3 && u_get(f, 0) == "route" && fe_valid_name(u_get(f, 1)) && !u_in(prefixes, u_get(f, 1))
+      u_push(prefixes, u_get(f, 1))
+      u_push(bases, u_get(f, 2))
+      good = true
     end
     if !good
-      return u_fail(u_cat4(path, ":", str_from_int(i + 1), ": expected 'registry <url>' or '<package> <sha256>'"))
+      return u_fail(u_cat4(path, ":", str_from_int(i + 1), ": expected 'registry <url>', 'route <prefix> <url>' or '<package> <sha256>'"))
     end
   end
   if reg == ""
@@ -99,6 +109,8 @@ fn lk_read(path: str, src: str) -> bool
   lk_file = path
   lk_source = src
   lk_registry = reg
+  lk_route_prefixes = prefixes
+  lk_route_bases = bases
   return true
 end
 
@@ -118,12 +130,15 @@ fn lk_check(name: str, sum: str) -> bool
   return true
 end
 
-fn lk_format(src: str, registry: str, sums: ptr Map) -> str
+fn lk_format(src: str, registry: str, prefixes: ptr Vec, bases: ptr Vec, sums: ptr Map) -> str
   let b = sb_new()
   sb_add(b, u_cat4("// Packenger lock file for ", src, ", written by 'packenger lock ", u_cat(src, "'.\n")))
   sb_add(b, "// Builds fetch exactly these package versions. Don't edit it: run\n")
   sb_add(b, "// 'packenger lock' again to update it.\n")
   sb_add(b, u_cat3("registry ", registry, "\n"))
+  for i = 0 to vec_len(prefixes) - 1
+    sb_add(b, u_cat4("route ", u_get(prefixes, i), " ", u_cat(u_get(bases, i), "\n")))
+  end
   let names = vec_new()
   for i = 0 to map_len(sums) - 1
     u_push(names, map_key(sums, i))

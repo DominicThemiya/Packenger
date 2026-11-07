@@ -57,13 +57,35 @@ func scanUses(src string) ([]string, string, error) {
 		if m == nil {
 			break
 		}
-		uses = append(uses, m[1])
+		// the package tree is read by the caller, not fetched
+		if m[1] != registry.TreeUse {
+			uses = append(uses, m[1])
+		}
 		lines[i] = ""
 	}
 	if len(uses) == 0 {
 		return nil, "", fmt.Errorf("the file does not use any packages, so it has no syntax; start it with 'use std'")
 	}
 	return uses, strings.Join(lines, "\n"), nil
+}
+
+// UsesTree reports whether source file src has the line "use pkg_tree",
+// which routes its packages with the pkg_tree.pkg next to it.
+func UsesTree(src string) bool {
+	for _, l := range strings.Split(src, "\n") {
+		t := strings.TrimSpace(l)
+		if t == "" || strings.HasPrefix(t, "//") {
+			continue
+		}
+		m := useRe.FindStringSubmatch(t)
+		if m == nil {
+			return false
+		}
+		if m[1] == registry.TreeUse {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Compiler) report() Reporter { return orNop(c.Report) }
@@ -355,6 +377,29 @@ func Assemble(asm, out string, tc *pkgfile.File, r Reporter) error {
 	}
 	if st, err := os.Stat(out); err == nil {
 		r.Built(out, st.Size())
+	}
+	return nil
+}
+
+// RunCommand is how to run an executable built for the target, from the
+// toolchain package's "emit run" section, with {out} replaced by exe; nil
+// means the executable runs by itself.
+func RunCommand(tc *pkgfile.File, exe string) []string {
+	if tc == nil {
+		return nil
+	}
+	for _, e := range tc.Emits {
+		if e.Section != "run" {
+			continue
+		}
+		for _, l := range e.Lines {
+			if f := strings.Fields(l); len(f) > 0 {
+				for i, a := range f {
+					f[i] = strings.ReplaceAll(a, "{out}", exe)
+				}
+				return f
+			}
+		}
 	}
 	return nil
 }

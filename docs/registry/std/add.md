@@ -4,7 +4,7 @@
 
 > + : addition
 
-truck [std](../std.md) · [source](../../../registry/std/add.pkg) · translated by [bintables/add](../bintables/add.md) · translated by [ctables/add](../ctables/add.md)
+truck [std](../std.md) · [source](../../../registry/std/add.pkg) · translated by [bintables/add](../bintables/add.md) · translated by [ctables/add](../ctables/add.md) · translated by [webtables/add](../webtables/add.md)
 
 Addition. Overflow wraps around (two's complement).
 

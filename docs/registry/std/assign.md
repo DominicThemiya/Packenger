@@ -4,7 +4,7 @@
 
 > Assign to a variable, a field, a slice element or a dereferenced pointer.
 
-truck [std](../std.md) · [source](../../../registry/std/assign.pkg) · translated by [bintables/assign](../bintables/assign.md) · translated by [ctables/assign](../ctables/assign.md)
+truck [std](../std.md) · [source](../../../registry/std/assign.pkg) · translated by [bintables/assign](../bintables/assign.md) · translated by [ctables/assign](../ctables/assign.md) · translated by [webtables/assign](../webtables/assign.md)
 
 ```
 total = total + 5

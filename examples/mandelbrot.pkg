@@ -1,0 +1,72 @@
+use std
+use rt/str
+
+// The Mandelbrot set as text, in integer fixed-point arithmetic.
+//
+//   packenger run examples/mandelbrot.pkg -- 100
+//
+// The optional argument is the width in characters (8 to 400). It runs
+// with every backend.
+
+const ONE = 4096        // fixed point: 1.0 is 4096
+const LIMIT = 200       // iterations before a point counts as inside
+
+fn parse(s: str) -> int
+  if len(s) == 0
+    return -1
+  end
+  let n = 0
+  for i = 0 to len(s) - 1
+    if s[i] < '0' || s[i] > '9' || n > 1000
+      return -1
+    end
+    n = n * 10 + ((s[i] as int) - 48)
+  end
+  return n
+end
+
+// iterations returns how many steps z = z² + c takes to leave the circle of
+// radius 2, or LIMIT if it doesn't.
+fn iterations(cx: int, cy: int) -> int
+  let x = 0
+  let y = 0
+  let i = 0
+  while i < LIMIT && x * x + y * y <= 4 * ONE * ONE
+    let t = (x * x - y * y) / ONE + cx
+    y = 2 * x * y / ONE + cy
+    x = t
+    i = i + 1
+  end
+  return i
+end
+
+let width = 72
+let args = argv
+if len(args) > 1
+  width = parse(args[1])
+  if width < 8 || width > 400
+    print "usage: mandelbrot [width], with a width from 8 to 400"
+    return 1
+  end
+end
+// characters are about twice as tall as they are wide
+let height = width * 2 / 5
+let shades = ".,:;=+*%#"
+let total = 0
+for row = 0 to height - 1
+  let line = sb_new()
+  // y from -1.2 to 1.2, x from -2.2 to 1.0
+  let cy = -4915 + row * 9830 / (height - 1)
+  for col = 0 to width - 1
+    let cx = -9011 + col * 13107 / (width - 1)
+    let n = iterations(cx, cy)
+    total = total + n
+    if n == LIMIT
+      sb_byte(line, '@')
+    else
+      sb_byte(line, shades[n % len(shades)])
+    end
+  end
+  print sb_str(line)
+end
+print str_concat("iterations: ", str_from_int(total))

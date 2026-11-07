@@ -4,7 +4,7 @@
 
 > Length of a slice or a string: len(x)
 
-truck [std](../std.md) · [source](../../../registry/std/len.pkg) · translated by [bintables/len](../bintables/len.md) · translated by [ctables/len](../ctables/len.md)
+truck [std](../std.md) · [source](../../../registry/std/len.pkg) · translated by [bintables/len](../bintables/len.md) · translated by [ctables/len](../ctables/len.md) · translated by [webtables/len](../webtables/len.md)
 
 ```
 print len("héllo")              // 6: the length in bytes

@@ -1,0 +1,14 @@
+doc Field access: `p.f`, a load with the field's offset as the memory offset.
+
+emit when self size 1
+  (i64.load8_u offset={f.offset} (i32.wrap_i64
+  {obj}
+  ))
+emit
+  (i64.load offset={f.offset} (i32.wrap_i64
+  {obj}
+  ))
+emit addr
+  (i64.add
+  {obj}
+  (i64.const {f.offset}))

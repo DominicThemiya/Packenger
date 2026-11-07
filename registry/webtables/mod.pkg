@@ -1,0 +1,9 @@
+doc Remainder: `%`, with the sign of the left operand, with `i64.rem_s`.
+      WebAssembly evaluates the operands left to right, as bintables does.
+  Dividing by zero, or the most negative number by -1, traps.
+
+emit
+  (i64.rem_s
+  {left}
+  {right}
+  )

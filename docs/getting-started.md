@@ -6,6 +6,8 @@
 - `nasm` and `ld` (from binutils), to assemble and link programs
 - x86-64 Linux, the platform the `bintables` backend targets
 - optionally `gcc` or `clang` as `cc`, for the C backend (`--target ctables`)
+- optionally `wat2wasm` (from wabt) and `wasmtime`, for the WebAssembly
+  backend (`--target webtables`)
 - network access to the registry (or a local copy, see below)
 
 ```sh
@@ -78,6 +80,23 @@ The [`examples/`](../examples) folder has:
 | `upcase.pkg` | `argv`, system calls, constants, `elif`, `break`: copies a file in upper case |
 | `tools.pkg` | the `rt` truck: runs `nasm` and `curl --parallel` and times them |
 | `exitcode.pkg` | the top-level `return` becomes the exit code |
+| `mandelbrot.pkg` | fixed-point arithmetic, `argv`, `rt/str`'s string builder |
+| `web/` | a package registry server written in Packenger, and a program that gets packages from it |
+
+### Your own registry
+
+[`examples/web`](../examples/web) is a package registry server written in
+Packenger, [`server.pkg`](../examples/web/server.pkg). It serves a folder
+of package files over HTTP, like the universal registry on GitHub, with a
+page listing every package at `/`. [`app.pkg`](../examples/web/app.pkg)
+gets its `acme` packages from it and everything else from the universal
+registry, because of the [package tree](publishing.md#package-trees) next
+to it:
+
+```sh
+packenger run examples/web/server.pkg -- examples/web/registry   # http://localhost:6464
+packenger run examples/web/app.pkg                               # in another terminal
+```
 
 ## Working offline
 

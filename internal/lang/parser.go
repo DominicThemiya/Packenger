@@ -331,8 +331,10 @@ func Parse(L *Lang, units []Unit) (*Program, error) {
 	}
 	p2 := newParser(L)
 	p2.types.Structs = p1.types.Structs
-	for _, v := range first.Globals {
-		p2.globals[v.Name] = &Var{Name: v.Name, Type: v.Type, Global: true}
+	for i, v := range first.Globals {
+		// globals are numbered in declaration order, so a backend can give
+		// each one a fixed address
+		p2.globals[v.Name] = &Var{Name: v.Name, Type: v.Type, Global: true, Index: i}
 	}
 	for name, c := range p1.consts {
 		p2.consts[name] = c

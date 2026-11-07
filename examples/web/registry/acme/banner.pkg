@@ -1,0 +1,34 @@
+doc Banners: a line of text in a box drawn with `+`, `-` and `|`.
+  ```
+  print banner("hello")
+  // +-------+
+  // | hello |
+  // +-------+
+  ```
+
+  | function | does |
+  |---|---|
+  | `banner(s: str) -> str` | `s` in a box, as three lines without a final newline |
+
+needs std rt/str
+code
+  fn banner_rule(width: int) -> str
+    let b = sb_new()
+    sb_byte(b, '+')
+    for i = 1 to width + 2
+      sb_byte(b, '-')
+    end
+    sb_byte(b, '+')
+    return sb_str(b)
+  end
+
+  fn banner(s: str) -> str
+    let rule = banner_rule(len(s))
+    let b = sb_new()
+    sb_add(b, rule)
+    sb_add(b, "\n| ")
+    sb_add(b, s)
+    sb_add(b, " |\n")
+    sb_add(b, rule)
+    return sb_str(b)
+  end

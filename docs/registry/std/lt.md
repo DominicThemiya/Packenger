@@ -4,7 +4,7 @@
 
 > < : less than
 
-truck [std](../std.md) · [source](../../../registry/std/lt.pkg) · translated by [bintables/lt](../bintables/lt.md) · translated by [ctables/lt](../ctables/lt.md)
+truck [std](../std.md) · [source](../../../registry/std/lt.pkg) · translated by [bintables/lt](../bintables/lt.md) · translated by [ctables/lt](../ctables/lt.md) · translated by [webtables/lt](../webtables/lt.md)
 
 Less than (signed for int).
 

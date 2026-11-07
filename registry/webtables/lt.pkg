@@ -1,0 +1,7 @@
+doc Less than: `<`, with `i64.lt_s`, widened to a word.
+
+emit
+  (i64.extend_i32_u (i64.lt_s
+  {left}
+  {right}
+  ))

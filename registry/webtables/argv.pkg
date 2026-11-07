@@ -1,0 +1,31 @@
+doc Command-line arguments: a `[str]`, built once from WASI `args_get`.
+
+emit
+  (call $__pk_argv)
+  @alloc
+  @wasi
+support
+  (global $__pk_argv_cache (mut i64) (i64.const 0))
+  (func $__pk_argv (result i64) (local $argc i32) (local $ptrs i32) (local $buf i32) (local $h i64) (local $d i64) (local $i i32) (local $s i32) (local $n i32) (local $str i64)
+    (if (i64.ne (global.get $__pk_argv_cache) (i64.const 0)) (then (return (global.get $__pk_argv_cache))))
+    (drop (call $__wasi_args_sizes_get (i32.const 16) (i32.const 20)))
+    (local.set $argc (i32.load (i32.const 16)))
+    (local.set $ptrs (i32.wrap_i64 (call $__pk_alloc (i64.extend_i32_u (i32.mul (local.get $argc) (i32.const 4))))))
+    (local.set $buf (i32.wrap_i64 (call $__pk_alloc (i64.extend_i32_u (i32.load (i32.const 20))))))
+    (drop (call $__wasi_args_get (local.get $ptrs) (local.get $buf)))
+    (local.set $h (call $__pk_alloc (i64.const 24)))
+    (local.set $d (call $__pk_alloc (i64.extend_i32_u (i32.mul (local.get $argc) (i32.const 8)))))
+    (i64.store (i32.wrap_i64 (local.get $h)) (local.get $d))
+    (i64.store offset=8 (i32.wrap_i64 (local.get $h)) (i64.extend_i32_u (local.get $argc)))
+    (i64.store offset=16 (i32.wrap_i64 (local.get $h)) (i64.extend_i32_u (local.get $argc)))
+    (block $done (loop $arg
+      (br_if $done (i32.ge_u (local.get $i) (local.get $argc)))
+      (local.set $s (i32.load (i32.add (local.get $ptrs) (i32.mul (local.get $i) (i32.const 4)))))
+      (local.set $n (call $__pk_strlen (local.get $s)))
+      (local.set $str (call $__pk_str (i64.extend_i32_u (local.get $n))))
+      (memory.copy (i32.add (i32.wrap_i64 (local.get $str)) (i32.const 8)) (local.get $s) (local.get $n))
+      (i64.store (i32.add (i32.wrap_i64 (local.get $d)) (i32.mul (local.get $i) (i32.const 8))) (local.get $str))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $arg)))
+    (global.set $__pk_argv_cache (local.get $h))
+    (local.get $h))

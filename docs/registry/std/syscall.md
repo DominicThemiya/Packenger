@@ -4,7 +4,7 @@
 
 > Linux system call: syscall(number, args...) -> int
 
-truck [std](../std.md) · [source](../../../registry/std/syscall.pkg) · translated by [bintables/syscall](../bintables/syscall.md) · translated by [ctables/syscall](../ctables/syscall.md)
+truck [std](../std.md) · [source](../../../registry/std/syscall.pkg) · translated by [bintables/syscall](../bintables/syscall.md) · translated by [ctables/syscall](../ctables/syscall.md) · translated by [webtables/syscall](../webtables/syscall.md)
 
 Makes a system call with up to six arguments and gives its result
 (negative values are errors, `-errno`).

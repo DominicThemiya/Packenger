@@ -4,7 +4,7 @@
 
 > - : negation
 
-truck [std](../std.md) · [source](../../../registry/std/neg.pkg) · translated by [bintables/neg](../bintables/neg.md) · translated by [ctables/neg](../ctables/neg.md)
+truck [std](../std.md) · [source](../../../registry/std/neg.pkg) · translated by [bintables/neg](../bintables/neg.md) · translated by [ctables/neg](../ctables/neg.md) · translated by [webtables/neg](../webtables/neg.md)
 
 `-x` negates an integer.
 

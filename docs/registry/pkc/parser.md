@@ -466,6 +466,9 @@ fn ps_parse(L: ptr Lang, units: ptr Vec) -> ptr PProg
     g.name = v.name
     g.ty = v.ty
     g.global = true
+    // globals are numbered in declaration order, so a backend can give
+    // each one a fixed address
+    g.index = i
     map_set(p2.globals, v.name, g as int)
   end
   for i = 0 to map_len(p1.consts) - 1

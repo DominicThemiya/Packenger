@@ -16,8 +16,8 @@ Flags can go before or after the file name.
 
 | flag | meaning |
 |---|---|
-| `--registry URL` | where packages are hosted. Default: the registry in the program's [lock file](publishing.md#lock-files) if it has one, else the env var `PACKENGER_REGISTRY`, else `https://raw.githubusercontent.com/DominicThemiya/Packenger/main/registry`. `file://` URLs work too. |
-| `--target TRUCK` | backend truck that translates the program (default `bintables`, NASM; `ctables` generates C and builds it with `cc -O2`) |
+| `--registry URL` | where packages are hosted; replaces the program's [package tree](publishing.md#package-trees), if any. Default: the registries in the program's [lock file](publishing.md#lock-files) if it has one, else its package tree, else the env var `PACKENGER_REGISTRY`, else `https://raw.githubusercontent.com/DominicThemiya/Packenger/main/registry`. `file://` URLs work too. |
+| `--target TRUCK` | backend truck that translates the program: `bintables` (default, NASM), `ctables` (C, built with `cc -O2`) or `webtables` (WebAssembly, built with `wat2wasm`, run with `wasmtime`) |
 | `-o FILE` | output file for `build` (default: the source name without `.pkg`) and `asm` (default: stdout) |
 | `-vb` | verbose build report on stderr (`-v` does the same) |
 

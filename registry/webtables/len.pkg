@@ -1,0 +1,10 @@
+doc Length: of a `str` (its first word) or a slice (the header's second word).
+
+emit when x str
+  (i64.load (i32.wrap_i64
+  {x}
+  ))
+emit
+  (i64.load offset=8 (i32.wrap_i64
+  {x}
+  ))

@@ -1,0 +1,7 @@
+doc Greater than: `>`, with `i64.gt_s`, widened to a word.
+
+emit
+  (i64.extend_i32_u (i64.gt_s
+  {left}
+  {right}
+  ))

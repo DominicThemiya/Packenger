@@ -4,7 +4,7 @@
 
 > <= : less than or equal
 
-truck [std](../std.md) · [source](../../../registry/std/le.pkg) · translated by [bintables/le](../bintables/le.md) · translated by [ctables/le](../ctables/le.md)
+truck [std](../std.md) · [source](../../../registry/std/le.pkg) · translated by [bintables/le](../bintables/le.md) · translated by [ctables/le](../ctables/le.md) · translated by [webtables/le](../webtables/le.md)
 
 Less than or equal (signed for int).
 

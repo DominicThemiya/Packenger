@@ -4,7 +4,7 @@
 
 > & : bitwise and
 
-truck [std](../std.md) · [source](../../../registry/std/band.pkg) · translated by [bintables/band](../bintables/band.md) · translated by [ctables/band](../ctables/band.md)
+truck [std](../std.md) · [source](../../../registry/std/band.pkg) · translated by [bintables/band](../bintables/band.md) · translated by [ctables/band](../ctables/band.md) · translated by [webtables/band](../webtables/band.md)
 
 ```
 print 12 & 10    // 8

@@ -4,7 +4,7 @@
 
 > The address of a string's bytes, for system calls: cstr(s) -> ptr u8
 
-truck [std](../std.md) · [source](../../../registry/std/cstr.pkg) · translated by [bintables/cstr](../bintables/cstr.md) · translated by [ctables/cstr](../ctables/cstr.md)
+truck [std](../std.md) · [source](../../../registry/std/cstr.pkg) · translated by [bintables/cstr](../bintables/cstr.md) · translated by [ctables/cstr](../ctables/cstr.md) · translated by [webtables/cstr](../webtables/cstr.md)
 
 Strings keep a zero byte after their contents, so `cstr(s)` can be passed
 wherever the operating system expects a C string, such as a file name for

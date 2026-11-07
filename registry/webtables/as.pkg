@@ -1,0 +1,13 @@
+doc Conversion: `x as T`. To `u8` keeps the low byte, to `bool` tests for non-zero.
+  Other conversions keep the word.
+
+emit when t u8
+  (i64.and
+  {v}
+  (i64.const 255))
+emit when t bool
+  (i64.extend_i32_u (i64.ne
+  {v}
+  (i64.const 0)))
+emit
+  {v}

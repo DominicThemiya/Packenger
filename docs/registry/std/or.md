@@ -4,7 +4,7 @@
 
 > || : logical or
 
-truck [std](../std.md) · [source](../../../registry/std/or.pkg) · translated by [bintables/or](../bintables/or.md) · translated by [ctables/or](../ctables/or.md)
+truck [std](../std.md) · [source](../../../registry/std/or.pkg) · translated by [bintables/or](../bintables/or.md) · translated by [ctables/or](../ctables/or.md) · translated by [webtables/or](../webtables/or.md)
 
 Logical or, short-circuit: the right side is evaluated only if the left side is false.
 

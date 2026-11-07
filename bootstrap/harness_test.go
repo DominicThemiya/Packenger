@@ -392,6 +392,104 @@ func TestLock(t *testing.T) {
 	}
 }
 
+// Package trees: "use pkg_tree" routes packages to registries with the
+// pkg_tree.pkg next to the program. Every compiler must route, report and
+// lock the same way, and reject broken trees with the same messages.
+func TestTree(t *testing.T) {
+	if _, err := exec.LookPath("nasm"); err != nil {
+		t.Skip("nasm not installed")
+	}
+	dir := t.TempDir()
+	acme, _ := filepath.Abs("../examples/web/registry")
+	prog := filepath.Join(dir, "app.pkg")
+	src, err := os.ReadFile("../examples/web/app.pkg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(prog, src, 0o644)
+	tree := filepath.Join(dir, "pkg_tree.pkg")
+	writeTree := func(text string) { os.WriteFile(tree, []byte(text), 0o644) }
+
+	// a route for acme; everything else from PACKENGER_REGISTRY
+	writeTree("// routes\ntree\n  acme   file://" + acme + "/\n")
+	o := agree(t, "run", prog)
+	if o.exit != 0 || !strings.Contains(o.stdout, "Built from your own registry") {
+		t.Fatalf("run with a tree:\n%s", o)
+	}
+	agreeIn(t, "report", unTimed, "run", "-vb", prog)
+
+	// "*" replaces the default registry; the longest prefix wins
+	reg, _ := filepath.Abs("../registry")
+	writeTree("tree\n  *  " + registry + "\n  acme  file:///nowhere\n  acme/banner  file://" + acme + "\n")
+	if o := agree(t, "run", prog); o.exit == 0 || !strings.Contains(o.stderr, "file:///nowhere/acme.pkg") {
+		t.Fatalf("acme should come from file:///nowhere:\n%s", o)
+	}
+	writeTree("tree\n  *  file://" + reg + "\n  acme  file://" + acme + "\n")
+	agreeIn(t, "report", unTimed, "asm", "-vb", "-o", filepath.Join(dir, "app.s"), prog)
+
+	// --registry replaces the whole tree
+	if o := agree(t, "run", "--registry", registry, prog); o.exit == 0 || !strings.Contains(o.stderr, "not found") {
+		t.Fatalf("--registry should ignore the routes:\n%s", o)
+	}
+
+	// locks record the routes, and builds use them
+	lockPath := filepath.Join(dir, "app.lock")
+	var lock []byte
+	for _, c := range compilers {
+		if o := run(t, c.bin, "lock", prog); o.exit != 0 {
+			t.Fatalf("%s lock failed:\n%s", c.name, o)
+		}
+		b, _ := os.ReadFile(lockPath)
+		if !bytes.Contains(b, []byte("\nroute acme file://"+acme+"\n")) {
+			t.Fatalf("%s lock has no route:\n%s", c.name, b)
+		}
+		if lock != nil && !bytes.Equal(b, lock) {
+			t.Fatalf("%s wrote a different lock file:\n%s", c.name, diff(string(lock), string(b)))
+		}
+		lock = b
+	}
+	agree(t, "lock", prog)
+	writeTree("tree\n  acme  file:///nowhere\n")
+	if o := agree(t, "run", prog); o.exit != 0 {
+		t.Fatalf("the lock's routes should win over the tree:\n%s", o)
+	}
+	agreeIn(t, "report", unTimed, "run", "-vb", prog)
+	for _, text := range []string{
+		"registry file://" + reg + "\nroute acme\n",
+		"registry file://" + reg + "\nroute acme a\nroute acme b\n",
+		"registry file://" + reg + "\nroute 9x a\n",
+	} {
+		os.WriteFile(lockPath, []byte(text), 0o644)
+		if o := agree(t, "run", prog); o.exit == 0 {
+			t.Errorf("lock %q was accepted:\n%s", text, o)
+		}
+	}
+	os.Remove(lockPath)
+
+	// broken trees
+	for _, text := range []string{
+		"",                               // no tree section
+		"  acme file:///x\n",             // a route before the section
+		"tree\n  acme\n",                 // no registry
+		"tree\n  acme file:///x extra\n", // too many fields
+		"tree\n  9acme file:///x\n",      // not a name
+		"tree\n  acme localhost:8080\n",  // not a URL
+		"tree\n  acme file:///x\n  acme file:///y\n",
+		"tree\n  * file:///x\n  * file:///y\n",
+		"tree\n  acme file:///x\ntree\n", // two sections
+		"routes\n  acme file:///x\n",     // unknown section
+	} {
+		writeTree(text)
+		if o := agree(t, "run", prog); o.exit == 0 {
+			t.Errorf("tree %q was accepted:\n%s", text, o)
+		}
+	}
+	os.Remove(tree)
+	if o := agree(t, "run", prog); o.exit == 0 || !strings.Contains(o.stderr, "pkg_tree") {
+		t.Fatalf("a missing tree was accepted:\n%s", o)
+	}
+}
+
 // The C backend: every compiler must generate the same C, and every program
 // must behave the same as with bintables.
 func TestCTables(t *testing.T) {
@@ -451,5 +549,57 @@ func TestCBootstrap(t *testing.T) {
 	c2 := build(filepath.Join(dir, "c1"), filepath.Join(dir, "c2"), "--target", "ctables")
 	if !bytes.Equal(c1, c2) {
 		t.Errorf("pkc compiled to C has no fixed point")
+	}
+}
+
+// webSkip are programs that need what WASI doesn't have: processes and the
+// environment.
+var webSkip = map[string]bool{"tools.pkg": true, "os.pkg": true}
+
+// The WebAssembly backend: every compiler must generate the same module, and
+// every program must behave the same as with bintables.
+func TestWebTables(t *testing.T) {
+	for _, tool := range []string{"nasm", "wat2wasm", "wasmtime"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skip(tool + " not installed")
+		}
+	}
+	for _, f := range corpus(t, "testdata/programs/*.pkg", "../examples/*.pkg", "../tests/rt/*.pkg") {
+		t.Run(filepath.Base(f), func(t *testing.T) {
+			if o := agree(t, "dump", "asm", "--target", "webtables", f); o.exit != 0 {
+				t.Fatalf("dump asm failed:\n%s", o)
+			}
+			src, _ := os.ReadFile(f)
+			if webSkip[filepath.Base(f)] || strings.Contains(string(src), "// output: varies") {
+				return
+			}
+			want := agree(t, "run", f)
+			if got := agree(t, "run", "--target", "webtables", f); got != want {
+				t.Fatalf("webtables and bintables differ:\n%s\nbintables:\n%s\nwebtables:\n%s", diff(want.String(), got.String()), want, got)
+			}
+		})
+	}
+}
+
+// pkc compiled to WebAssembly, running in wasmtime, must generate the same
+// module for itself as the Go compiler does.
+func TestWebBootstrap(t *testing.T) {
+	for _, tool := range []string{"wat2wasm", "wasmtime"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skip(tool + " not installed")
+		}
+	}
+	if testing.Short() {
+		t.Skip("the WebAssembly bootstrap takes a few seconds")
+	}
+	wasm := filepath.Join(t.TempDir(), "pkc.wasm")
+	if o := run(t, compilers[0].bin, "build", "--target", "webtables", "pkc.pkg", "-o", wasm); o.exit != 0 {
+		t.Fatalf("building pkc.wasm:\n%s", o)
+	}
+	want := run(t, compilers[0].bin, "asm", "--target", "webtables", "pkc.pkg")
+	// WASI programs can't read the environment, so the registry is a flag
+	got := run(t, "wasmtime", "run", "--dir=/", "--dir=.", wasm, "asm", "--target", "webtables", "pkc.pkg", "--registry", registry)
+	if got.exit != 0 || got.stdout != want.stdout {
+		t.Fatalf("pkc.wasm generated a different module for itself:\n%s\n%s", diff(want.stdout, got.stdout), got.stderr)
 	}
 }

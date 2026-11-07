@@ -1,0 +1,23 @@
+doc Conditional: `if`, `elif`, `else`, as nested blocks.
+  Each branch is a block that its condition leaves when false
+  (`br_if`), and that jumps to the end of the whole `if` when it is done:
+  the same order of evaluation as bintables' jumps.
+
+emit
+  (block ${L.end}
+  (block ${L.next}
+  (br_if ${L.next} (i64.eqz
+  {cond}
+  ))
+  {then}
+  (br ${L.end}))
+  {each elif}
+  (block ${it.L.next}
+  (br_if ${it.L.next} (i64.eqz
+  {it.cond}
+  ))
+  {it.then}
+  (br ${L.end}))
+  {end}
+  {else}
+  )

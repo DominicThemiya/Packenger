@@ -1,0 +1,108 @@
+doc Backend truck: translates Packenger packages to WebAssembly, for WASI runtimes and browsers.
+  `webtables` is the third backend for the same front end:
+  `--target webtables` writes a WebAssembly text module, converts it with
+  `wat2wasm` and runs it with `wasmtime` (see
+  [toolchain](webtables/toolchain.md)). The output runs on any CPU and OS
+  with a WASI runtime, and in browsers.
+
+  ```sh
+  packenger run examples/fib.pkg --target webtables
+  packenger build examples/fib.pkg --target webtables -o fib.wasm
+  wasmtime fib.wasm
+  packenger asm examples/fib.pkg --target webtables    # print the module
+  ```
+
+  ## Conventions
+
+  | what | how |
+  |---|---|
+  | every value | an `i64` on the WebAssembly operand stack |
+  | addresses | `i64` values, wrapped to `i32` for loads and stores |
+  | variables | in linear memory, because `&x` needs an address: a stack with frames like bintables', and a globals area |
+  | arguments | pushed on the memory stack right to left by the caller, popped by the callee |
+  | order of evaluation | the same as bintables |
+  | control flow | `block`, `loop` and `br`: structured, with the same labels |
+  | memory layout | strings, slices and structs as in every backend |
+  | operating system | Linux syscall numbers translated to WASI ([syscall](webtables/syscall.md)) |
+
+  ## Memory map
+
+  | addresses | contents |
+  |---|---|
+  | 0–15 | unused, so that `null` is not a valid address of anything |
+  | 16–63 | scratch for WASI calls: I/O vectors, results, the clock |
+  | 64–95 | the buffer `print` converts numbers in |
+  | 128–279 | runtime messages and constants |
+  | 1024–1151 | scratch for file status |
+  | 4096–65535 | globals, 8 bytes each, in declaration order |
+  | 65536–8454143 | the stack (8 MB), growing down from 8454144 |
+  | 8454144– | the heap, growing up with `memory.grow` |
+
+  ## Limits
+
+  - No processes: `fork`, `execve` and `wait4` have no WASI equivalent, so
+    `rt/os`'s `os_run` returns an error, and `pkc` can't run here.
+  - Reading a directory (`getdents64`) and `getcwd` are not translated.
+  - Linear memory is 32-bit: at most 4 GB.
+  - Variables live in memory, not in WebAssembly locals, so the code is
+    closer to bintables than to ctables in speed.
+
+truck
+  add
+  addr
+  alloc
+  and
+  argv
+  as
+  assign
+  band
+  bor
+  break
+  bxor
+  call
+  const
+  continue
+  cstr
+  deref
+  div
+  do
+  dot
+  eq
+  exprstmt
+  false
+  fn
+  ge
+  global
+  gt
+  if
+  index
+  int
+  le
+  len
+  let
+  lt
+  make
+  mod
+  mul
+  ne
+  neg
+  new
+  not
+  null
+  or
+  panic
+  print
+  program
+  return
+  shl
+  shr
+  storage
+  str
+  streq
+  sub
+  syscall
+  toolchain
+  true
+  var
+  wasi
+  while

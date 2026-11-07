@@ -4,7 +4,7 @@
 
 > == : equal
 
-truck [std](../std.md) · [source](../../../registry/std/eq.pkg) · translated by [bintables/eq](../bintables/eq.md) · translated by [ctables/eq](../ctables/eq.md)
+truck [std](../std.md) · [source](../../../registry/std/eq.pkg) · translated by [bintables/eq](../bintables/eq.md) · translated by [ctables/eq](../ctables/eq.md) · translated by [webtables/eq](../webtables/eq.md)
 
 Equal: compares two values of the same type and gives a `bool`.
 

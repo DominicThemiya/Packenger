@@ -1,0 +1,9 @@
+doc Variable read: a word loaded from the variable's address in linear memory.
+  Every variable lives in memory, because WebAssembly locals have no
+  address and `&x` must work; see [storage](storage.md). The `addr`
+  section gives the address as a word, for `&x`.
+
+emit
+  (i64.load {addr})
+emit addr
+  (i64.extend_i32_u {addr})

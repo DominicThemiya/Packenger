@@ -1,0 +1,10 @@
+// The package tree of app.pkg, which loads it with "use pkg_tree".
+// Packages named acme or acme/... come from a registry server started with
+//
+//   packenger run examples/web/server.pkg -- examples/web/registry
+//
+// and everything else from the universal registry, which needs no line: the
+// default is $PACKENGER_REGISTRY, else the Packenger repository on GitHub.
+// A "*" line would replace that default.
+tree
+  acme  http://localhost:6464

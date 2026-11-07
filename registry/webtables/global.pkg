@@ -1,0 +1,7 @@
+doc Global variable: stores the initial value, if any, where it is declared.
+
+emit when value missing
+emit
+  (i64.store {name.addr}
+  {value}
+  )

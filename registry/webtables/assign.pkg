@@ -1,0 +1,23 @@
+doc Assignment: to a variable, or through an address (fields, elements, `*p`).
+  The value is evaluated before the address, as in bintables, so it is
+  pushed on the memory stack first and popped by the store. Targets of
+  size 1 (`u8`) store one byte.
+
+emit when target is var
+  (i64.store {target.addr}
+  {value}
+  )
+emit when target size 1
+  (call $__pk_push
+  {value}
+  )
+  (i64.store8 (i32.wrap_i64
+  {target!addr}
+  ) (call $__pk_pop))
+emit
+  (call $__pk_push
+  {value}
+  )
+  (i64.store (i32.wrap_i64
+  {target!addr}
+  ) (call $__pk_pop))

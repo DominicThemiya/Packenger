@@ -236,6 +236,11 @@ Notes from the port so far:
   bootstrap/pkc.pkg` gives a pkc that builds the same pkc, byte for byte,
   as the NASM one, and reaches its own fixed point (`TestCBootstrap`). It
   generates code 2.6× faster than pkc built with bintables.
+- pkc builds for WebAssembly: `packenger build --target webtables
+  bootstrap/pkc.pkg -o pkc.wasm`, run with `wasmtime`, generates the same
+  module for itself, so the fixed point holds in WebAssembly too
+  (`TestWebBootstrap`). It can't assemble (no processes in WASI), and it
+  can't read the environment, so it needs `--registry`.
 - Lock files (`pkc/lock`) hash packages with `rt/sha256`, written in
   Packenger, and pin GitHub registries by asking the API with `curl`.
   `TestLock` checks both compilers write the same lock and reject the same
@@ -261,7 +266,7 @@ phase 0 harness before moving on:
 
 | package | Go source | must match |
 |---|---|---|
-| `pkc/fetch` | `registry.go` | same package bytes; same errors |
+| `pkc/fetch` | `registry.go`, `tree.go` | same package bytes and routes; same errors |
 | `pkc/lock` | `lock.go` | same lock files; same errors |
 | `pkc/pkgfile` | `pkgfile.go` | same parsed structure for every registry package |
 | `pkc/lexer` | `lexer.go` | `dump tokens` |

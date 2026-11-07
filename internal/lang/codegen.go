@@ -497,10 +497,10 @@ func (g *Gen) value(expr string, n *Node, params map[string][]string, it *Node) 
 
 // storage renders where variable v lives (section local, param or global),
 // or declares a global (section decl), with the target's storage package.
-// Its templates see {name}, {index} (the slot or parameter number) and
-// {offset} (the slot's distance from the frame pointer in bintables'
-// layout: 8(index+1) below it for locals, 16+8·index above it for
-// parameters).
+// Its templates see {name}, {index} (the slot, parameter or global
+// number) and {offset}: the slot's distance from the frame pointer in
+// bintables' layout (8(index+1) below it for locals, 16+8·index above it
+// for parameters), or 8·index for globals.
 func (g *Gen) storage(v *Var, section string) (string, error) {
 	pkg := g.Back["storage"]
 	if pkg == nil {
@@ -512,6 +512,8 @@ func (g *Gen) storage(v *Var, section string) (string, error) {
 		offset = 8 * (v.Index + 1)
 	case "param":
 		offset = 16 + 8*v.Index
+	case "global", "decl":
+		offset = 8 * v.Index
 	}
 	params := map[string][]string{"name": {v.Name}, "index": {strconv.Itoa(v.Index)}, "offset": {strconv.Itoa(offset)}}
 	for _, e := range pkg.Emits {
@@ -588,6 +590,14 @@ func (g *Gen) attr(n *Node, a string) (string, error) {
 				b[i] = strconv.Itoa(int(n.Str[i]))
 			}
 			return strings.Join(b, ","), nil
+		}
+	case "hex":
+		if n.Kind == "str" {
+			var b strings.Builder
+			for i := 0; i < len(n.Str); i++ {
+				fmt.Fprintf(&b, "\\%02x", n.Str[i])
+			}
+			return b.String(), nil
 		}
 	case "count":
 		return strconv.Itoa(len(n.Items)), nil

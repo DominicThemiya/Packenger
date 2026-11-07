@@ -1,0 +1,8 @@
+doc Shift left: `<<`, the count taken modulo 64, with `i64.shl`.
+      WebAssembly evaluates the operands left to right, as bintables does.
+
+emit
+  (i64.shl
+  {left}
+  {right}
+  )

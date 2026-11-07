@@ -1,0 +1,7 @@
+doc Greater than or equal: `>=`, with `i64.ge_s`, widened to a word.
+
+emit
+  (i64.extend_i32_u (i64.ge_s
+  {left}
+  {right}
+  ))

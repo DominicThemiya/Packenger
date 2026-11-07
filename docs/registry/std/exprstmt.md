@@ -4,7 +4,7 @@
 
 > An expression used as a statement.
 
-truck [std](../std.md) · [source](../../../registry/std/exprstmt.pkg) · translated by [bintables/exprstmt](../bintables/exprstmt.md) · translated by [ctables/exprstmt](../ctables/exprstmt.md)
+truck [std](../std.md) · [source](../../../registry/std/exprstmt.pkg) · translated by [bintables/exprstmt](../bintables/exprstmt.md) · translated by [ctables/exprstmt](../ctables/exprstmt.md) · translated by [webtables/exprstmt](../webtables/exprstmt.md)
 
 Lets an expression stand on its own line, which is how functions are
 called for their side effects, including functions that return nothing:

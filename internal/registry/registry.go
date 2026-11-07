@@ -27,6 +27,7 @@ var nameRe = regexp.MustCompile(`^[A-Za-z_\-'?!+*<>=&|~^][\w\-'?!+*<>=&|~^]*(/[A
 // Registry resolves package names to source text.
 type Registry struct {
 	Base   string
+	Routes []Route // packages under these prefixes come from other registries
 	Client *http.Client
 
 	mu    sync.Mutex
@@ -53,13 +54,29 @@ func New(base string) *Registry {
 // ValidName reports whether name can be a hosted package name.
 func ValidName(name string) bool { return nameRe.MatchString(name) }
 
+// A Route sends the packages under a name prefix to their own registry:
+// prefix "acme" covers "acme" and "acme/json".
+type Route struct{ Prefix, Base string }
+
+// BaseFor returns the registry that hosts package name: the route with the
+// longest matching prefix, else Base.
+func (r *Registry) BaseFor(name string) string {
+	base, best := r.Base, -1
+	for _, rt := range r.Routes {
+		if (name == rt.Prefix || strings.HasPrefix(name, rt.Prefix+"/")) && len(rt.Prefix) > best {
+			base, best = rt.Base, len(rt.Prefix)
+		}
+	}
+	return base
+}
+
 // URL returns where package name is hosted.
 func (r *Registry) URL(name string) string {
 	segs := strings.Split(name, "/")
 	for i, s := range segs {
 		segs[i] = url.PathEscape(s)
 	}
-	return r.Base + "/" + strings.Join(segs, "/") + ".pkg"
+	return strings.TrimRight(r.BaseFor(name), "/") + "/" + strings.Join(segs, "/") + ".pkg"
 }
 
 // Fetch downloads package name. Concurrent calls for the same name share one

@@ -1,0 +1,5 @@
+doc Allocation: `new T`, a zeroed struct from `$__pk_alloc`.
+
+emit
+  (call $__pk_alloc (i64.const {t.alloc}))
+  @alloc

@@ -1,0 +1,4 @@
+doc `true`: the word 1.
+
+emit
+  (i64.const 1)

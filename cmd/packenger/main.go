@@ -108,19 +108,41 @@ func run(args []string, srcOut *string) (int, error) {
 	explicitReg := false
 	fs.Visit(func(f *flag.Flag) { explicitReg = explicitReg || f.Name == "registry" })
 
-	// A lock file next to the source pins the registry (unless --registry
+	// "use pkg_tree" routes packages to registries with pkg_tree.pkg next to
+	// the source, unless --registry is given.
+	var routes []registry.Route
+	if b, err := os.ReadFile(src); err == nil && !(cmd == "dump" && stage == "pkg") && lang.UsesTree(string(b)) {
+		tree, err := registry.ReadTree(src)
+		if err != nil {
+			return 1, err
+		}
+		if !explicitReg {
+			routes = tree.Routes
+			if tree.Default != "" {
+				*regURL = tree.Default
+			}
+		}
+	}
+
+	// A lock file next to the source pins the registries (unless --registry
 	// is given) and the version of every package. "lock" itself ignores it
-	// and pins the registry as it is now.
+	// and pins the registries as they are now.
 	var lock *registry.Lock
 	var sums map[string]string
 	lockPath := registry.LockPath(src)
 	switch {
 	case cmd == "lock":
-		pinned, _, err := registry.New(*regURL).Pin(context.Background())
+		r := registry.New(*regURL)
+		pinned, _, err := r.Pin(context.Background())
 		if err != nil {
 			return 1, err
 		}
 		*regURL = pinned
+		for i, rt := range routes {
+			if routes[i].Base, _, err = r.PinURL(context.Background(), rt.Base); err != nil {
+				return 1, err
+			}
+		}
 		sums = map[string]string{}
 	case !(cmd == "dump" && stage == "pkg"):
 		l, err := registry.ReadLock(lockPath, src)
@@ -129,14 +151,20 @@ func run(args []string, srcOut *string) (int, error) {
 		}
 		if l != nil && !explicitReg {
 			*regURL = l.Registry
+			routes = l.Routes
 		}
 		lock = l
 	}
-	c := &lang.Compiler{Registry: registry.New(*regURL), Target: *target, Lock: lock, Sums: sums}
+	reg := registry.New(*regURL)
+	reg.Routes = routes
+	c := &lang.Compiler{Registry: reg, Target: *target, Lock: lock, Sums: sums}
 	var rep *ui.Reporter
 	if *verbose {
 		rep = ui.NewReporter(os.Stderr, ui.Colors(os.Stderr))
 		rep.Header(cmd, src, exe, *regURL, *target)
+		for _, rt := range routes {
+			rep.Route(rt.Prefix, rt.Base)
+		}
 		if lock != nil {
 			rep.Lock(lockPath, len(lock.Sums))
 		}
@@ -168,12 +196,16 @@ func run(args []string, srcOut *string) (int, error) {
 		res.Tree(os.Stdout, *target)
 		return 0, nil
 	case "lock":
-		text := registry.FormatLock(filepath.Base(src), *regURL, sums)
+		text := registry.FormatLock(filepath.Base(src), *regURL, routes, sums)
 		if err := os.WriteFile(lockPath, []byte(text), 0o644); err != nil {
 			return 1, err
 		}
 		done("")
-		ui.Locked(os.Stdout, ui.Colors(os.Stdout), lockPath, len(sums), *regURL)
+		var shown [][2]string
+		for _, rt := range routes {
+			shown = append(shown, [2]string{rt.Prefix, rt.Base})
+		}
+		ui.Locked(os.Stdout, ui.Colors(os.Stdout), lockPath, len(sums), *regURL, shown)
 		return 0, nil
 	case "build":
 		if err := lang.Assemble(res.Asm, exe, res.Back["toolchain"], c.Report); err != nil {
@@ -192,7 +224,14 @@ func run(args []string, srcOut *string) (int, error) {
 			return 1, err
 		}
 		done("running")
-		p := exec.Command(exe, progArgs...)
+		// some targets need a runtime to run their output
+		runner := lang.RunCommand(res.Back["toolchain"], exe)
+		if runner == nil {
+			runner = []string{exe}
+		} else if _, err := exec.LookPath(runner[0]); err != nil {
+			return 1, fmt.Errorf("%s is not installed (target %s runs programs with it)", runner[0], *target)
+		}
+		p := exec.Command(runner[0], append(runner[1:], progArgs...)...)
 		p.Stdin, p.Stdout, p.Stderr = os.Stdin, os.Stdout, os.Stderr
 		if err := p.Run(); err != nil {
 			var ee *exec.ExitError

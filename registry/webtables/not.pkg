@@ -1,0 +1,6 @@
+doc Logical not: `!`.
+
+emit
+  (i64.extend_i32_u (i64.eqz
+  {operand}
+  ))

@@ -16,12 +16,69 @@ packages named so far, then the ones they need, and so on) runs in
 parallel: goroutines in the Go compiler, one `curl --parallel` in `pkc`.
 
 Any static file host works. Point the compiler at it with `--registry URL`
-or `PACKENGER_REGISTRY`. For working on packages locally use a `file://`
-URL:
+or `PACKENGER_REGISTRY`, or route some packages to it from a
+[package tree](#package-trees). For working on packages locally use a
+`file://` URL:
 
 ```sh
 export PACKENGER_REGISTRY=file://$PWD/registry
 ```
+
+## Package trees
+
+A program can say where its packages come from. With the line
+`use pkg_tree` among its `use` lines, the compiler reads `pkg_tree.pkg`
+from the program's folder before fetching anything:
+
+```
+// pkg_tree.pkg
+tree
+  acme   http://localhost:6464
+  *      https://raw.githubusercontent.com/DominicThemiya/Packenger/main/registry
+```
+
+```
+// app.pkg
+use pkg_tree
+use std
+use acme          // from localhost:6464
+```
+
+- **Routes go by name prefix.** `acme` covers the package `acme` and
+  everything under it, such as `acme/banner`. When several prefixes match,
+  the longest wins, so `acme/net` can be routed somewhere other than the
+  rest of `acme`.
+- **`*` is the default** for packages no route matches. Without a `*` line
+  they come from where they would anyway: `PACKENGER_REGISTRY`, else the
+  universal registry. So a tree that only adds your own packages needs no
+  `*` line.
+- **Registries** are `http://`, `https://` or `file://` URLs.
+- **The format** is like a package file: a `tree` section, with one
+  `<prefix> <registry>` line per route, indented, and `//` comments.
+  `pkg_tree` is not fetched, so it can't be the name of a hosted package.
+- **What wins:** `--registry` replaces the whole tree (useful for pointing
+  everything at a mirror). Otherwise a [lock file](#lock-files) records the
+  tree's routes and is used instead of it; run `packenger lock` again after
+  changing the tree. `packenger run -vb` shows the routes in use.
+
+## Hosting a registry
+
+A registry is just files, so anything that serves a folder over HTTP will
+do: a web server, GitHub, or [`examples/web/server.pkg`](../examples/web/server.pkg),
+a registry server written in Packenger:
+
+```sh
+packenger build examples/web/server.pkg -o pkg-server
+./pkg-server my-registry                  # http://127.0.0.1:6464
+./pkg-server my-registry 8000 0.0.0.0     # port 8000, reachable from other machines
+```
+
+It serves `<folder>/<name>.pkg` at `/<name>.pkg`, and at `/` a page
+listing every package with its summary and the `pkg_tree.pkg` lines for
+using it. Lay the folder out like [`registry/`](../registry): a truck
+`acme` is `acme.pkg`, and its member `banner` is `acme/banner.pkg`.
+[`examples/web`](../examples/web) has a small one, and a program that uses
+it.
 
 ## Lock files
 
@@ -57,8 +114,11 @@ bintables/add dd39c7c9960213d9d3054d373579a7afbe90f8d6061888a50ac7cefaeb3626be
 - **What is locked:** every front-end package the program loads, and the
   *whole* backend truck, so editing the program to use another construct
   doesn't need a new lock. Changing the `use` lines does.
+- **The package tree's routes** are pinned the same way, one
+  `route <prefix> <registry>` line each, and builds use them instead of
+  `pkg_tree.pkg`.
 - **Which registry is used:** `--registry` if given, else the lock's, else
-  `PACKENGER_REGISTRY`, else the default. With `--registry` the hashes are
+  the package tree's `*`, else `PACKENGER_REGISTRY`, else the default. With `--registry` the hashes are
   still checked, so a lock also catches a mirror serving different files.
 
 To update to the newest packages, run `packenger lock` again. It ignores
@@ -72,8 +132,8 @@ with the program they belong to.
 2. Add `<name>` to the truck's member list in `registry/<truck>.pkg`.
 3. If it is a syntax package without `expand`, add a backend package with
    the same name, `registry/bintables/<name>.pkg`, and list it in
-   `registry/bintables.pkg`. Do the same in `ctables`, the C backend; the
-   harness runs every test program with both.
+   `registry/bintables.pkg`. Do the same in `ctables` (C) and `webtables`
+   (WebAssembly); the harness runs every test program with all three.
 4. Try it with the local registry, then regenerate the docs and run the
    tests:
 

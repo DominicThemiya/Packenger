@@ -1,0 +1,8 @@
+doc Bitwise or: `|`, with `i64.or`.
+      WebAssembly evaluates the operands left to right, as bintables does.
+
+emit
+  (i64.or
+  {left}
+  {right}
+  )

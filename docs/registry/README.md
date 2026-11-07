@@ -206,58 +206,117 @@ format.
   - [ctables/true](ctables/true.md) — `true`: the word 1.
   - [ctables/var](ctables/var.md) — Variable read: the variable's storage.
   - [ctables/while](ctables/while.md) — Loop: `while cond ... [next ...] end`, with `goto`.
+- **[webtables](webtables.md)** (truck) — Backend truck: translates Packenger packages to WebAssembly, for WASI runtimes and browsers.
+  - [webtables/add](webtables/add.md) — Addition: `+`, with `i64.add`.
+  - [webtables/addr](webtables/addr.md) — Address-of: `&x`, from the operand's `addr` section.
+  - [webtables/alloc](webtables/alloc.md) — Helper: the heap. `$__pk_alloc(n)` returns `n` zeroed bytes, 8-aligned.
+  - [webtables/and](webtables/and.md) — Logical and: `&&`, short-circuiting, with a typed `if`.
+  - [webtables/argv](webtables/argv.md) — Command-line arguments: a `[str]`, built once from WASI `args_get`.
+  - [webtables/as](webtables/as.md) — Conversion: `x as T`. To `u8` keeps the low byte, to `bool` tests for non-zero.
+  - [webtables/assign](webtables/assign.md) — Assignment: to a variable, or through an address (fields, elements, `*p`).
+  - [webtables/band](webtables/band.md) — Bitwise and: `&`, with `i64.and`.
+  - [webtables/bor](webtables/bor.md) — Bitwise or: `|`, with `i64.or`.
+  - [webtables/break](webtables/break.md) — `break`: leaves the innermost loop's outer block.
+  - [webtables/bxor](webtables/bxor.md) — Bitwise xor: `^`, with `i64.xor`.
+  - [webtables/call](webtables/call.md) — Function call: the arguments are pushed on the memory stack right to left.
+  - [webtables/const](webtables/const.md) — Constant declaration: nothing at run time; uses are replaced by the value.
+  - [webtables/continue](webtables/continue.md) — `continue`: leaves the body block of the innermost loop, so its `next` block runs.
+  - [webtables/cstr](webtables/cstr.md) — C string: the address of a string's bytes, which end with a 0.
+  - [webtables/deref](webtables/deref.md) — Dereference: `*p`, a word or (for `u8`) a byte.
+  - [webtables/div](webtables/div.md) — Division: `/`, rounding toward zero, with `i64.div_s`.
+  - [webtables/do](webtables/do.md) — Block: `do ... end`. Scoping is resolved by the compiler, so it is just the body.
+  - [webtables/dot](webtables/dot.md) — Field access: `p.f`, a load with the field's offset as the memory offset.
+  - [webtables/eq](webtables/eq.md) — Equality: `==`, by value; strings by content.
+  - [webtables/exprstmt](webtables/exprstmt.md) — Expression statement: evaluates the expression and drops the value.
+  - [webtables/false](webtables/false.md) — `false`: the word 0.
+  - [webtables/fn](webtables/fn.md) — Function definition: a WebAssembly function of no parameters returning an `i64`.
+  - [webtables/ge](webtables/ge.md) — Greater than or equal: `>=`, with `i64.ge_s`, widened to a word.
+  - [webtables/global](webtables/global.md) — Global variable: stores the initial value, if any, where it is declared.
+  - [webtables/gt](webtables/gt.md) — Greater than: `>`, with `i64.gt_s`, widened to a word.
+  - [webtables/if](webtables/if.md) — Conditional: `if`, `elif`, `else`, as nested blocks.
+  - [webtables/index](webtables/index.md) — Indexing: `x[i]` on a `str` or a slice, with a bounds check.
+  - [webtables/int](webtables/int.md) — Integer literal: an `i64.const`.
+  - [webtables/le](webtables/le.md) — Less than or equal: `<=`, with `i64.le_s`, widened to a word.
+  - [webtables/len](webtables/len.md) — Length: of a `str` (its first word) or a slice (the header's second word).
+  - [webtables/let](webtables/let.md) — Variable declaration: stores the value at the variable's address.
+  - [webtables/lt](webtables/lt.md) — Less than: `<`, with `i64.lt_s`, widened to a word.
+  - [webtables/make](webtables/make.md) — Slice allocation: `make([T], n)`: a 24-byte header and `n` zeroed elements.
+  - [webtables/mod](webtables/mod.md) — Remainder: `%`, with the sign of the left operand, with `i64.rem_s`.
+  - [webtables/mul](webtables/mul.md) — Multiplication: `*`, with `i64.mul`.
+  - [webtables/ne](webtables/ne.md) — Inequality: `!=`, by value; strings by content.
+  - [webtables/neg](webtables/neg.md) — Negation: unary `-`, as `0 - x`.
+  - [webtables/new](webtables/new.md) — Allocation: `new T`, a zeroed struct from `$__pk_alloc`.
+  - [webtables/not](webtables/not.md) — Logical not: `!`.
+  - [webtables/null](webtables/null.md) — `null`: the word 0.
+  - [webtables/or](webtables/or.md) — Logical or: `||`, short-circuiting, with a typed `if`.
+  - [webtables/panic](webtables/panic.md) — Helper: runtime errors. Writes the message to stderr and exits with status 2.
+  - [webtables/print](webtables/print.md) — Print: writes an `int`, `u8`, `bool` or `str` and a newline to stdout.
+  - [webtables/program](webtables/program.md) — Program skeleton: WASI imports, memory, runtime, data, functions and `_start`.
+  - [webtables/return](webtables/return.md) — Return: restores the stack pointer, then returns the value.
+  - [webtables/shl](webtables/shl.md) — Shift left: `<<`, the count taken modulo 64, with `i64.shl`.
+  - [webtables/shr](webtables/shr.md) — Arithmetic shift right: `>>`, the count taken modulo 64, with `i64.shr_s`.
+  - [webtables/storage](webtables/storage.md) — Where variables live: a stack in linear memory, and a globals area.
+  - [webtables/str](webtables/str.md) — String literal: a passive data segment, copied to the heap on first use.
+  - [webtables/streq](webtables/streq.md) — Helper: string equality, `$__pk_streq(a, b)`: the lengths, then the bytes.
+  - [webtables/sub](webtables/sub.md) — Subtraction: `-`, with `i64.sub`.
+  - [webtables/syscall](webtables/syscall.md) — System call: Linux syscall numbers, translated to WASI.
+  - [webtables/toolchain](webtables/toolchain.md) — How to build and run: `wat2wasm`, then a WASI runtime.
+  - [webtables/true](webtables/true.md) — `true`: the word 1.
+  - [webtables/var](webtables/var.md) — Variable read: a word loaded from the variable's address in linear memory.
+  - [webtables/wasi](webtables/wasi.md) — Helper: the WASI runtime: Linux syscalls translated to WASI calls.
+  - [webtables/while](webtables/while.md) — Loop: `while cond ... [next ...] end`, as a `loop` inside a `block`.
 
 ## How front end and back end pair up
 
 | syntax package | becomes |
 |---|---|
-| [std/add](std/add.md) | [bintables/add](bintables/add.md), [ctables/add](ctables/add.md) |
-| [std/addr](std/addr.md) | [bintables/addr](bintables/addr.md), [ctables/addr](ctables/addr.md) |
-| [std/and](std/and.md) | [bintables/and](bintables/and.md), [ctables/and](ctables/and.md) |
-| [std/argv](std/argv.md) | [bintables/argv](bintables/argv.md), [ctables/argv](ctables/argv.md) |
-| [std/as](std/as.md) | [bintables/as](bintables/as.md), [ctables/as](ctables/as.md) |
-| [std/assign](std/assign.md) | [bintables/assign](bintables/assign.md), [ctables/assign](ctables/assign.md) |
-| [std/band](std/band.md) | [bintables/band](bintables/band.md), [ctables/band](ctables/band.md) |
-| [std/bor](std/bor.md) | [bintables/bor](bintables/bor.md), [ctables/bor](ctables/bor.md) |
-| [std/break](std/break.md) | [bintables/break](bintables/break.md), [ctables/break](ctables/break.md) |
-| [std/bxor](std/bxor.md) | [bintables/bxor](bintables/bxor.md), [ctables/bxor](ctables/bxor.md) |
-| [std/call](std/call.md) | [bintables/call](bintables/call.md), [ctables/call](ctables/call.md) |
-| [std/const](std/const.md) | [bintables/const](bintables/const.md), [ctables/const](ctables/const.md) |
-| [std/continue](std/continue.md) | [bintables/continue](bintables/continue.md), [ctables/continue](ctables/continue.md) |
-| [std/cstr](std/cstr.md) | [bintables/cstr](bintables/cstr.md), [ctables/cstr](ctables/cstr.md) |
-| [std/deref](std/deref.md) | [bintables/deref](bintables/deref.md), [ctables/deref](ctables/deref.md) |
-| [std/div](std/div.md) | [bintables/div](bintables/div.md), [ctables/div](ctables/div.md) |
-| [std/do](std/do.md) | [bintables/do](bintables/do.md), [ctables/do](ctables/do.md) |
-| [std/dot](std/dot.md) | [bintables/dot](bintables/dot.md), [ctables/dot](ctables/dot.md) |
-| [std/eq](std/eq.md) | [bintables/eq](bintables/eq.md), [ctables/eq](ctables/eq.md) |
-| [std/exprstmt](std/exprstmt.md) | [bintables/exprstmt](bintables/exprstmt.md), [ctables/exprstmt](ctables/exprstmt.md) |
-| [std/false](std/false.md) | [bintables/false](bintables/false.md), [ctables/false](ctables/false.md) |
-| [std/fn](std/fn.md) | [bintables/fn](bintables/fn.md), [ctables/fn](ctables/fn.md) |
+| [std/add](std/add.md) | [bintables/add](bintables/add.md), [ctables/add](ctables/add.md), [webtables/add](webtables/add.md) |
+| [std/addr](std/addr.md) | [bintables/addr](bintables/addr.md), [ctables/addr](ctables/addr.md), [webtables/addr](webtables/addr.md) |
+| [std/and](std/and.md) | [bintables/and](bintables/and.md), [ctables/and](ctables/and.md), [webtables/and](webtables/and.md) |
+| [std/argv](std/argv.md) | [bintables/argv](bintables/argv.md), [ctables/argv](ctables/argv.md), [webtables/argv](webtables/argv.md) |
+| [std/as](std/as.md) | [bintables/as](bintables/as.md), [ctables/as](ctables/as.md), [webtables/as](webtables/as.md) |
+| [std/assign](std/assign.md) | [bintables/assign](bintables/assign.md), [ctables/assign](ctables/assign.md), [webtables/assign](webtables/assign.md) |
+| [std/band](std/band.md) | [bintables/band](bintables/band.md), [ctables/band](ctables/band.md), [webtables/band](webtables/band.md) |
+| [std/bor](std/bor.md) | [bintables/bor](bintables/bor.md), [ctables/bor](ctables/bor.md), [webtables/bor](webtables/bor.md) |
+| [std/break](std/break.md) | [bintables/break](bintables/break.md), [ctables/break](ctables/break.md), [webtables/break](webtables/break.md) |
+| [std/bxor](std/bxor.md) | [bintables/bxor](bintables/bxor.md), [ctables/bxor](ctables/bxor.md), [webtables/bxor](webtables/bxor.md) |
+| [std/call](std/call.md) | [bintables/call](bintables/call.md), [ctables/call](ctables/call.md), [webtables/call](webtables/call.md) |
+| [std/const](std/const.md) | [bintables/const](bintables/const.md), [ctables/const](ctables/const.md), [webtables/const](webtables/const.md) |
+| [std/continue](std/continue.md) | [bintables/continue](bintables/continue.md), [ctables/continue](ctables/continue.md), [webtables/continue](webtables/continue.md) |
+| [std/cstr](std/cstr.md) | [bintables/cstr](bintables/cstr.md), [ctables/cstr](ctables/cstr.md), [webtables/cstr](webtables/cstr.md) |
+| [std/deref](std/deref.md) | [bintables/deref](bintables/deref.md), [ctables/deref](ctables/deref.md), [webtables/deref](webtables/deref.md) |
+| [std/div](std/div.md) | [bintables/div](bintables/div.md), [ctables/div](ctables/div.md), [webtables/div](webtables/div.md) |
+| [std/do](std/do.md) | [bintables/do](bintables/do.md), [ctables/do](ctables/do.md), [webtables/do](webtables/do.md) |
+| [std/dot](std/dot.md) | [bintables/dot](bintables/dot.md), [ctables/dot](ctables/dot.md), [webtables/dot](webtables/dot.md) |
+| [std/eq](std/eq.md) | [bintables/eq](bintables/eq.md), [ctables/eq](ctables/eq.md), [webtables/eq](webtables/eq.md) |
+| [std/exprstmt](std/exprstmt.md) | [bintables/exprstmt](bintables/exprstmt.md), [ctables/exprstmt](ctables/exprstmt.md), [webtables/exprstmt](webtables/exprstmt.md) |
+| [std/false](std/false.md) | [bintables/false](bintables/false.md), [ctables/false](ctables/false.md), [webtables/false](webtables/false.md) |
+| [std/fn](std/fn.md) | [bintables/fn](bintables/fn.md), [ctables/fn](ctables/fn.md), [webtables/fn](webtables/fn.md) |
 | [std/for](std/for.md) | expands into [std/do](std/do.md), [std/let](std/let.md), [std/while](std/while.md), [std/le](std/le.md), [std/assign](std/assign.md), [std/add](std/add.md) |
-| [std/ge](std/ge.md) | [bintables/ge](bintables/ge.md), [ctables/ge](ctables/ge.md) |
-| [std/global](std/global.md) | [bintables/global](bintables/global.md), [ctables/global](ctables/global.md) |
-| [std/gt](std/gt.md) | [bintables/gt](bintables/gt.md), [ctables/gt](ctables/gt.md) |
-| [std/if](std/if.md) | [bintables/if](bintables/if.md), [ctables/if](ctables/if.md) |
-| [std/index](std/index.md) | [bintables/index](bintables/index.md), [ctables/index](ctables/index.md) |
-| [std/le](std/le.md) | [bintables/le](bintables/le.md), [ctables/le](ctables/le.md) |
-| [std/len](std/len.md) | [bintables/len](bintables/len.md), [ctables/len](ctables/len.md) |
-| [std/let](std/let.md) | [bintables/let](bintables/let.md), [ctables/let](ctables/let.md) |
-| [std/lt](std/lt.md) | [bintables/lt](bintables/lt.md), [ctables/lt](ctables/lt.md) |
-| [std/make](std/make.md) | [bintables/make](bintables/make.md), [ctables/make](ctables/make.md) |
-| [std/mod](std/mod.md) | [bintables/mod](bintables/mod.md), [ctables/mod](ctables/mod.md) |
-| [std/mul](std/mul.md) | [bintables/mul](bintables/mul.md), [ctables/mul](ctables/mul.md) |
-| [std/ne](std/ne.md) | [bintables/ne](bintables/ne.md), [ctables/ne](ctables/ne.md) |
-| [std/neg](std/neg.md) | [bintables/neg](bintables/neg.md), [ctables/neg](ctables/neg.md) |
-| [std/new](std/new.md) | [bintables/new](bintables/new.md), [ctables/new](ctables/new.md) |
-| [std/not](std/not.md) | [bintables/not](bintables/not.md), [ctables/not](ctables/not.md) |
-| [std/null](std/null.md) | [bintables/null](bintables/null.md), [ctables/null](ctables/null.md) |
-| [std/or](std/or.md) | [bintables/or](bintables/or.md), [ctables/or](ctables/or.md) |
-| [std/print](std/print.md) | [bintables/print](bintables/print.md), [ctables/print](ctables/print.md) |
-| [std/return](std/return.md) | [bintables/return](bintables/return.md), [ctables/return](ctables/return.md) |
-| [std/shl](std/shl.md) | [bintables/shl](bintables/shl.md), [ctables/shl](ctables/shl.md) |
-| [std/shr](std/shr.md) | [bintables/shr](bintables/shr.md), [ctables/shr](ctables/shr.md) |
+| [std/ge](std/ge.md) | [bintables/ge](bintables/ge.md), [ctables/ge](ctables/ge.md), [webtables/ge](webtables/ge.md) |
+| [std/global](std/global.md) | [bintables/global](bintables/global.md), [ctables/global](ctables/global.md), [webtables/global](webtables/global.md) |
+| [std/gt](std/gt.md) | [bintables/gt](bintables/gt.md), [ctables/gt](ctables/gt.md), [webtables/gt](webtables/gt.md) |
+| [std/if](std/if.md) | [bintables/if](bintables/if.md), [ctables/if](ctables/if.md), [webtables/if](webtables/if.md) |
+| [std/index](std/index.md) | [bintables/index](bintables/index.md), [ctables/index](ctables/index.md), [webtables/index](webtables/index.md) |
+| [std/le](std/le.md) | [bintables/le](bintables/le.md), [ctables/le](ctables/le.md), [webtables/le](webtables/le.md) |
+| [std/len](std/len.md) | [bintables/len](bintables/len.md), [ctables/len](ctables/len.md), [webtables/len](webtables/len.md) |
+| [std/let](std/let.md) | [bintables/let](bintables/let.md), [ctables/let](ctables/let.md), [webtables/let](webtables/let.md) |
+| [std/lt](std/lt.md) | [bintables/lt](bintables/lt.md), [ctables/lt](ctables/lt.md), [webtables/lt](webtables/lt.md) |
+| [std/make](std/make.md) | [bintables/make](bintables/make.md), [ctables/make](ctables/make.md), [webtables/make](webtables/make.md) |
+| [std/mod](std/mod.md) | [bintables/mod](bintables/mod.md), [ctables/mod](ctables/mod.md), [webtables/mod](webtables/mod.md) |
+| [std/mul](std/mul.md) | [bintables/mul](bintables/mul.md), [ctables/mul](ctables/mul.md), [webtables/mul](webtables/mul.md) |
+| [std/ne](std/ne.md) | [bintables/ne](bintables/ne.md), [ctables/ne](ctables/ne.md), [webtables/ne](webtables/ne.md) |
+| [std/neg](std/neg.md) | [bintables/neg](bintables/neg.md), [ctables/neg](ctables/neg.md), [webtables/neg](webtables/neg.md) |
+| [std/new](std/new.md) | [bintables/new](bintables/new.md), [ctables/new](ctables/new.md), [webtables/new](webtables/new.md) |
+| [std/not](std/not.md) | [bintables/not](bintables/not.md), [ctables/not](ctables/not.md), [webtables/not](webtables/not.md) |
+| [std/null](std/null.md) | [bintables/null](bintables/null.md), [ctables/null](ctables/null.md), [webtables/null](webtables/null.md) |
+| [std/or](std/or.md) | [bintables/or](bintables/or.md), [ctables/or](ctables/or.md), [webtables/or](webtables/or.md) |
+| [std/print](std/print.md) | [bintables/print](bintables/print.md), [ctables/print](ctables/print.md), [webtables/print](webtables/print.md) |
+| [std/return](std/return.md) | [bintables/return](bintables/return.md), [ctables/return](ctables/return.md), [webtables/return](webtables/return.md) |
+| [std/shl](std/shl.md) | [bintables/shl](bintables/shl.md), [ctables/shl](ctables/shl.md), [webtables/shl](webtables/shl.md) |
+| [std/shr](std/shr.md) | [bintables/shr](bintables/shr.md), [ctables/shr](ctables/shr.md), [webtables/shr](webtables/shr.md) |
 | [std/struct](std/struct.md) | *(no backend package)* |
-| [std/sub](std/sub.md) | [bintables/sub](bintables/sub.md), [ctables/sub](ctables/sub.md) |
-| [std/syscall](std/syscall.md) | [bintables/syscall](bintables/syscall.md), [ctables/syscall](ctables/syscall.md) |
-| [std/true](std/true.md) | [bintables/true](bintables/true.md), [ctables/true](ctables/true.md) |
-| [std/while](std/while.md) | [bintables/while](bintables/while.md), [ctables/while](ctables/while.md) |
+| [std/sub](std/sub.md) | [bintables/sub](bintables/sub.md), [ctables/sub](ctables/sub.md), [webtables/sub](webtables/sub.md) |
+| [std/syscall](std/syscall.md) | [bintables/syscall](bintables/syscall.md), [ctables/syscall](ctables/syscall.md), [webtables/syscall](webtables/syscall.md) |
+| [std/true](std/true.md) | [bintables/true](bintables/true.md), [ctables/true](ctables/true.md), [webtables/true](webtables/true.md) |
+| [std/while](std/while.md) | [bintables/while](bintables/while.md), [ctables/while](ctables/while.md), [webtables/while](webtables/while.md) |

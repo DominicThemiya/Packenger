@@ -1,0 +1,107 @@
+doc Helper: the WASI runtime: Linux syscalls translated to WASI calls.
+  Included with `@wasi` by every package that talks to the system:
+  `$__pk_syscall` (used by [syscall](syscall.md)) pops the arguments and
+  dispatches on the Linux syscall number to `$__pk_sys`; `$__pk_rw` reads
+  or writes through `fd_read`/`fd_write` (also used by `print` and
+  panics); `$__pk_path` picks the preopened directory for a path;
+  `$__pk_errno` translates WASI error codes to negative Linux ones.
+
+emit
+  @alloc
+support
+  (global $__pk_pfd (mut i32) (i32.const 4))
+  (global $__pk_pptr (mut i32) (i32.const 0))
+  (global $__pk_plen (mut i32) (i32.const 0))
+  (func $__pk_strlen (param $s i32) (result i32) (local $n i32)
+    (block $done (loop $next
+      (br_if $done (i32.eqz (i32.load8_u (i32.add (local.get $s) (local.get $n)))))
+      (local.set $n (i32.add (local.get $n) (i32.const 1)))
+      (br $next)))
+    (local.get $n))
+  (func $__pk_syscall (param $count i32) (result i64) (local $w i32) (local $a i64) (local $b i64) (local $c i64)
+    (local.set $w (global.get $sp))
+    (if (i32.gt_u (local.get $count) (i32.const 1)) (then (local.set $a (i64.load offset=8 (local.get $w)))))
+    (if (i32.gt_u (local.get $count) (i32.const 2)) (then (local.set $b (i64.load offset=16 (local.get $w)))))
+    (if (i32.gt_u (local.get $count) (i32.const 3)) (then (local.set $c (i64.load offset=24 (local.get $w)))))
+    (global.set $sp (i32.add (local.get $w) (i32.mul (local.get $count) (i32.const 8))))
+    (call $__pk_sys (i64.load (local.get $w)) (local.get $a) (local.get $b) (local.get $c)))
+  (func $__pk_errno (param $e i32) (result i64)
+    (if (i32.eqz (local.get $e)) (then (return (i64.const 0))))
+    (if (i32.eq (local.get $e) (i32.const 44)) (then (return (i64.const -2))))
+    (if (i32.eq (local.get $e) (i32.const 20)) (then (return (i64.const -17))))
+    (if (i32.eq (local.get $e) (i32.const 2)) (then (return (i64.const -13))))
+    (if (i32.eq (local.get $e) (i32.const 76)) (then (return (i64.const -13))))
+    (if (i32.eq (local.get $e) (i32.const 63)) (then (return (i64.const -1))))
+    (if (i32.eq (local.get $e) (i32.const 8)) (then (return (i64.const -9))))
+    (if (i32.eq (local.get $e) (i32.const 28)) (then (return (i64.const -22))))
+    (if (i32.eq (local.get $e) (i32.const 31)) (then (return (i64.const -21))))
+    (if (i32.eq (local.get $e) (i32.const 54)) (then (return (i64.const -20))))
+    (if (i32.eq (local.get $e) (i32.const 55)) (then (return (i64.const -39))))
+    (if (i32.eq (local.get $e) (i32.const 52)) (then (return (i64.const -38))))
+    (if (i32.eq (local.get $e) (i32.const 59)) (then (return (i64.const -25))))
+    (i64.const -5))
+  (func $__pk_rw (param $write i32) (param $fd i64) (param $buf i64) (param $len i64) (result i64) (local $e i32)
+    (i32.store (i32.const 16) (i32.wrap_i64 (local.get $buf)))
+    (i32.store (i32.const 20) (i32.wrap_i64 (local.get $len)))
+    (if (local.get $write)
+      (then (local.set $e (call $__wasi_fd_write (i32.wrap_i64 (local.get $fd)) (i32.const 16) (i32.const 1) (i32.const 24))))
+      (else (local.set $e (call $__wasi_fd_read (i32.wrap_i64 (local.get $fd)) (i32.const 16) (i32.const 1) (i32.const 24)))))
+    (if (local.get $e) (then (return (call $__pk_errno (local.get $e)))))
+    (i64.extend_i32_u (i32.load (i32.const 24))))
+  (func $__pk_path (param $p i64) (local $s i32)
+    (local.set $s (i32.wrap_i64 (local.get $p)))
+    (global.set $__pk_pfd (i32.const 4))
+    (if (i32.eq (i32.load8_u (local.get $s)) (i32.const 47)) (then
+      (global.set $__pk_pfd (i32.const 3))
+      (local.set $s (i32.add (local.get $s) (i32.const 1)))))
+    (global.set $__pk_pptr (local.get $s))
+    (global.set $__pk_plen (call $__pk_strlen (local.get $s)))
+    (if (i32.eqz (global.get $__pk_plen)) (then
+      (global.set $__pk_pptr (i32.const 273))
+      (global.set $__pk_plen (i32.const 1)))))
+  (func $__pk_open (param $path i64) (param $flags i64) (result i64) (local $f i32) (local $o i32) (local $e i32)
+    (call $__pk_path (local.get $path))
+    (local.set $f (i32.wrap_i64 (local.get $flags)))
+    (if (i32.and (local.get $f) (i32.const 64)) (then (local.set $o (i32.or (local.get $o) (i32.const 1)))))
+    (if (i32.and (local.get $f) (i32.const 65536)) (then (local.set $o (i32.or (local.get $o) (i32.const 2)))))
+    (if (i32.and (local.get $f) (i32.const 128)) (then (local.set $o (i32.or (local.get $o) (i32.const 4)))))
+    (if (i32.and (local.get $f) (i32.const 512)) (then (local.set $o (i32.or (local.get $o) (i32.const 8)))))
+    (local.set $e (call $__wasi_path_open (global.get $__pk_pfd) (i32.const 1) (global.get $__pk_pptr) (global.get $__pk_plen)
+      (local.get $o) (i64.const 536870911) (i64.const 536870911)
+      (i32.and (i32.shr_u (local.get $f) (i32.const 10)) (i32.const 1)) (i32.const 24)))
+    (if (local.get $e) (then (return (call $__pk_errno (local.get $e)))))
+    (i64.extend_i32_u (i32.load (i32.const 24))))
+  (func $__pk_sys (param $n i64) (param $a i64) (param $b i64) (param $c i64) (result i64) (local $e i32)
+    (if (i64.le_u (local.get $n) (i64.const 1)) (then
+      (return (call $__pk_rw (i32.wrap_i64 (local.get $n)) (local.get $a) (local.get $b) (local.get $c)))))
+    (if (i64.eq (local.get $n) (i64.const 2)) (then (return (call $__pk_open (local.get $a) (local.get $b)))))
+    (if (i64.eq (local.get $n) (i64.const 3)) (then
+      (return (call $__pk_errno (call $__wasi_fd_close (i32.wrap_i64 (local.get $a)))))))
+    (if (i64.eq (local.get $n) (i64.const 9)) (then (return (call $__pk_alloc (local.get $b)))))
+    (if (i64.eq (local.get $n) (i64.const 16)) (then
+      (local.set $e (call $__wasi_fd_fdstat_get (i32.wrap_i64 (local.get $a)) (i32.const 1024)))
+      (if (i32.and (i32.eqz (local.get $e)) (i32.eq (i32.load8_u (i32.const 1024)) (i32.const 2)))
+        (then (return (i64.const 0))))
+      (return (i64.const -25))))
+    (if (i64.eq (local.get $n) (i64.const 21)) (then
+      (call $__pk_path (local.get $a))
+      (return (call $__pk_errno (call $__wasi_path_filestat_get (global.get $__pk_pfd) (i32.const 1) (global.get $__pk_pptr) (global.get $__pk_plen) (i32.const 1024))))))
+    (if (i64.eq (local.get $n) (i64.const 39)) (then (return (i64.const 1))))
+    (if (i32.or (i64.eq (local.get $n) (i64.const 60)) (i64.eq (local.get $n) (i64.const 231))) (then
+      (call $__wasi_proc_exit (i32.wrap_i64 (local.get $a)))))
+    (if (i64.eq (local.get $n) (i64.const 83)) (then
+      (call $__pk_path (local.get $a))
+      (return (call $__pk_errno (call $__wasi_path_create_directory (global.get $__pk_pfd) (global.get $__pk_pptr) (global.get $__pk_plen))))))
+    (if (i64.eq (local.get $n) (i64.const 84)) (then
+      (call $__pk_path (local.get $a))
+      (return (call $__pk_errno (call $__wasi_path_remove_directory (global.get $__pk_pfd) (global.get $__pk_pptr) (global.get $__pk_plen))))))
+    (if (i64.eq (local.get $n) (i64.const 87)) (then
+      (call $__pk_path (local.get $a))
+      (return (call $__pk_errno (call $__wasi_path_unlink_file (global.get $__pk_pfd) (global.get $__pk_pptr) (global.get $__pk_plen))))))
+    (if (i64.eq (local.get $n) (i64.const 228)) (then
+      (local.set $e (call $__wasi_clock_time_get (i32.wrap_i64 (local.get $a)) (i64.const 1) (i32.const 32)))
+      (if (local.get $e) (then (return (call $__pk_errno (local.get $e)))))
+      (i64.store (i32.wrap_i64 (local.get $b)) (i64.div_u (i64.load (i32.const 32)) (i64.const 1000000000)))
+      (i64.store offset=8 (i32.wrap_i64 (local.get $b)) (i64.rem_u (i64.load (i32.const 32)) (i64.const 1000000000)))
+      (return (i64.const 0))))
+    (i64.const -38))

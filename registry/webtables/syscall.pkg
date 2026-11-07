@@ -1,0 +1,34 @@
+doc System call: Linux syscall numbers, translated to WASI.
+  The arguments are pushed right to left, like bintables, and
+  `$__pk_syscall` pops them. Results are Linux's: a count, or a negative
+  Linux error number (WASI's error codes are translated back).
+
+  | Linux syscall | WASI |
+  |---|---|
+  | 0 `read`, 1 `write` | `fd_read`, `fd_write` |
+  | 2 `open` | `path_open`; `O_CREAT`, `O_EXCL`, `O_TRUNC`, `O_DIRECTORY`, `O_APPEND` are translated |
+  | 3 `close` | `fd_close` |
+  | 9 `mmap` | anonymous memory only: `$__pk_alloc` from [alloc](alloc.md), which is zeroed like `mmap`'s |
+  | 16 `ioctl` | `fd_fdstat_get`: succeeds for a character device, as `TCGETS` does for a terminal |
+  | 21 `access` | `path_filestat_get` |
+  | 39 `getpid` | always 1 |
+  | 60 `exit`, 231 `exit_group` | `proc_exit` |
+  | 83 `mkdir`, 84 `rmdir`, 87 `unlink` | `path_create_directory`, `path_remove_directory`, `path_unlink_file` |
+  | 228 `clock_gettime` | `clock_time_get` |
+  | anything else | `-ENOSYS` (-38) |
+
+  Paths starting with `/` are looked up in preopened directory 3, the
+  filesystem root; other paths in preopened directory 4, the working
+  directory (see [toolchain](toolchain.md)). Processes (`fork`, `execve`,
+  `wait4`) have no WASI equivalent, so `rt/os`'s `os_run` and the
+  programs that need it don't work.
+
+emit
+  (block (result i64)
+  {each args reverse}
+  (call $__pk_push
+  {it}
+  )
+  {end}
+  (call $__pk_syscall (i32.const {args.count})))
+  @wasi

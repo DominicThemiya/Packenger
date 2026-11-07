@@ -1,0 +1,21 @@
+doc Where variables live: a stack in linear memory, and a globals area.
+  Each section is an `i32` address expression. Functions keep their frame
+  pointer in the WebAssembly local `$fp`, laid out like bintables: locals
+  below it, parameters above it.
+
+  | section | for | address |
+  |---|---|---|
+  | `local` | a local variable | `$fp - 8(slot + 1)` |
+  | `param` | a parameter | `$fp + 16 + 8·index` |
+  | `global` | a `global` | `4096 + 8·index`, in the globals area |
+  | `decl` | declaring a global | nothing: memory starts zeroed |
+
+  See the [truck page](../webtables.md) for the whole memory map.
+
+emit local
+  (i32.sub (local.get $fp) (i32.const {offset}))
+emit param
+  (i32.add (local.get $fp) (i32.const {offset}))
+emit global
+  (i32.add (i32.const 4096) (i32.const {offset}))
+emit decl

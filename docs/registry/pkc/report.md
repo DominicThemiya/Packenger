@@ -178,6 +178,15 @@ fn rp_header(cmd: str, src: str, out: str, registry: str, target: str)
   rp_line(u_cat4("  ", rp_c(rp_pad("target", 9), UI_DIM), " ", target))
 end
 
+// rp_route notes that the packages under prefix come from their own registry.
+fn rp_route(prefix: str, registry: str)
+  if !rp_on
+    return
+  end
+  let reg = u_after(u_after(registry, "https://"), "http://")
+  rp_line(u_cat4("  ", rp_c(rp_pad("route", 9), UI_DIM), " ", u_cat4(prefix, " ", rp_c("→", UI_DIM), u_cat(" ", reg))))
+end
+
 // rp_lock notes that the build is checked against a lock file.
 fn rp_lock(path: str, packages: int)
   if !rp_on

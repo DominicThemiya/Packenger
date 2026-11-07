@@ -1,0 +1,4 @@
+doc `false`: the word 0.
+
+emit
+  (i64.const 0)

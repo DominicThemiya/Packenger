@@ -4,7 +4,7 @@
 
 > Indexing: a[i] for slices (assignable) and s[i] for strings (a u8).
 
-truck [std](../std.md) · [source](../../../registry/std/index.pkg) · translated by [bintables/index](../bintables/index.md) · translated by [ctables/index](../ctables/index.md)
+truck [std](../std.md) · [source](../../../registry/std/index.pkg) · translated by [bintables/index](../bintables/index.md) · translated by [ctables/index](../ctables/index.md) · translated by [webtables/index](../webtables/index.md)
 
 ```
 let a = make([int], 3)

@@ -4,7 +4,7 @@
 
 > Address of a place: &x
 
-truck [std](../std.md) · [source](../../../registry/std/addr.pkg) · translated by [bintables/addr](../bintables/addr.md) · translated by [ctables/addr](../ctables/addr.md)
+truck [std](../std.md) · [source](../../../registry/std/addr.pkg) · translated by [bintables/addr](../bintables/addr.md) · translated by [ctables/addr](../ctables/addr.md) · translated by [webtables/addr](../webtables/addr.md)
 
 Gives a pointer to a variable, a field or a slice element.
 

@@ -1,0 +1,6 @@
+doc Variable declaration: stores the value at the variable's address.
+
+emit
+  (i64.store {name.addr}
+  {value}
+  )

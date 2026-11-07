@@ -4,7 +4,7 @@
 
 > Skip to the next iteration of the innermost loop: continue
 
-truck [std](../std.md) · [source](../../../registry/std/continue.pkg) · translated by [bintables/continue](../bintables/continue.md) · translated by [ctables/continue](../ctables/continue.md)
+truck [std](../std.md) · [source](../../../registry/std/continue.pkg) · translated by [bintables/continue](../bintables/continue.md) · translated by [ctables/continue](../ctables/continue.md) · translated by [webtables/continue](../webtables/continue.md)
 
 In a `while` loop, `continue` runs the `next` block (if any) and then
 checks the condition again; in `for` it advances the loop variable.

@@ -4,7 +4,7 @@
 
 > Conditional: if cond ... [elif cond ...]* [else ...] end
 
-truck [std](../std.md) · [source](../../../registry/std/if.pkg) · translated by [bintables/if](../bintables/if.md) · translated by [ctables/if](../ctables/if.md)
+truck [std](../std.md) · [source](../../../registry/std/if.pkg) · translated by [bintables/if](../bintables/if.md) · translated by [ctables/if](../ctables/if.md) · translated by [webtables/if](../webtables/if.md)
 
 Runs the block of the first condition that is `true`, otherwise the
 `else` block, if there is one. Conditions must be `bool`.

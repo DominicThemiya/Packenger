@@ -4,7 +4,7 @@
 
 > | : bitwise or
 
-truck [std](../std.md) · [source](../../../registry/std/bor.pkg) · translated by [bintables/bor](../bintables/bor.md) · translated by [ctables/bor](../ctables/bor.md)
+truck [std](../std.md) · [source](../../../registry/std/bor.pkg) · translated by [bintables/bor](../bintables/bor.md) · translated by [ctables/bor](../ctables/bor.md) · translated by [webtables/bor](../webtables/bor.md)
 
 ```
 print 12 | 3     // 15

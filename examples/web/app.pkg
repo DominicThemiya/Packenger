@@ -1,0 +1,22 @@
+use pkg_tree
+use std
+use rt/str
+use acme
+
+// A program built from two registries: std and rt from the universal one,
+// acme from the server in this folder, as routed by pkg_tree.pkg.
+//
+//   packenger run examples/web/server.pkg -- examples/web/registry &
+//   packenger run examples/web/app.pkg
+
+print banner("Built from your own registry")
+print ""
+// fib(5) to fib(12), as a bar chart
+let a = 5
+let b = 8
+for n = 5 to 12
+  print bars_row(str_concat(str_concat("fib(", str_from_int(n)), ")"), a, 144, 36)
+  let t = a + b
+  a = b
+  b = t
+end

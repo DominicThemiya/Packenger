@@ -1,0 +1,8 @@
+doc Addition: `+`, with `i64.add`.
+      WebAssembly evaluates the operands left to right, as bintables does.
+
+emit
+  (i64.add
+  {left}
+  {right}
+  )

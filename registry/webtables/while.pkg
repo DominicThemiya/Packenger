@@ -1,0 +1,16 @@
+doc Loop: `while cond ... [next ...] end`, as a `loop` inside a `block`.
+  `break` leaves the outer block (`{L.end}`); `continue` leaves the inner
+  block around the body (`{L.next}`), so the `next` block (`{step}`) runs
+  before the loop branches back to `{L.top}`.
+
+emit
+  (block ${L.end}
+  (loop ${L.top}
+  (block ${L.next}
+  (br_if ${L.end} (i64.eqz
+  {cond}
+  ))
+  {body}
+  )
+  {step}
+  (br ${L.top})))

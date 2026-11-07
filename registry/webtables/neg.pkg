@@ -1,0 +1,6 @@
+doc Negation: unary `-`, as `0 - x`.
+
+emit
+  (i64.sub (i64.const 0)
+  {operand}
+  )

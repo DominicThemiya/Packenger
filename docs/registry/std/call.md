@@ -4,7 +4,7 @@
 
 > Function call: name(arg, ...)
 
-truck [std](../std.md) · [source](../../../registry/std/call.pkg) · translated by [bintables/call](../bintables/call.md) · translated by [ctables/call](../ctables/call.md)
+truck [std](../std.md) · [source](../../../registry/std/call.pkg) · translated by [bintables/call](../bintables/call.md) · translated by [ctables/call](../ctables/call.md) · translated by [webtables/call](../webtables/call.md)
 
 ```
 print gcd(84, 36)

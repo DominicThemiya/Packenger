@@ -1,0 +1,7 @@
+doc Less than or equal: `<=`, with `i64.le_s`, widened to a word.
+
+emit
+  (i64.extend_i32_u (i64.le_s
+  {left}
+  {right}
+  ))

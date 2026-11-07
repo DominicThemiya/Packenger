@@ -67,7 +67,10 @@ fn dr_scan_uses(src: str, uses: ptr Vec, body: ptr str) -> bool
     if rest != "" && !str_starts(rest, "//")
       break
     end
-    u_push(uses, str_slice(t, j, k))
+    // the package tree is read by the caller, not fetched
+    if str_slice(t, j, k) != "pkg_tree"
+      u_push(uses, str_slice(t, j, k))
+    end
     vec_set(lines, i, "" as int)
   end
   if vec_len(uses) == 0
@@ -75,6 +78,37 @@ fn dr_scan_uses(src: str, uses: ptr Vec, body: ptr str) -> bool
   end
   *body = u_join(lines, "\n")
   return true
+end
+
+// dr_uses_tree reports whether source src has the line "use pkg_tree",
+// which routes its packages with the pkg_tree.pkg next to it.
+fn dr_uses_tree(src: str) -> bool
+  let lines = u_split(src, '\n')
+  for i = 0 to vec_len(lines) - 1
+    let t = u_trim(u_get(lines, i))
+    if t == "" || str_starts(t, "//")
+      continue
+    end
+    if !(str_starts(t, "use") && len(t) > 3 && u_is_space(t[3]))
+      return false
+    end
+    let j = 3
+    while j < len(t) && u_is_space(t[j])
+      j = j + 1
+    end
+    let k = j
+    while k < len(t) && !u_is_space(t[k])
+      k = k + 1
+    end
+    let rest = u_trim(str_slice(t, k, len(t)))
+    if rest != "" && !str_starts(rest, "//")
+      return false
+    end
+    if str_slice(t, j, k) == "pkg_tree"
+      return true
+    end
+  end
+  return false
 end
 
 fn dr_dep(name: str, why: str) -> ptr DrDep
@@ -412,6 +446,31 @@ fn dr_toolchain(tc: ptr PfFile, file: ptr str, cmds: ptr Vec, tools: ptr Vec) ->
     return u_fail(u_cat(tc.name, " needs an 'emit file' section naming the source file and an 'emit' section of commands"))
   end
   return true
+end
+
+// dr_run_command is how to run an executable built for the target, from
+// the toolchain package's "emit run" section with {out} replaced by exe;
+// null means it runs by itself.
+fn dr_run_command(tc: ptr PfFile, exe: str) -> ptr Vec
+  if tc == null
+    return null
+  end
+  for i = 0 to vec_len(tc.emits) - 1
+    let e = vec_get(tc.emits, i) as ptr PfEmit
+    if e.section == "run"
+      for k = 0 to vec_len(e.lines) - 1
+        let f = u_fields(u_get(e.lines, k))
+        if vec_len(f) > 0
+          let out = vec_new()
+          for j = 0 to vec_len(f) - 1
+            u_push(out, u_replace(u_get(f, j), "{out}", exe))
+          end
+          return out
+        end
+      end
+    end
+  end
+  return null
 end
 
 // dr_assemble turns the generated source into an executable with the

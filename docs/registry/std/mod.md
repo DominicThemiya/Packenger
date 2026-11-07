@@ -4,7 +4,7 @@
 
 > % : remainder (sign follows the left operand, like C)
 
-truck [std](../std.md) · [source](../../../registry/std/mod.pkg) · translated by [bintables/mod](../bintables/mod.md) · translated by [ctables/mod](../ctables/mod.md)
+truck [std](../std.md) · [source](../../../registry/std/mod.pkg) · translated by [bintables/mod](../bintables/mod.md) · translated by [ctables/mod](../ctables/mod.md) · translated by [webtables/mod](../webtables/mod.md)
 
 Remainder, with the sign of the left operand (like C). A zero divisor crashes the program.
 

@@ -1,0 +1,14 @@
+doc Inequality: `!=`, by value; strings by content.
+      Strings go through `$__pk_streq` from [streq](streq.md).
+
+emit when left str
+  (i64.xor (i64.const 1) (call $__pk_streq
+  {left}
+  {right}
+  ))
+  @streq
+emit
+  (i64.extend_i32_u (i64.ne
+  {left}
+  {right}
+  ))

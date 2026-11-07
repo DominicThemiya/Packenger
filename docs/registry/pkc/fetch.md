@@ -14,6 +14,10 @@ path segments escaped like Go's `url.PathEscape`. `fe_fetch` reads a
 parallel downloads. If that fails, each package is fetched again on its
 own, so errors carry the same messages as the Go compiler.
 
+Routes send the packages under a name prefix to their own registry
+(`fe_routes`, `fe_base_for`); `fe_read_tree` reads them from the
+`pkg_tree.pkg` next to a program (port of internal/registry/tree.go).
+
 ## Needs
 
 - [std](../std.md)
@@ -113,6 +117,117 @@ fn fe_url(base: str, name: str) -> str
   return u_cat4(u_rtrim_byte(base, '/'), "/", u_join(esc, "/"), ".pkg")
 end
 
+// the routes in use: name prefixes and their registries (strs), or null
+global fe_route_prefixes: ptr Vec
+global fe_route_bases: ptr Vec
+
+fn fe_routes(prefixes: ptr Vec, bases: ptr Vec)
+  fe_route_prefixes = prefixes
+  fe_route_bases = bases
+end
+
+// fe_base_for returns the registry that hosts package name: the route
+// with the longest matching prefix, else base.
+fn fe_base_for(base: str, name: str) -> str
+  if fe_route_prefixes == null
+    return base
+  end
+  let best = -1
+  for i = 0 to vec_len(fe_route_prefixes) - 1
+    let p = u_get(fe_route_prefixes, i)
+    if (name == p || str_starts(name, u_cat(p, "/"))) && len(p) > best
+      base = u_get(fe_route_bases, i)
+      best = len(p)
+    end
+  end
+  return base
+end
+
+// fe_pkg_url is where package name is hosted, with the routes applied.
+fn fe_pkg_url(base: str, name: str) -> str
+  return fe_url(fe_base_for(base, name), name)
+end
+
+// the package tree read by fe_read_tree
+global fe_tree_default: str
+global fe_tree_prefixes: ptr Vec
+global fe_tree_bases: ptr Vec
+
+// fe_tree_path is where the tree of source file src lives: pkg_tree.pkg
+// in the same folder.
+fn fe_tree_path(src: str) -> str
+  let i = len(src)
+  while i > 0 && src[i - 1] != '/'
+    i = i - 1
+  end
+  return u_cat(str_slice(src, 0, i), "pkg_tree.pkg")
+end
+
+// fe_read_tree reads the package tree of source file src:
+//
+//   tree
+//     acme  http://localhost:8080
+//     *     https://raw.githubusercontent.com/DominicThemiya/Packenger/main/registry
+fn fe_read_tree(src: str) -> bool
+  let path = fe_tree_path(src)
+  if !io_exists(path)
+    return u_fail(u_cat4(src, " uses pkg_tree, but there is no ", path, ""))
+  end
+  let ok = false
+  let text = io_read_file(path, &ok)
+  if !ok
+    return u_fail(u_cat3("read ", path, ": can't read the file"))
+  end
+  fe_tree_default = ""
+  fe_tree_prefixes = vec_new()
+  fe_tree_bases = vec_new()
+  let in_tree = false
+  let lines = u_split(text, '\n')
+  for i = 0 to vec_len(lines) - 1
+    let line = u_get(lines, i)
+    let at = u_cat4(path, ":", str_from_int(i + 1), ": ")
+    let t = u_trim(line)
+    if t == "" || str_starts(t, "//")
+      continue
+    end
+    if line[0] != ' ' && line[0] != '\t'
+      if t != "tree" || in_tree
+        return u_fail(u_cat(at, "expected one 'tree' section"))
+      end
+      in_tree = true
+      continue
+    end
+    if !in_tree
+      return u_fail(u_cat(at, "expected one 'tree' section"))
+    end
+    let f = u_fields(t)
+    if vec_len(f) != 2
+      return u_fail(u_cat(at, "expected '<prefix> <registry url>'"))
+    end
+    let prefix = u_get(f, 0)
+    let base = u_rtrim_byte(u_get(f, 1), '/')
+    if prefix != "*" && !fe_valid_name(prefix)
+      return u_fail(u_cat3(at, u_quote(prefix), " is not a package name or *"))
+    end
+    if !str_starts(base, "http://") && !str_starts(base, "https://") && !str_starts(base, "file://")
+      return u_fail(u_cat(at, "the registry must be an http://, https:// or file:// URL"))
+    end
+    if u_in(fe_tree_prefixes, prefix) || prefix == "*" && fe_tree_default != ""
+      return u_fail(u_cat3(at, prefix, " has two routes"))
+    end
+    if prefix == "*"
+      fe_tree_default = base
+    else
+      u_push(fe_tree_prefixes, prefix)
+      u_push(fe_tree_bases, base)
+    end
+  end
+  if !in_tree
+    return u_fail(u_cat(path, ": no 'tree' section"))
+  end
+  return true
+end
+
 // fe_fetch returns the source of package name; *origin is its URL. On an
 // error it sets pk_err and *ok to false.
 fn fe_fetch(base: str, name: str, origin: ptr str, ok: ptr bool) -> str
@@ -121,7 +236,7 @@ fn fe_fetch(base: str, name: str, origin: ptr str, ok: ptr bool) -> str
     u_fail(u_cat("invalid package name ", u_quote(name)))
     return ""
   end
-  let u = fe_url(base, name)
+  let u = fe_pkg_url(base, name)
   *origin = u
   if str_starts(u, "file://")
     let path = fe_unescape(str_slice(u, 7, len(u)))
@@ -169,7 +284,7 @@ fn fe_fetch_batch(base: str, names: ptr Vec, srcs: ptr Vec, origins: ptr Vec, er
   for i = 0 to vec_len(names) - 1
     let name = u_get(names, i)
     let tmp = ""
-    if fe_valid_name(name) && !str_starts(fe_url(base, name), "file://")
+    if fe_valid_name(name) && !str_starts(fe_pkg_url(base, name), "file://")
       tmp = fe_tmp()
       vec_push(remote, i)
     end
@@ -185,7 +300,7 @@ fn fe_fetch_batch(base: str, names: ptr Vec, srcs: ptr Vec, origins: ptr Vec, er
       let i = vec_get(remote, k)
       u_push(args, "--output")
       u_push(args, u_get(tmps, i))
-      u_push(args, fe_url(base, u_get(names, i)))
+      u_push(args, fe_pkg_url(base, u_get(names, i)))
     end
     fast = os_run("curl", args) == 0
   end
@@ -196,7 +311,7 @@ fn fe_fetch_batch(base: str, names: ptr Vec, srcs: ptr Vec, origins: ptr Vec, er
     let origin = ""
     let ok = false
     if fast && tmp != ""
-      origin = fe_url(base, name)
+      origin = fe_pkg_url(base, name)
       src = io_read_file(tmp, &ok)
       if !ok
         u_fail(u_cat3("can't download package ", u_quote(name), ": the download disappeared"))

@@ -1,0 +1,4 @@
+doc `continue`: leaves the body block of the innermost loop, so its `next` block runs.
+
+emit
+  (br ${loop.L.next})

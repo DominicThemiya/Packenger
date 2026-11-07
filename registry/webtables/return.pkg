@@ -1,0 +1,12 @@
+doc Return: restores the stack pointer, then returns the value.
+  At the top level, the value becomes the exit code.
+
+emit when value missing
+  (global.set $sp (local.get $top))
+  (return (i64.const 0))
+emit
+  (local.set $ret
+  {value}
+  )
+  (global.set $sp (local.get $top))
+  (return (local.get $ret))

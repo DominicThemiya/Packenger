@@ -4,7 +4,7 @@
 
 > Allocate a struct (or any value) on the heap: new Type
 
-truck [std](../std.md) · [source](../../../registry/std/new.pkg) · translated by [bintables/new](../bintables/new.md) · translated by [ctables/new](../ctables/new.md)
+truck [std](../std.md) · [source](../../../registry/std/new.pkg) · translated by [bintables/new](../bintables/new.md) · translated by [ctables/new](../ctables/new.md) · translated by [webtables/new](../webtables/new.md)
 
 ```
 let p = new Point     // ptr Point, every field zero

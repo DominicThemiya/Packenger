@@ -35,14 +35,24 @@ fib(35) runs in 0.15 s, against 0.12 s for `gcc -O0`, 0.035 s for
 `gcc -O2` and 2.1 s for Python. The executables are about 5 KB and don't
 use libc.
 
-**There are two backends.** `bintables` writes NASM; `ctables` writes C
-for the same programs and builds it with `cc -O2`, which runs fib(35)
-about 4.5× faster than bintables. Nothing in `std` or the compiler changes; only `--target`:
+**There are three backends.** Nothing in `std` or the compiler changes,
+only `--target`:
+
+| target | output | notes |
+|---|---|---|
+| `bintables` (default) | NASM → static x86-64 Linux executable | no libc, ~5 KB |
+| `ctables` | C → `cc -O2` | fib(35) about 4.5× faster than bintables |
+| `webtables` | WebAssembly → `wat2wasm` | runs on any OS with a WASI runtime, or in a browser |
 
 ```sh
 ./bin/packenger run examples/fib.pkg --target ctables
-./bin/packenger asm examples/fib.pkg --target ctables   # print the C
+./bin/packenger run examples/fib.pkg --target webtables
+./bin/packenger asm examples/fib.pkg --target webtables  # print the module
 ```
+
+[`examples/web`](examples/web) is a package registry server written in
+Packenger. Programs can get packages from it, or from any registry, by
+routing names to it in a [package tree](docs/publishing.md#package-trees).
 
 **The compiler is self-hosting.** `pkc`, a Packenger compiler written in
 Packenger (the [`pkc` truck](docs/registry/pkc.md)), does everything the Go
@@ -95,4 +105,5 @@ are defined by `std` packages too. Packages can also be built from other package
 ## Requirements
 
 Go to build the compiler, `nasm` and `ld` to assemble programs, and x86-64
-Linux. The C backend also needs `gcc` or `clang` as `cc`.
+Linux. The C backend also needs `gcc` or `clang` as `cc`, and the
+WebAssembly backend `wat2wasm` (wabt) and `wasmtime`.

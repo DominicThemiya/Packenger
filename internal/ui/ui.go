@@ -166,6 +166,14 @@ func (r *Reporter) Header(cmd, src, out, registry, target string) {
 	r.line("  %s %s", r.p.c(pad("target", 9), dim), target)
 }
 
+// Route notes that the packages under prefix come from their own registry.
+func (r *Reporter) Route(prefix, registry string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	reg := strings.TrimPrefix(strings.TrimPrefix(registry, "https://"), "http://")
+	r.line("  %s %s %s %s", r.p.c(pad("route", 9), dim), prefix, r.p.c("→", dim), reg)
+}
+
 // Lock notes that the build is checked against a lock file.
 func (r *Reporter) Lock(path string, packages int) {
 	r.mu.Lock()
@@ -174,10 +182,13 @@ func (r *Reporter) Lock(path string, packages int) {
 }
 
 // Locked reports a lock file that was written.
-func Locked(w io.Writer, color bool, path string, packages int, registry string) {
+func Locked(w io.Writer, color bool, path string, packages int, registry string, routes [][2]string) {
 	p := painter{color}
 	fmt.Fprintf(w, "  %s %s %s\n", p.c("✓ locked", bold, green), plural(packages, "package", "packages"), p.c("in", dim)+" "+path)
 	fmt.Fprintf(w, "    %s %s\n", p.c("registry", dim), registry)
+	for _, r := range routes {
+		fmt.Fprintf(w, "    %s %s %s %s\n", p.c("route", dim), r[0], p.c("→", dim), r[1])
+	}
 }
 
 func (r *Reporter) Uses(file string, uses []string) {

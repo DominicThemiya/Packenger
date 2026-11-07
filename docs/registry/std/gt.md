@@ -4,7 +4,7 @@
 
 > > : greater than
 
-truck [std](../std.md) · [source](../../../registry/std/gt.pkg) · translated by [bintables/gt](../bintables/gt.md) · translated by [ctables/gt](../ctables/gt.md)
+truck [std](../std.md) · [source](../../../registry/std/gt.pkg) · translated by [bintables/gt](../bintables/gt.md) · translated by [ctables/gt](../ctables/gt.md) · translated by [webtables/gt](../webtables/gt.md)
 
 Greater than (signed for int).
 

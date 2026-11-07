@@ -1,0 +1,4 @@
+doc `break`: leaves the innermost loop's outer block.
+
+emit
+  (br ${loop.L.end})

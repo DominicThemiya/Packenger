@@ -175,9 +175,30 @@ code
         exe = str_slice(exe, 0, len(exe) - 4)
       end
     end
-    // A lock file next to the source pins the registry (unless --registry
+    // "use pkg_tree" routes packages to registries with pkg_tree.pkg next to
+    // the source, unless --registry is given.
+    let prefixes = vec_new()
+    let bases = vec_new()
+    let peek_ok = false
+    let peek = ""
+    if !(a.cmd == "dump" && stage == "pkg") && io_exists(*src)
+      peek = io_read_file(*src, &peek_ok)
+    end
+    if peek_ok && dr_uses_tree(peek)
+      if !fe_read_tree(*src)
+        return -1
+      end
+      if !a.registry_set
+        prefixes = fe_tree_prefixes
+        bases = fe_tree_bases
+        if fe_tree_default != ""
+          a.registry = fe_tree_default
+        end
+      end
+    end
+    // A lock file next to the source pins the registries (unless --registry
     // is given) and the version of every package. "lock" itself ignores it
-    // and pins the registry as it is now.
+    // and pins the registries as they are now.
     let lock_path = lk_path_of(*src)
     if a.cmd == "lock"
       let pinned = ""
@@ -185,6 +206,12 @@ code
         return -1
       end
       a.registry = pinned
+      for i = 0 to vec_len(bases) - 1
+        if !lk_pin(u_get(bases, i), &pinned)
+          return -1
+        end
+        vec_set(bases, i, pinned as int)
+      end
       lk_collect = map_new()
     elif !(a.cmd == "dump" && stage == "pkg")
       if !lk_read(lock_path, *src)
@@ -192,10 +219,16 @@ code
       end
       if lk_sums != null && !a.registry_set
         a.registry = lk_registry
+        prefixes = lk_route_prefixes
+        bases = lk_route_bases
       end
     end
+    fe_routes(prefixes, bases)
     if a.verbose
       rp_header(a.cmd, *src, exe, a.registry, a.target)
+      for i = 0 to vec_len(prefixes) - 1
+        rp_route(u_get(prefixes, i), u_get(bases, i))
+      end
       if lk_sums != null
         rp_lock(lock_path, map_len(lk_sums))
       end
@@ -227,12 +260,12 @@ code
       io_out(tr_tree(r, ui_base(*src), a.target))
       return 0
     elif a.cmd == "lock"
-      if !io_write_file(lock_path, lk_format(ui_base(*src), a.registry, lk_collect))
+      if !io_write_file(lock_path, lk_format(ui_base(*src), a.registry, prefixes, bases, lk_collect))
         u_fail(u_cat3("open ", lock_path, ": can't write the file"))
         return -1
       end
       rp_done("")
-      pkc_locked(lock_path, map_len(lk_collect), a.registry)
+      pkc_locked(lock_path, map_len(lk_collect), a.registry, prefixes, bases)
       return 0
     elif a.cmd == "build"
       if !dr_assemble(r.asm, exe, map_get(r.back, "toolchain") as ptr PfFile)
@@ -252,7 +285,27 @@ code
         return -1
       end
       rp_done("running")
-      let status = os_run(prog, a.prog_args)
+      // some targets need a runtime to run their output
+      let cmd = prog
+      let cargs = a.prog_args
+      let runner = dr_run_command(map_get(r.back, "toolchain") as ptr PfFile, prog)
+      if runner != null
+        cmd = u_get(runner, 0)
+        if os_find(cmd) == ""
+          dr_rm(prog)
+          dr_rmdir(dir)
+          u_fail(u_cat4(cmd, " is not installed (target ", a.target, " runs programs with it)"))
+          return -1
+        end
+        cargs = vec_new()
+        for i = 1 to vec_len(runner) - 1
+          vec_push(cargs, vec_get(runner, i))
+        end
+        for i = 0 to vec_len(a.prog_args) - 1
+          vec_push(cargs, vec_get(a.prog_args, i))
+        end
+      end
+      let status = os_run(cmd, cargs)
       dr_rm(prog)
       dr_rmdir(dir)
       return status
@@ -262,11 +315,14 @@ code
   end
 
   // pkc_locked reports a lock file that was written.
-  fn pkc_locked(path: str, packages: int, registry: str)
+  fn pkc_locked(path: str, packages: int, registry: str, prefixes: ptr Vec, bases: ptr Vec)
     let on = term_colors(1)
     io_out(u_cat4("  ", ui_c(on, "✓ locked", u_cat(UI_BOLD, UI_GREEN)), " ", rp_plural(packages, "package", "packages")))
     io_out(u_cat4(" ", ui_c(on, "in", UI_DIM), " ", u_cat(path, "\n")))
     io_out(u_cat4("    ", ui_c(on, "registry", UI_DIM), " ", u_cat(registry, "\n")))
+    for i = 0 to vec_len(prefixes) - 1
+      io_out(u_cat4("    ", ui_c(on, "route", UI_DIM), " ", u_cat4(u_get(prefixes, i), " ", ui_c(on, "→", UI_DIM), u_cat3(" ", u_get(bases, i), "\n"))))
+    end
   end
 
   fn pkc_dump(a: ptr PkcArgs, stage: str, src: str) -> int

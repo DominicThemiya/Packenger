@@ -1,0 +1,41 @@
+doc Print: writes an `int`, `u8`, `bool` or `str` and a newline to stdout.
+  Each print is one or two `fd_write` calls, unbuffered, like bintables.
+  Numbers are converted in a buffer at address 64.
+
+emit when value str
+  (call $__pk_print_str
+  {value}
+  )
+  @wasi
+emit when value bool
+  (call $__pk_print_bool
+  {value}
+  )
+  @wasi
+emit
+  (call $__pk_print_int
+  {value}
+  )
+  @wasi
+support
+  (func $__pk_print_int (param $v i64) (local $p i32) (local $u i64)
+    (local.set $p (i32.const 95))
+    (i32.store8 (local.get $p) (i32.const 10))
+    (local.set $u (local.get $v))
+    (if (i64.lt_s (local.get $v) (i64.const 0)) (then (local.set $u (i64.sub (i64.const 0) (local.get $v)))))
+    (loop $digit
+      (local.set $p (i32.sub (local.get $p) (i32.const 1)))
+      (i32.store8 (local.get $p) (i32.add (i32.const 48) (i32.wrap_i64 (i64.rem_u (local.get $u) (i64.const 10)))))
+      (local.set $u (i64.div_u (local.get $u) (i64.const 10)))
+      (br_if $digit (i64.ne (local.get $u) (i64.const 0))))
+    (if (i64.lt_s (local.get $v) (i64.const 0)) (then
+      (local.set $p (i32.sub (local.get $p) (i32.const 1)))
+      (i32.store8 (local.get $p) (i32.const 45))))
+    (drop (call $__pk_rw (i32.const 1) (i64.const 1) (i64.extend_i32_u (local.get $p)) (i64.extend_i32_u (i32.sub (i32.const 96) (local.get $p))))))
+  (func $__pk_print_str (param $s i64)
+    (drop (call $__pk_rw (i32.const 1) (i64.const 1) (i64.add (local.get $s) (i64.const 8)) (i64.load (i32.wrap_i64 (local.get $s)))))
+    (drop (call $__pk_rw (i32.const 1) (i64.const 1) (i64.const 272) (i64.const 1))))
+  (func $__pk_print_bool (param $b i64)
+    (if (i64.ne (local.get $b) (i64.const 0))
+      (then (drop (call $__pk_rw (i32.const 1) (i64.const 1) (i64.const 256) (i64.const 5))))
+      (else (drop (call $__pk_rw (i32.const 1) (i64.const 1) (i64.const 264) (i64.const 6))))))

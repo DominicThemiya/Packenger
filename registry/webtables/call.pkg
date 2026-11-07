@@ -1,0 +1,14 @@
+doc Function call: the arguments are pushed on the memory stack right to left.
+  As in bintables, so side effects in arguments happen in the same order.
+  The callee pops them.
+
+emit when args empty
+  (call ${callee.label})
+emit
+  (block (result i64)
+  {each args reverse}
+  (call $__pk_push
+  {it}
+  )
+  {end}
+  (call ${callee.label}))

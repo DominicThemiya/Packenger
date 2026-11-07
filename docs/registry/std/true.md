@@ -4,7 +4,7 @@
 
 > The boolean true.
 
-truck [std](../std.md) · [source](../../../registry/std/true.pkg) · translated by [bintables/true](../bintables/true.md) · translated by [ctables/true](../ctables/true.md)
+truck [std](../std.md) · [source](../../../registry/std/true.pkg) · translated by [bintables/true](../bintables/true.md) · translated by [ctables/true](../ctables/true.md) · translated by [webtables/true](../webtables/true.md)
 
 ```
 let done = true

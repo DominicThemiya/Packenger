@@ -1,0 +1,18 @@
+doc Acme's packages: text banners and bar charts for the terminal.
+  A small private truck, hosted by `server.pkg` rather than the universal
+  registry. Programs reach it through a package tree:
+
+  ```
+  // pkg_tree.pkg
+  tree
+    acme  http://localhost:6464
+  ```
+
+  | package | provides |
+  |---|---|
+  | `acme/banner` | `banner(s)`: text in a box |
+  | `acme/bars` | `bars_row(label, n, max, width)`: one row of a bar chart |
+
+truck
+  banner
+  bars

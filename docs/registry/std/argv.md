@@ -4,7 +4,7 @@
 
 > The program's command-line arguments: argv -> [str]
 
-truck [std](../std.md) · [source](../../../registry/std/argv.pkg) · translated by [bintables/argv](../bintables/argv.md) · translated by [ctables/argv](../ctables/argv.md)
+truck [std](../std.md) · [source](../../../registry/std/argv.pkg) · translated by [bintables/argv](../bintables/argv.md) · translated by [ctables/argv](../ctables/argv.md) · translated by [webtables/argv](../webtables/argv.md)
 
 ```
 let args = argv

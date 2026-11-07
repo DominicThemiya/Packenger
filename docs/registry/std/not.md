@@ -4,7 +4,7 @@
 
 > ! : logical not
 
-truck [std](../std.md) · [source](../../../registry/std/not.pkg) · translated by [bintables/not](../bintables/not.md) · translated by [ctables/not](../ctables/not.md)
+truck [std](../std.md) · [source](../../../registry/std/not.pkg) · translated by [bintables/not](../bintables/not.md) · translated by [ctables/not](../ctables/not.md) · translated by [webtables/not](../webtables/not.md)
 
 `!b` is `true` if `b` is `false`, and the other way around.
 

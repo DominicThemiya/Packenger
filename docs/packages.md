@@ -236,7 +236,7 @@ with placeholders.
 | placeholder | becomes |
 |---|---|
 | `{slot}` (alone on a line) | the slot's generated code; expressions leave their value in `rax` |
-| `{slot.addr}` | where a variable lives, from the target's `storage` package: e.g. `[rbp-8]` in bintables, `L[0]` in ctables |
+| `{slot.addr}` | where a variable lives, from the target's `storage` package: e.g. `[rbp-8]` in bintables, `L[0]` in ctables, an address expression in webtables |
 | `{slot.operand}` | a simple operand: the integer, or the variable's address |
 | `{slot.value}` | an integer literal's value |
 | `{slot.label}` | a function's label, e.g. `pk_fib` |
@@ -246,7 +246,7 @@ with placeholders.
 | `{slot.elemsize}` | size of the element of a slice, the pointee of a pointer, or 1 for `str` |
 | `{slot.alloc}` | bytes to allocate for a `type` slot: a struct's full size |
 | `{slot.offset}` | a `field` slot's offset in its struct |
-| `{slot.len}`, `{slot.bytes}` | a string's length and its bytes as `db` values |
+| `{slot.len}`, `{slot.bytes}`, `{slot.hex}` | a string's length, its bytes as comma-separated numbers (`104,105`), and as `\hh` escapes (`\68\69`) |
 | `{frame}` | the stack space for a function's (or the program's) variables |
 | `{L.name}` | a label unique to this use, e.g. `{L.end}:` |
 | `{D.name}` | a data label unique to this use |
@@ -307,14 +307,20 @@ independent of what it generates:
 - **`storage`** says where variables live. Its `emit local`, `emit param`
   and `emit global` sections render a variable's `{addr}`, and `emit decl`
   declares a global. They see `{name}`, `{index}` (the slot or parameter
-  number) and `{offset}` (the slot's distance from the frame pointer in a
-  bintables-style frame). See [bintables/storage](registry/bintables/storage.md)
+  number) and `{offset}`: the slot's distance from the frame pointer in a
+  bintables-style frame, or 8 × the global's number. Globals are numbered
+  in declaration order, so a backend can give each a fixed address. See [bintables/storage](registry/bintables/storage.md)
   and [ctables/storage](registry/ctables/storage.md).
 - **`toolchain`** says how to build an executable. `emit file` names the
   source file and each line of `emit` is a command, run in a temporary
-  directory; `{out}` is the executable's absolute path. See
-  [bintables/toolchain](registry/bintables/toolchain.md) (`nasm` and `ld`)
-  and [ctables/toolchain](registry/ctables/toolchain.md) (`cc`).
+  directory; `{out}` is the executable's absolute path. An optional
+  `emit run` section is the command that runs the output, for targets
+  whose output isn't a native executable; `packenger run` appends the
+  program's arguments. See
+  [bintables/toolchain](registry/bintables/toolchain.md) (`nasm` and `ld`),
+  [ctables/toolchain](registry/ctables/toolchain.md) (`cc`) and
+  [webtables/toolchain](registry/webtables/toolchain.md) (`wat2wasm`, run
+  with `wasmtime`).
 
 The slot kinds `type`, `field`, `newtype`, `fields`, `newconst`, `ident`,
 `func`, `newfunc`, `args` and `params`, and the `group`/`groups` nodes of
@@ -334,8 +340,10 @@ plus `program`, `storage` and `toolchain`; select it with
 translates the same `std` programs to C. Its templates produce C
 expressions, using GCC statement expressions `({ ... })` wherever
 bintables would push a value, so that operands are evaluated in the same
-order. The harness runs every test program with both backends and requires
-the same output.
+order. [webtables](registry/webtables.md) is the third: WebAssembly, with
+structured control flow (`block`, `loop`, `br`) and variables in linear
+memory. The harness runs every test program with every backend and
+requires the same output.
 
 ## Trucks
 

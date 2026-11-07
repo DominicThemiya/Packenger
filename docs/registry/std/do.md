@@ -4,7 +4,7 @@
 
 > A block with its own scope: do ... end
 
-truck [std](../std.md) · [source](../../../registry/std/do.pkg) · translated by [bintables/do](../bintables/do.md) · translated by [ctables/do](../ctables/do.md)
+truck [std](../std.md) · [source](../../../registry/std/do.pkg) · translated by [bintables/do](../bintables/do.md) · translated by [ctables/do](../ctables/do.md) · translated by [webtables/do](../webtables/do.md)
 
 Variables declared inside are only visible until `end`.
 
