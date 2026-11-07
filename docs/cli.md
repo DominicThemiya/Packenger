@@ -101,6 +101,7 @@ missing `nasm`:
 ## Other tools
 
 ```sh
-go run ./cmd/pkgdoc       # regenerate docs/registry from the package files
+go run ./cmd/pkgdoc       # regenerate docs/registry and registry/index.txt
+packenger run tools/treestat.pkg    # measure a package tree (see tools.md)
 go test ./bootstrap/      # comparison harness (PKC=/path/to/pkc to add pkc)
 ```

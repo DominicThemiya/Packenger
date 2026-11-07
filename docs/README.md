@@ -10,6 +10,7 @@
 | [How the compiler works](architecture.md) | the pipeline, and where each part lives in the code |
 | [Self-hosting plan](self-hosting.md) | roadmap for a Packenger compiler written in Packenger |
 | [Dump formats](dumps.md) | `packenger dump` output and the comparison harness |
+| [Tools](tools.md) | programs for working with registries: `treestat` measures a package tree |
 | [Runtime library](registry/rt.md) | the `rt` truck: memory, vectors, strings, maps, files, processes |
 | [Standard extensions](registry/stdx.md) | the `stdx` truck: `+=` and friends, `for x in xs`, `match`, `assert` |
 | [Package reference](registry/README.md) | generated: every truck and package in the registry |

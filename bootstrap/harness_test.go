@@ -392,6 +392,19 @@ func TestLock(t *testing.T) {
 	}
 }
 
+// Tools: tools/treestat.pkg must build with every compiler and report the
+// same on this repository's registry (through index.txt and file://, so no
+// network), apart from timings.
+func TestTools(t *testing.T) {
+	if _, err := exec.LookPath("nasm"); err != nil {
+		t.Skip("nasm not installed")
+	}
+	o := agreeIn(t, "report", unTimed, "run", "../tools/treestat.pkg", "--", registry, "--no-fallback")
+	if o.exit != 0 || !strings.Contains(o.stdout, "PACKAGE TREE") || !strings.Contains(o.stdout, "none ✓") {
+		t.Fatalf("treestat on the registry:\n%s", o)
+	}
+}
+
 // Package trees: "use pkg_tree" routes packages to registries with the
 // pkg_tree.pkg next to the program. Every compiler must route, report and
 // lock the same way, and reject broken trees with the same messages.

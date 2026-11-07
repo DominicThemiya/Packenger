@@ -86,6 +86,7 @@ instruction comes from a package.
 | [`internal/lang/report.go`](../internal/lang/report.go) | the build events behind `-vb` |
 | [`internal/lang/dump.go`](../internal/lang/dump.go), [`internal/pkgfile/dump.go`](../internal/pkgfile/dump.go) | the `dump` formats |
 | [`bootstrap/`](../bootstrap) | the comparison harness and its corpus |
+| [`tools/`](../tools) | programs for working with registries, in Packenger ([tools](tools.md)) |
 | [`internal/ui`](../internal/ui) | the `-vb` report and error formatting |
 | [`internal/pkgdoc`](../internal/pkgdoc) | the package reference generator and registry checks |
 | [`registry/`](../registry) | the hosted packages: the `std`, `stdx`, `bintables`, `ctables`, `webtables`, `rt` and `pkc` trucks |

@@ -1,0 +1,959 @@
+use std
+use stdx
+use rt
+use pkc/util
+use pkc/fetch
+use pkc/pkgfile
+
+// treestat: how heavy is a package tree? It downloads every package of a
+// registry the way the compiler does, and reports sizes, what each truck
+// costs to use, the dependency graph, the language each front-end truck
+// defines, and how complete each backend is.
+//
+//   packenger run tools/treestat.pkg                          the universal tree
+//   packenger run tools/treestat.pkg -- http://localhost:6464 a self-hosted tree
+//   packenger run tools/treestat.pkg -- <registry> std rt     start from these
+//
+// A self-hosted tree usually builds on the universal one, the way a
+// program's pkg_tree.pkg routes only its own packages elsewhere. So
+// packages a registry doesn't have are looked up in a fallback registry
+// (the universal tree, unless --fallback <url> or --no-fallback says
+// otherwise). They are external: counted in what using a package costs,
+// but not in the tree's own sizes, trucks, grammar and backends.
+//
+// A registry is files over HTTP, which can't be listed, so treestat reads
+// <registry>/index.txt: the universal registry has one (written by
+// cmd/pkgdoc) and examples/web/server.pkg generates one. For other hosts,
+// name the root packages. Either way it follows truck members, needs and
+// backend @includes from there, so it also finds packages that are
+// referenced but missing. Needs curl, like pkc.
+
+const UNIVERSAL = "https://raw.githubusercontent.com/DominicThemiya/Packenger/main/registry"
+
+global ts_color: bool
+global ts_files: ptr Map      // name -> ptr PfFile
+global ts_sizes: ptr Map      // name -> bytes
+global ts_lines: ptr Map      // name -> lines
+global ts_deps: ptr Map       // name -> ptr Vec: members, needs and includes
+global ts_uses: ptr Map       // name -> ptr Vec: needs and includes only
+global ts_missing: ptr Map    // name -> why it was wanted (str)
+global ts_broken: ptr Map     // name -> the parse error (str)
+global ts_names: ptr Vec      // every package fetched, sorted
+global ts_downloads: int      // packages requested, found or not
+global ts_external: ptr Map   // names found only in the fallback registry
+global ts_ext_bytes: int
+
+// ---- output ----
+
+fn ts_paint(s: str, style: str) -> str
+  return term_paint(s, style, ts_color)
+end
+
+fn ts_line(s: str)
+  io_out(s)
+  io_out("\n")
+end
+
+fn ts_heading(title: str)
+  ts_line("")
+  ts_line(ts_paint(title, TERM_BOLD))
+end
+
+fn ts_size(n: int) -> str
+  if n < 1024
+    return u_cat(str_from_int(n), " B")
+  end
+  let tenths = n * 10 / 1024
+  return u_cat4(str_from_int(tenths / 10), ".", str_from_int(tenths % 10), " KB")
+end
+
+fn ts_bar(n: int, max: int, width: int) -> str
+  let b = sb_new()
+  let full = 0
+  if max > 0
+    full = n * width / max
+  end
+  if full == 0 && n > 0
+    full = 1
+  end
+  for i = 1 to full
+    sb_add(b, "█")
+  end
+  return ts_paint(sb_str(b), TERM_CYAN)
+end
+
+// ts_row pads cells to widths; a negative width aligns right.
+fn ts_row(cells: ptr Vec, widths: [int]) -> str
+  let b = sb_new()
+  sb_add(b, "  ")
+  for i = 0 to vec_len(cells) - 1
+    let c = u_get(cells, i)
+    let w = widths[i]
+    if w < 0
+      sb_add(b, str_lpad(c, -w))
+    elif i == vec_len(cells) - 1
+      sb_add(b, c)
+    else
+      sb_add(b, str_pad(c, w))
+    end
+    sb_add(b, "  ")
+  end
+  return u_rtrim_byte(sb_str(b), ' ')
+end
+
+fn ts_cells(a: str, b: str, c: str, d: str) -> ptr Vec
+  let v = vec_new()
+  u_push(v, a)
+  u_push(v, b)
+  u_push(v, c)
+  u_push(v, d)
+  return v
+end
+
+fn ts_widths(a: int, b: int, c: int, d: int) -> [int]
+  let w = make([int], 4)
+  w[0] = a
+  w[1] = b
+  w[2] = c
+  w[3] = d
+  return w
+end
+
+fn ts_plural(n: int, one: str, many: str) -> str
+  if n == 1
+    return u_cat3("1 ", one, "")
+  end
+  return u_cat3(str_from_int(n), " ", many)
+end
+
+// ts_wrap lists words in lines of at most width bytes, indented.
+fn ts_wrap(words: ptr Vec, indent: str, width: int)
+  let line = sb_new()
+  for i = 0 to vec_len(words) - 1
+    let w = u_get(words, i)
+    if sb_len(line) > 0 && sb_len(line) + len(w) + 1 > width
+      ts_line(u_cat(indent, ts_paint(sb_str(line), TERM_DIM)))
+      sb_clear(line)
+    end
+    if sb_len(line) > 0
+      sb_add(line, " ")
+    end
+    sb_add(line, w)
+  end
+  if sb_len(line) > 0
+    ts_line(u_cat(indent, ts_paint(sb_str(line), TERM_DIM)))
+  end
+end
+
+// ---- names ----
+
+fn ts_top(name: str) -> str
+  let slash = str_find_byte(name, '/', 0)
+  if slash < 0
+    return name
+  end
+  return str_slice(name, 0, slash)
+end
+
+fn ts_rest(name: str) -> str
+  let slash = str_find_byte(name, '/', 0)
+  if slash < 0
+    return ""
+  end
+  return str_slice(name, slash + 1, len(name))
+end
+
+fn ts_file(name: str) -> ptr PfFile
+  if !map_has(ts_files, name)
+    return null
+  end
+  return map_get(ts_files, name) as ptr PfFile
+end
+
+fn ts_count(m: ptr Map, name: str) -> int
+  if !map_has(m, name)
+    return 0
+  end
+  return map_get(m, name)
+end
+
+fn ts_bump(m: ptr Map, name: str, by: int)
+  map_set(m, name, ts_count(m, name) + by)
+end
+
+fn ts_vec(m: ptr Map, name: str) -> ptr Vec
+  if !map_has(m, name)
+    return vec_new()
+  end
+  return map_get(m, name) as ptr Vec
+end
+
+// ts_len is vec_len, with 0 for the sections a package doesn't have
+fn ts_len(v: ptr Vec) -> int
+  if v == null
+    return 0
+  end
+  return vec_len(v)
+end
+
+fn ts_sort_strs(v: ptr Vec)
+  for i = 1 to vec_len(v) - 1
+    let x = u_get(v, i)
+    let j = i - 1
+    while j >= 0 && str_cmp(u_get(v, j), x) > 0
+      vec_set(v, j + 1, vec_get(v, j))
+      j -= 1
+    end
+    vec_set(v, j + 1, x as int)
+  end
+end
+
+// ts_sort_desc sorts names by their value in m, largest first, then by name.
+fn ts_sort_desc(names: ptr Vec, m: ptr Map)
+  for i = 1 to vec_len(names) - 1
+    let x = u_get(names, i)
+    let j = i - 1
+    while j >= 0
+      let y = u_get(names, j)
+      let vx = ts_count(m, x)
+      let vy = ts_count(m, y)
+      if vy > vx || vy == vx && str_cmp(y, x) < 0
+        break
+      end
+      vec_set(names, j + 1, vec_get(names, j))
+      j -= 1
+    end
+    vec_set(names, j + 1, x as int)
+  end
+end
+
+// ---- fetching ----
+
+// ts_fetch_text downloads a small file, such as index.txt.
+fn ts_fetch_text(url: str, ok: ptr bool) -> str
+  if str_starts(url, "file://")
+    let path = fe_unescape(str_slice(url, 7, len(url)))
+    *ok = false
+    if !io_exists(path)
+      return ""
+    end
+    return io_read_file(path, ok)
+  end
+  let args = vec_new()
+  u_push(args, "--silent")
+  u_push(args, "--fail")
+  u_push(args, "--location")
+  u_push(args, "--user-agent")
+  u_push(args, "packenger")
+  u_push(args, "--max-time")
+  u_push(args, "30")
+  u_push(args, url)
+  let out = ""
+  *ok = os_run_output("curl", args, &out) == 0
+  return out
+end
+
+fn ts_deps_of(f: ptr PfFile, uses: ptr Vec, why: ptr Vec) -> ptr Vec
+  let all = vec_new()
+  for i = 0 to vec_len(f.truck) - 1
+    u_push(all, u_cat3(f.name, "/", u_get(f.truck, i)))
+    u_push(why, u_cat("member of truck ", f.name))
+  end
+  for i = 0 to vec_len(f.needs) - 1
+    u_push(all, u_get(f.needs, i))
+    u_push(uses, u_get(f.needs, i))
+    u_push(why, u_cat("needed by ", f.name))
+  end
+  // a backend package's @name includes another package of its truck
+  for i = 0 to vec_len(f.emits) - 1
+    let e = vec_get(f.emits, i) as ptr PfEmit
+    for k = 0 to vec_len(e.lines) - 1
+      let l = u_get(e.lines, k)
+      if str_starts(l, "@")
+        let inc = u_cat3(ts_top(f.name), "/", u_get(u_fields(str_slice(l, 1, len(l))), 0))
+        if !u_in(all, inc)
+          u_push(all, inc)
+          u_push(uses, inc)
+          u_push(why, u_cat("included by ", f.name))
+        end
+      end
+    end
+  end
+  return all
+end
+
+// ts_take records one downloaded package and queues what it leads to. It
+// returns false if the registry couldn't be reached.
+fn ts_take(name: str, src: str, origin: str, err: str, external: bool, why: ptr Map, seen: ptr Map, next_round: ptr Vec) -> bool
+  if err != ""
+    if !u_has(err, "not found in registry")
+      pk_err = err
+      return false
+    end
+    map_set(ts_missing, name, map_get(why, name))
+    return true
+  end
+  let f = pf_parse(name, origin, src)
+  if f == null
+    map_set(ts_broken, name, pk_err as int)
+    return true
+  end
+  map_set(ts_files, name, f as int)
+  map_set(ts_sizes, name, len(src))
+  if external
+    map_set(ts_external, name, 1)
+    ts_ext_bytes += len(src)
+  end
+  let lines = 0
+  for c in src
+    if c == '\n'
+      lines += 1
+    end
+  end
+  map_set(ts_lines, name, lines)
+  let uses = vec_new()
+  let whys = vec_new()
+  let deps = ts_deps_of(f, uses, whys)
+  map_set(ts_deps, name, deps as int)
+  map_set(ts_uses, name, uses as int)
+  for k = 0 to vec_len(deps) - 1
+    let d = u_get(deps, k)
+    if !map_has(seen, d)
+      map_set(seen, d, 1)
+      u_push(next_round, d)
+      map_set(why, d, vec_get(whys, k))
+    end
+  end
+  return true
+end
+
+// ts_crawl downloads first and everything it leads to, a round at a time
+// like the compiler, trying fallback ("" for none) for what reg doesn't
+// have. It returns the number of rounds, or -1 if a registry can't be
+// reached.
+fn ts_crawl(reg: str, fallback: str, first: ptr Vec, reason: str) -> int
+  let why = map_new()
+  let seen = map_new()
+  let pending = vec_new()
+  for i = 0 to vec_len(first) - 1
+    let n = u_get(first, i)
+    if !map_has(seen, n)
+      map_set(seen, n, 1)
+      u_push(pending, n)
+      map_set(why, n, reason as int)
+    end
+  end
+  let rounds = 0
+  while vec_len(pending) > 0
+    rounds += 1
+    let srcs = vec_new()
+    let origins = vec_new()
+    let errs = vec_new()
+    fe_fetch_batch(reg, pending, srcs, origins, errs)
+    ts_downloads += vec_len(pending)
+    let next_round = vec_new()
+    let retry = vec_new()
+    for i = 0 to vec_len(pending) - 1
+      let name = u_get(pending, i)
+      let err = u_get(errs, i)
+      if fallback != "" && u_has(err, "not found in registry")
+        u_push(retry, name)
+      elif !ts_take(name, u_get(srcs, i), u_get(origins, i), err, false, why, seen, next_round)
+        return -1
+      end
+    end
+    if vec_len(retry) > 0
+      let srcs2 = vec_new()
+      let origins2 = vec_new()
+      let errs2 = vec_new()
+      fe_fetch_batch(fallback, retry, srcs2, origins2, errs2)
+      ts_downloads += vec_len(retry)
+      for i = 0 to vec_len(retry) - 1
+        if !ts_take(u_get(retry, i), u_get(srcs2, i), u_get(origins2, i), u_get(errs2, i), true, why, seen, next_round)
+          return -1
+        end
+      end
+    end
+    pending = next_round
+  end
+  return rounds
+end
+
+// ---- measuring ----
+
+// ts_closure counts what using name loads: packages, bytes, and the
+// rounds of downloads it takes (the depth of the dependency graph).
+fn ts_closure(name: str, count: ptr int, bytes: ptr int, rounds: ptr int)
+  let seen = map_new()
+  let level = vec_new()
+  u_push(level, name)
+  map_set(seen, name, 1)
+  *count = 0
+  *bytes = 0
+  *rounds = 0
+  while vec_len(level) > 0
+    *rounds += 1
+    let next_level = vec_new()
+    for i = 0 to vec_len(level) - 1
+      let n = u_get(level, i)
+      if ts_file(n) == null
+        continue
+      end
+      *count += 1
+      *bytes += ts_count(ts_sizes, n)
+      let deps = ts_vec(ts_deps, n)
+      for k = 0 to vec_len(deps) - 1
+        let d = u_get(deps, k)
+        if !map_has(seen, d)
+          map_set(seen, d, 1)
+          u_push(next_level, d)
+        end
+      end
+    end
+    level = next_level
+  end
+end
+
+fn ts_kind(top: str) -> str
+  if ts_file(u_cat(top, "/toolchain")) != null
+    return "backend"
+  end
+  let syntax = 0
+  let code = 0
+  for i = 0 to vec_len(ts_names) - 1
+    let n = u_get(ts_names, i)
+    if ts_top(n) == top
+      let f = ts_file(n)
+      if vec_len(f.syntax) > 0
+        syntax += 1
+      end
+      if ts_len(f.code) > 0
+        code += 1
+      end
+    end
+  end
+  if syntax > 0 && syntax >= code
+    return "front-end"
+  elif code > 0
+    return "library"
+  end
+  return "other"
+end
+
+// ts_cycle finds a cycle in the needs graph from n, or returns "".
+fn ts_cycle(n: str, state: ptr Map, path: ptr Vec) -> str
+  map_set(state, n, 1)
+  u_push(path, n)
+  let f = ts_file(n)
+  if f != null
+    for i = 0 to vec_len(f.needs) - 1
+      let d = u_get(f.needs, i)
+      let s = ts_count(state, d)
+      if s == 1
+        let b = sb_new()
+        let on = false
+        for k = 0 to vec_len(path) - 1
+          on = on || u_get(path, k) == d
+          if on
+            sb_add(b, u_get(path, k))
+            sb_add(b, " → ")
+          end
+        end
+        sb_add(b, d)
+        return sb_str(b)
+      elif s == 0
+        let found = ts_cycle(d, state, path)
+        if found != ""
+          return found
+        end
+      end
+    end
+  end
+  vec_pop(path)
+  map_set(state, n, 2)
+  return ""
+end
+
+// ---- the report ----
+
+fn ts_overview(reg: str, how: str, rounds: int, took: int, downloads: int)
+  let bytes = 0
+  let lines = 0
+  let trucks = 0
+  let largest = ""
+  for i = 0 to vec_len(ts_names) - 1
+    let n = u_get(ts_names, i)
+    bytes += ts_count(ts_sizes, n)
+    lines += ts_count(ts_lines, n)
+    if ts_file(n).is_truck
+      trucks += 1
+    end
+    if largest == "" || ts_count(ts_sizes, n) > ts_count(ts_sizes, largest)
+      largest = n
+    end
+  end
+  ts_line("")
+  ts_line(u_cat3(ts_paint("PACKAGE TREE", TERM_BOLD), "  ", reg))
+  let fetched = u_cat4(ts_plural(downloads, "download", "downloads"), " in ", ts_plural(rounds, "round", "rounds"), "")
+  ts_line(ts_paint(u_cat4("  found through ", how, " · ", u_cat4(fetched, " · ", time_fmt(took), "")), TERM_DIM))
+  ts_line("")
+  let w = ts_widths(10, 0, 0, 0)
+  ts_line(ts_row(ts_cells("packages", str_from_int(vec_len(ts_names)), "", ""), w))
+  ts_line(ts_row(ts_cells("trucks", str_from_int(trucks), "", ""), w))
+  ts_line(ts_row(ts_cells("size", ts_size(bytes), "", ""), w))
+  ts_line(ts_row(ts_cells("lines", str_from_int(lines), "", ""), w))
+  if map_len(ts_external) > 0
+    ts_line(ts_row(ts_cells("external", u_cat4(ts_plural(map_len(ts_external), "package", "packages"), " (", ts_size(ts_ext_bytes), ") from the fallback, not counted here"), "", ""), w))
+  end
+  if vec_len(ts_names) > 0
+    ts_line(ts_row(ts_cells("average", ts_size(bytes / vec_len(ts_names)), "", ""), w))
+    ts_line(ts_row(ts_cells("largest", u_cat4(largest, " (", ts_size(ts_count(ts_sizes, largest)), ")"), "", ""), w))
+  end
+end
+
+fn ts_contents()
+  let doc = 0
+  let syntax = 0
+  let expand = 0
+  let emit = 0
+  let code = 0
+  for i = 0 to vec_len(ts_names) - 1
+    let f = ts_file(u_get(ts_names, i))
+    doc += vec_len(f.doc_body) + 1
+    for k = 0 to vec_len(f.syntax) - 1
+      syntax += vec_len((vec_get(f.syntax, k) as ptr PfSyntax).patterns)
+    end
+    expand += ts_len(f.expand)
+    for k = 0 to vec_len(f.emits) - 1
+      emit += vec_len((vec_get(f.emits, k) as ptr PfEmit).lines)
+    end
+    emit += vec_len(f.data) + vec_len(f.support)
+    code += ts_len(f.code)
+  end
+  let total = doc + syntax + expand + emit + code
+  ts_heading("CONTENTS  lines by section")
+  let max = doc
+  let values = make([int], 5)
+  values[0] = doc
+  values[1] = syntax
+  values[2] = expand
+  values[3] = emit
+  values[4] = code
+  for v in values
+    if v > max
+      max = v
+    end
+  end
+  let labels = make([str], 5)
+  labels[0] = "doc"
+  labels[1] = "syntax"
+  labels[2] = "expand"
+  labels[3] = "emit"
+  labels[4] = "code"
+  let notes = make([str], 5)
+  notes[0] = "documentation"
+  notes[1] = "patterns: the grammar"
+  notes[2] = "templates of packages made of packages"
+  notes[3] = "backend templates: NASM, C, WebAssembly"
+  notes[4] = "library source"
+  let w = ts_widths(8, -6, -4, 0)
+  for i = 0 to 4
+    let pct = 0
+    if total > 0
+      pct = values[i] * 100 / total
+    end
+    ts_line(ts_row(ts_cells(labels[i], str_from_int(values[i]), u_cat(str_from_int(pct), "%"), u_cat3(ts_bar(values[i], max, 24), " ", ts_paint(notes[i], TERM_DIM))), w))
+  end
+end
+
+fn ts_trucks(tops: ptr Vec)
+  ts_heading("TRUCKS")
+  let w = ts_widths(12, 10, -5, -9)
+  let head = ts_cells("name", "kind", "pkgs", "size")
+  u_push(head, "largest")
+  let w5 = make([int], 5)
+  w5[0] = 12
+  w5[1] = 10
+  w5[2] = -5
+  w5[3] = -9
+  w5[4] = 0
+  ts_line(ts_paint(ts_row(head, w5), TERM_DIM))
+  for i = 0 to vec_len(tops) - 1
+    let t = u_get(tops, i)
+    let count = 0
+    let bytes = 0
+    let largest = ""
+    for k = 0 to vec_len(ts_names) - 1
+      let n = u_get(ts_names, k)
+      if ts_top(n) == t
+        count += 1
+        bytes += ts_count(ts_sizes, n)
+        if n != t && (largest == "" || ts_count(ts_sizes, n) > ts_count(ts_sizes, largest))
+          largest = n
+        end
+      end
+    end
+    let row = ts_cells(t, ts_kind(t), str_from_int(count), ts_size(bytes))
+    if largest != ""
+      u_push(row, u_cat4(largest, " (", ts_size(ts_count(ts_sizes, largest)), ")"))
+    else
+      u_push(row, "")
+    end
+    ts_line(ts_row(row, w5))
+  end
+end
+
+fn ts_costs(tops: ptr Vec)
+  ts_heading("WHAT IT COSTS TO USE  everything a use line loads")
+  let bytes = map_new()
+  let counts = map_new()
+  let depth = map_new()
+  let max = 0
+  let roots = vec_new()
+  for i = 0 to vec_len(tops) - 1
+    let t = u_get(tops, i)
+    if ts_file(t) != null
+      let c = 0
+      let b = 0
+      let r = 0
+      ts_closure(t, &c, &b, &r)
+      map_set(bytes, t, b)
+      map_set(counts, t, c)
+      map_set(depth, t, r)
+      u_push(roots, t)
+      if b > max
+        max = b
+      end
+    end
+  end
+  ts_sort_desc(roots, bytes)
+  let w = ts_widths(14, -6, -9, -7)
+  let head = ts_cells("use", "pkgs", "size", "rounds")
+  ts_line(ts_paint(ts_row(head, w), TERM_DIM))
+  for i = 0 to vec_len(roots) - 1
+    let t = u_get(roots, i)
+    let row = ts_cells(t, str_from_int(ts_count(counts, t)), ts_size(ts_count(bytes, t)), str_from_int(ts_count(depth, t)))
+    ts_line(u_cat3(ts_row(row, w), "  ", ts_bar(ts_count(bytes, t), max, 20)))
+  end
+
+  // single packages, not trucks
+  let single = vec_new()
+  let sbytes = map_new()
+  let scount = map_new()
+  for i = 0 to vec_len(ts_names) - 1
+    let n = u_get(ts_names, i)
+    if !ts_file(n).is_truck
+      let c = 0
+      let b = 0
+      let r = 0
+      ts_closure(n, &c, &b, &r)
+      map_set(sbytes, n, b)
+      map_set(scount, n, c)
+      u_push(single, n)
+    end
+  end
+  ts_sort_desc(single, sbytes)
+  ts_line("")
+  ts_line(ts_paint(ts_row(ts_cells("heaviest single packages", "pkgs", "size", ""), ts_widths(20, -6, -9, 0)), TERM_DIM))
+  let shown = 8
+  if vec_len(single) < shown
+    shown = vec_len(single)
+  end
+  for i = 0 to shown - 1
+    let n = u_get(single, i)
+    let row = ts_cells(n, str_from_int(ts_count(scount, n)), ts_size(ts_count(sbytes, n)), "")
+    ts_line(ts_row(row, ts_widths(20, -6, -9, 0)))
+  end
+end
+
+fn ts_needed()
+  let fanin = map_new()
+  let users = map_new()
+  for i = 0 to vec_len(ts_names) - 1
+    let n = u_get(ts_names, i)
+    let uses = ts_vec(ts_uses, n)
+    for k = 0 to vec_len(uses) - 1
+      let d = u_get(uses, k)
+      ts_bump(fanin, d, 1)
+      if !map_has(users, d)
+        map_set(users, d, vec_new() as int)
+      end
+      u_push(map_get(users, d) as ptr Vec, n)
+    end
+  end
+  let names = vec_new()
+  for i = 0 to map_len(fanin) - 1
+    u_push(names, map_key(fanin, i))
+  end
+  ts_sort_desc(names, fanin)
+  ts_heading("MOST DEPENDED ON  packages that need or @include it")
+  let shown = 8
+  if vec_len(names) < shown
+    shown = vec_len(names)
+  end
+  let max = 0
+  if shown > 0
+    max = ts_count(fanin, u_get(names, 0))
+  end
+  for i = 0 to shown - 1
+    let n = u_get(names, i)
+    let row = ts_cells(n, str_from_int(ts_count(fanin, n)), ts_bar(ts_count(fanin, n), max, 20), "")
+    ts_line(ts_row(row, ts_widths(20, -4, 0, 0)))
+  end
+end
+
+fn ts_language(tops: ptr Vec)
+  let any = false
+  for i = 0 to vec_len(tops) - 1
+    any = any || ts_kind(u_get(tops, i)) == "front-end"
+  end
+  if !any
+    return
+  end
+  ts_heading("LANGUAGE  what each front-end truck adds to the grammar")
+  // words and symbols reserved by the trucks listed before
+  let earlier = vec_new()
+  for i = 0 to vec_len(tops) - 1
+    let t = u_get(tops, i)
+    if ts_kind(t) != "front-end"
+      continue
+    end
+    let pkgs = 0
+    let patterns = 0
+    let words = vec_new()
+    let symbols = vec_new()
+    for k = 0 to vec_len(ts_names) - 1
+      let n = u_get(ts_names, k)
+      let f = ts_file(n)
+      if ts_top(n) != t || vec_len(f.syntax) == 0
+        continue
+      end
+      pkgs += 1
+      for s = 0 to vec_len(f.syntax) - 1
+        let syn = vec_get(f.syntax, s) as ptr PfSyntax
+        for p = 0 to vec_len(syn.patterns) - 1
+          patterns += 1
+          let lits = pf_literals(vec_get(syn.patterns, p) as ptr PfPattern)
+          for l = 0 to vec_len(lits) - 1
+            let lit = u_get(lits, l)
+            let c = lit[0]
+            if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_'
+              if !u_in(words, lit)
+                u_push(words, lit)
+              end
+            elif !u_in(symbols, lit)
+              u_push(symbols, lit)
+            end
+          end
+        end
+      end
+    end
+    ts_sort_strs(words)
+    ts_sort_strs(symbols)
+    let fresh_words = 0
+    for k = 0 to vec_len(words) - 1
+      if !u_in(earlier, u_get(words, k))
+        fresh_words += 1
+      end
+    end
+    let fresh_symbols = 0
+    for k = 0 to vec_len(symbols) - 1
+      if !u_in(earlier, u_get(symbols, k))
+        fresh_symbols += 1
+      end
+    end
+    let kw = ts_plural(vec_len(words), "keyword", "keywords")
+    let sy = ts_plural(vec_len(symbols), "symbol", "symbols")
+    if vec_len(earlier) > 0
+      kw = u_cat4(kw, " (", str_from_int(fresh_words), " new)")
+      sy = u_cat4(sy, " (", str_from_int(fresh_symbols), " new)")
+    end
+    ts_line(u_cat4("  ", ts_paint(str_pad(t, 8), TERM_BOLD), " ", u_cat4(ts_plural(pkgs, "package", "packages"), ", ", ts_plural(patterns, "pattern", "patterns"), u_cat4(", ", kw, ", ", sy))))
+    for k = 0 to vec_len(words) - 1
+      u_push(earlier, u_get(words, k))
+    end
+    for k = 0 to vec_len(symbols) - 1
+      u_push(earlier, u_get(symbols, k))
+    end
+    ts_wrap(words, "    ", 72)
+    ts_wrap(symbols, "    ", 72)
+  end
+end
+
+fn ts_backends(tops: ptr Vec)
+  // front-end packages that need a backend: syntax, and not an expansion
+  let fronts = vec_new()
+  for i = 0 to vec_len(ts_names) - 1
+    let n = u_get(ts_names, i)
+    let f = ts_file(n)
+    if ts_kind(ts_top(n)) == "front-end" && !f.is_truck && vec_len(f.syntax) > 0 && ts_len(f.expand) == 0
+      // struct declarations are laid out by the compiler, not a backend
+      if (vec_get(f.syntax, 0) as ptr PfSyntax).kind != "struct"
+        u_push(fronts, n)
+      end
+    end
+  end
+  let any = false
+  for i = 0 to vec_len(tops) - 1
+    any = any || ts_kind(u_get(tops, i)) == "backend"
+  end
+  if !any || vec_len(fronts) == 0
+    return
+  end
+  ts_heading("BACKENDS  front-end packages each one translates")
+  for i = 0 to vec_len(tops) - 1
+    let b = u_get(tops, i)
+    if ts_kind(b) != "backend"
+      continue
+    end
+    let gaps = vec_new()
+    for k = 0 to vec_len(fronts) - 1
+      let n = u_get(fronts, k)
+      if ts_file(u_cat3(b, "/", ts_rest(n))) == null
+        u_push(gaps, n)
+      end
+    end
+    let have = vec_len(fronts) - vec_len(gaps)
+    let mark = ts_paint("✓", TERM_GREEN)
+    if vec_len(gaps) > 0
+      mark = ts_paint(u_cat3("missing ", str_from_int(vec_len(gaps)), ":"), TERM_YELLOW)
+    end
+    ts_line(u_cat4("  ", str_pad(b, 12), str_lpad(u_cat3(str_from_int(have), "/", str_from_int(vec_len(fronts))), 7), u_cat("  ", mark)))
+    ts_wrap(gaps, "    ", 72)
+  end
+end
+
+fn ts_problems()
+  ts_heading("PROBLEMS")
+  let any = false
+  for i = 0 to map_len(ts_missing) - 1
+    any = true
+    ts_line(u_cat4("  ", ts_paint("missing ", TERM_RED), map_key(ts_missing, i), ts_paint(u_cat3(" (", map_value(ts_missing, i) as str, ")"), TERM_DIM)))
+  end
+  for i = 0 to map_len(ts_broken) - 1
+    any = true
+    ts_line(u_cat3("  ", ts_paint("broken  ", TERM_RED), map_value(ts_broken, i) as str))
+  end
+  let state = map_new()
+  let cycles = vec_new()
+  for i = 0 to vec_len(ts_names) - 1
+    let n = u_get(ts_names, i)
+    if ts_count(state, n) == 0
+      let c = ts_cycle(n, state, vec_new())
+      if c != "" && !u_in(cycles, c)
+        u_push(cycles, c)
+      end
+    end
+  end
+  for i = 0 to vec_len(cycles) - 1
+    any = true
+    ts_line(u_cat3("  ", ts_paint("cycle   ", TERM_RED), u_get(cycles, i)))
+  end
+  if !any
+    ts_line(u_cat("  ", ts_paint("none ✓", TERM_GREEN)))
+  end
+end
+
+// ---- main ----
+
+let args = argv
+let reg = UNIVERSAL
+let roots = vec_new()
+let fallback = "?"
+let i = 1
+while i < len(args)
+  let a = args[i]
+  i += 1
+  if a == "-h" || a == "--help"
+    io_out("usage: treestat [registry] [--fallback <url> | --no-fallback] [root packages...]\n")
+    io_out(u_cat3("  registry     an http(s):// or file:// URL; default ", UNIVERSAL, "\n"))
+    io_out("  roots        where to start; default: every package in <registry>/index.txt\n")
+    io_out("  --fallback   where to find packages the registry doesn't have; default:\n")
+    io_out("               the universal tree, as for a program's pkg_tree.pkg\n")
+    io_flush()
+    return 0
+  elif a == "--no-fallback"
+    fallback = ""
+  elif a == "--fallback" && i < len(args)
+    fallback = u_rtrim_byte(args[i], '/')
+    i += 1
+  elif str_starts(a, "http://") || str_starts(a, "https://") || str_starts(a, "file://")
+    reg = u_rtrim_byte(a, '/')
+  else
+    u_push(roots, a)
+  end
+end
+if fallback == "?"
+  fallback = UNIVERSAL
+  if reg == UNIVERSAL
+    fallback = ""
+  end
+end
+ts_color = term_colors(1)
+ts_files = map_new()
+ts_sizes = map_new()
+ts_lines = map_new()
+ts_deps = map_new()
+ts_uses = map_new()
+ts_missing = map_new()
+ts_broken = map_new()
+ts_external = map_new()
+
+let start = time_now()
+let how = "the packages named on the command line"
+let reason = "named on the command line"
+if vec_len(roots) == 0
+  let ok = false
+  let text = ts_fetch_text(u_cat(reg, "/index.txt"), &ok)
+  if !ok
+    io_err(u_cat3("treestat: ", reg, " has no index.txt to list its packages; name where to start, e.g.\n"))
+    io_err(u_cat3("  packenger run tools/treestat.pkg -- ", reg, " std rt\n"))
+    return 1
+  end
+  let lines = u_split(text, '\n')
+  for i = 0 to vec_len(lines) - 1
+    let t = u_trim(u_get(lines, i))
+    if t != "" && !str_starts(t, "//")
+      u_push(roots, t)
+    end
+  end
+  how = "index.txt"
+  reason = "listed in index.txt"
+end
+let rounds = ts_crawl(reg, fallback, roots, reason)
+if rounds < 0
+  io_err(u_cat3("treestat: ", pk_err, "\n"))
+  return 1
+end
+let took = time_now() - start
+
+ts_names = vec_new()
+for k = 0 to map_len(ts_files) - 1
+  if !map_has(ts_external, map_key(ts_files, k))
+    u_push(ts_names, map_key(ts_files, k))
+  end
+end
+ts_sort_strs(ts_names)
+let tops = vec_new()
+for k = 0 to vec_len(ts_names) - 1
+  let t = ts_top(u_get(ts_names, k))
+  if !u_in(tops, t)
+    u_push(tops, t)
+  end
+end
+
+ts_overview(reg, how, rounds, took, ts_downloads)
+if vec_len(ts_names) > 0
+  ts_contents()
+  ts_trucks(tops)
+  ts_costs(tops)
+  ts_needed()
+  ts_language(tops)
+  ts_backends(tops)
+end
+ts_problems()
+ts_line("")
+io_flush()
+if map_len(ts_missing) > 0 || map_len(ts_broken) > 0
+  return 1
+end

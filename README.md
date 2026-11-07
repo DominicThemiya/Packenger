@@ -99,6 +99,7 @@ are defined by `std` packages too. Packages can also be built from other package
 | [Publishing packages](docs/publishing.md) | the registry and keeping docs current |
 | [Command line](docs/cli.md) | commands, flags and the `-vb` report |
 | [How the compiler works](docs/architecture.md) | pipeline and code map |
+| [Tools](docs/tools.md) | `treestat`: how heavy a package tree is |
 | [Self-hosting](docs/self-hosting.md) | `pkc`, the compiler written in Packenger, and its bootstrap |
 | [Package reference](docs/registry/README.md) | every truck and package, generated from the registry |
 

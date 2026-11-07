@@ -24,6 +24,12 @@ or `PACKENGER_REGISTRY`, or route some packages to it from a
 export PACKENGER_REGISTRY=file://$PWD/registry
 ```
 
+Tools such as [treestat](tools.md#treestat) find a registry's packages
+through `<registry>/index.txt`, one name per line, since a folder can't be
+listed over HTTP. `go run ./cmd/pkgdoc` keeps the universal registry's up
+to date, and `server.pkg` generates one; on other static hosts, publish
+one alongside the packages.
+
 ## Package trees
 
 A program can say where its packages come from. With the line
@@ -73,9 +79,9 @@ packenger build examples/web/server.pkg -o pkg-server
 ./pkg-server my-registry 8000 0.0.0.0     # port 8000, reachable from other machines
 ```
 
-It serves `<folder>/<name>.pkg` at `/<name>.pkg`, and at `/` a page
-listing every package with its summary and the `pkg_tree.pkg` lines for
-using it. Lay the folder out like [`registry/`](../registry): a truck
+It serves `<folder>/<name>.pkg` at `/<name>.pkg`, at `/index.txt` a list
+of every package, and at `/` a page listing every package with its summary
+and the `pkg_tree.pkg` lines for using it. Lay the folder out like [`registry/`](../registry): a truck
 `acme` is `acme.pkg`, and its member `banner` is `acme/banner.pkg`.
 [`examples/web`](../examples/web) has a small one, and a program that uses
 it.

@@ -1,5 +1,6 @@
-// Command pkgdoc regenerates docs/registry from the package files in
-// registry/. Run it from the repository root after changing a package:
+// Command pkgdoc regenerates docs/registry and registry/index.txt from the
+// package files in registry/. Run it from the repository root after
+// changing a package:
 //
 //	go run ./cmd/pkgdoc
 package main
@@ -27,5 +28,9 @@ func main() {
 		fmt.Fprintln(os.Stderr, "pkgdoc:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("wrote docs/registry (%d packages)\n", len(t.Pkgs))
+	if err := os.WriteFile("registry/"+pkgdoc.IndexFile, []byte(t.PackageIndex()), 0o644); err != nil {
+		fmt.Fprintln(os.Stderr, "pkgdoc:", err)
+		os.Exit(1)
+	}
+	fmt.Printf("wrote docs/registry and registry/%s (%d packages)\n", pkgdoc.IndexFile, len(t.Pkgs))
 }

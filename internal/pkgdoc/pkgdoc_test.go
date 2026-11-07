@@ -33,6 +33,9 @@ func TestGeneratedDocsAreUpToDate(t *testing.T) {
 			t.Errorf("docs/registry/%s is out of date; run: go run ./cmd/pkgdoc", p)
 		}
 	}
+	if got, _ := os.ReadFile("../../registry/" + IndexFile); string(got) != tree.PackageIndex() {
+		t.Errorf("registry/%s is out of date; run: go run ./cmd/pkgdoc", IndexFile)
+	}
 	filepath.WalkDir(out, func(p string, d os.DirEntry, err error) error {
 		if err == nil && !d.IsDir() {
 			rel, _ := filepath.Rel(out, p)
