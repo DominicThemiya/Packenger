@@ -143,7 +143,7 @@ fn lk_format(src: str, registry: str, prefixes: ptr Vec, bases: ptr Vec, sums: p
   for i = 0 to map_len(sums) - 1
     u_push(names, map_key(sums, i))
   end
-  u_sort_strs(names)
+  sort_strs(names)
   for i = 0 to vec_len(names) - 1
     let n = u_get(names, i)
     sb_add(b, u_cat4(n, " ", map_get(sums, n) as str, "\n"))

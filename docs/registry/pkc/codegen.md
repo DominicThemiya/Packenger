@@ -141,7 +141,7 @@ fn cg_kinds(prog: ptr PProg) -> ptr Vec
   for i = 0 to map_len(kinds) - 1
     u_push(out, map_key(kinds, i))
   end
-  u_sort_strs(out)
+  sort_strs(out)
   return out
 end
 

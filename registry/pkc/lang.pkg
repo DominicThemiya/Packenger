@@ -67,19 +67,6 @@ code
     return true
   end
 
-  // u_sort_strs sorts strings by bytes (insertion sort: the lists are short).
-  fn u_sort_strs(v: ptr Vec)
-    for i = 1 to vec_len(v) - 1
-      let x = vec_get(v, i)
-      let j = i - 1
-      while j >= 0 && str_cmp(vec_get(v, j) as str, x as str) > 0
-        vec_set(v, j + 1, vec_get(v, j))
-        j = j - 1
-      end
-      vec_set(v, j + 1, x)
-    end
-  end
-
   fn lg_fail(msg: str) -> ptr Lang
     pk_err = msg
     return null
@@ -194,7 +181,7 @@ code
     for i = 0 to map_len(punct) - 1
       u_push(L.puncts, map_key(punct, i))
     end
-    u_sort_strs(L.puncts)
+    sort_strs(L.puncts)
     if !lg_lex_all(L, L.stmt_slot) || !lg_lex_all(L, L.expr_slot)
       return null
     end

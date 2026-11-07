@@ -74,7 +74,7 @@ fn tr_tree(r: ptr DrResult, file: str, target: str) -> str
   for i = 0 to map_len(r.front.front) - 1
     u_push(names, map_key(r.front.front, i))
   end
-  u_sort_strs(names)
+  sort_strs(names)
   for i = 0 to vec_len(names) - 1
     let n = u_get(names, i)
     let f = map_get(r.front.front, n) as ptr PfFile

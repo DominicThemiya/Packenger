@@ -234,7 +234,7 @@ fn dr_lex(reg: str, file: str, src: str) -> ptr DrFront
       u_push(names, map_key(front, i))
     end
   end
-  u_sort_strs(names)
+  sort_strs(names)
   let pkgs = vec_new()
   for i = 0 to vec_len(names) - 1
     vec_push(pkgs, map_get(front, u_get(names, i)))
@@ -247,7 +247,7 @@ fn dr_lex(reg: str, file: str, src: str) -> ptr DrFront
   for i = 0 to map_len(L.keywords) - 1
     u_push(keywords, map_key(L.keywords, i))
   end
-  u_sort_strs(keywords)
+  sort_strs(keywords)
   rp_grammar(vec_len(pkgs), lg_forms(L), map_len(L.infix), map_len(L.prefix), keywords, L.puncts)
   let toks = lx_lex(body, file, L.puncts, false)
   if toks == null
@@ -268,7 +268,7 @@ fn dr_library_units(front: ptr Map, L: ptr Lang) -> ptr Vec
   for i = 0 to map_len(front) - 1
     u_push(names, map_key(front, i))
   end
-  u_sort_strs(names)
+  sort_strs(names)
   let units = vec_new()
   for i = 0 to vec_len(names) - 1
     let f = map_get(front, u_get(names, i)) as ptr PfFile
