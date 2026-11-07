@@ -786,8 +786,9 @@ end
 
 // ps_type_newvars gives a variable declared "of" slot its type; with
 // several slots listed, the first one present wins.
+// ps_type_newvars gives a variable declared "of" the given slot its type,
+// or with "of slot[]" the type of its elements (u8 for a str).
 fn ps_type_newvars(p: ptr Parser, n: ptr PNode, slot: str, c: ptr PNode) -> bool
-  let ty = c.ty
   for i = 0 to ps_nslots(n) - 1
     let v = ps_nd(n.svals, i)
     if v.kind != "var" || v.vr == null || v.sval == ""
@@ -795,13 +796,22 @@ fn ps_type_newvars(p: ptr Parser, n: ptr PNode, slot: str, c: ptr PNode) -> bool
     end
     let of = u_fields(v.sval)
     let rank = -1
+    let elem = false
     for k = 0 to vec_len(of) - 1
-      if u_get(of, k) == slot
+      if u_get(of, k) == slot || u_get(of, k) == u_cat(slot, "[]")
         rank = k
+        elem = u_get(of, k) != slot
       end
     end
     if rank < 0 || v.ofrank > 0 && v.ofrank - 1 < rank
       continue
+    end
+    let ty = c.ty
+    if elem
+      ty = ty_elem(ty)
+      if ty == ""
+        ty = "?"
+      end
     end
     if ty_struct(p.types, ty) != null
       ps_fail_hard(p, c.file, c.line, c.col, u_cat4(v.vr.name, " can't hold a struct value; use ptr ", ty, ""))
@@ -1627,6 +1637,11 @@ fn ps_expand(p: ptr Parser, r: ptr LgRule, n: ptr PNode, s: ptr PSnap) -> ptr PN
     let t = lx_tok(r.tmpl, i)
     if t.kind != TK_HOLE
       vec_push(toks, t as int)
+      continue
+    end
+    if t.text == "@pos"
+      // where the construct is used, as a string: "app.pkg:12:3"
+      vec_push(toks, ps_tok_copy(TK_STR, ps_pos(n), t) as int)
       continue
     end
     if str_starts(t.text, "$")

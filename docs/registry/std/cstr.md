@@ -27,3 +27,7 @@ cstr ( {s: expr str} ) -> ptr u8
 | `s` | expression | `str` |
 
 Produces: `ptr u8`
+
+## Used by
+
+[sugar/assert](../sugar/assert.md)

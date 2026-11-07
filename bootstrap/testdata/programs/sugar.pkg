@@ -1,0 +1,77 @@
+use std
+use sugar
+
+// the sugar truck: compound assignment, for-in and assert
+
+struct Acc
+  n: int
+end
+
+global calls: int = 0
+
+fn next_index() -> int
+  calls += 1
+  return 1
+end
+
+// compound assignment on variables, fields, elements and *p
+let n = 10
+n += 5
+n -= 3
+n *= 4
+n /= 6
+n %= 5
+print n
+let a = new Acc
+a.n += 7
+a.n *= a.n
+print a.n
+let xs = make([int], 3)
+xs[next_index()] += 40
+xs[next_index()] -= -2
+print xs[1]
+print calls
+let p = &n
+*p += 100
+print n
+
+// for-in over a slice, with break and continue
+xs[0] = 1
+xs[2] = 3
+let total = 0
+for x in xs
+  if x == 3
+    continue
+  end
+  total += x
+end
+print total
+for x in xs
+  print x
+  break
+end
+
+// over a string's bytes, and nested
+let vowels = 0
+for c in "packenger tree"
+  for v in "aeiou"
+    if c == v
+      vowels += 1
+    end
+  end
+end
+print vowels
+
+// the slice is evaluated once
+let grow = make([int], 2)
+let seen = 0
+for g in grow
+  grow = make([int], 10)
+  seen += 1
+end
+print seen
+
+// assertions that hold do nothing
+assert total == 43
+assert len("abc") == 3 && vowels > 0
+print "done"

@@ -34,3 +34,7 @@ Kind: `prefix`, precedence 80, left-associative
 | `x` |  | — |
 
 Produces: `ptr {x}`
+
+## Used by
+
+[sugar/add_assign](../sugar/add_assign.md), [sugar/div_assign](../sugar/div_assign.md), [sugar/mod_assign](../sugar/mod_assign.md), [sugar/mul_assign](../sugar/mul_assign.md), [sugar/sub_assign](../sugar/sub_assign.md)

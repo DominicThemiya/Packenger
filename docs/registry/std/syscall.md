@@ -32,3 +32,7 @@ syscall ( {args: args} ) -> int
 | `args` | argument list | — |
 
 Produces: `int`
+
+## Used by
+
+[sugar/assert](../sugar/assert.md)

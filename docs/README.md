@@ -11,6 +11,7 @@
 | [Self-hosting plan](self-hosting.md) | roadmap for a Packenger compiler written in Packenger |
 | [Dump formats](dumps.md) | `packenger dump` output and the comparison harness |
 | [Runtime library](registry/rt.md) | the `rt` truck: memory, vectors, strings, maps, files, processes |
+| [Syntactic sugar](registry/sugar.md) | the `sugar` truck: `+=` and friends, `for x in xs`, `assert` |
 | [Package reference](registry/README.md) | generated: every truck and package in the registry |
 
 The package reference is generated from the packages themselves. Don't

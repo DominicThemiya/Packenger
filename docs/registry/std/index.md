@@ -48,3 +48,7 @@ Kind: `postfix`, precedence 90, left-associative
 | `i` | expression | `int` |
 
 Produces: `u8`
+
+## Used by
+
+[sugar/forin](../sugar/forin.md)

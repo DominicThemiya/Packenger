@@ -27,3 +27,7 @@ Kind: `prefix`, precedence 70, left-associative
 | `operand` | expression | `bool` |
 
 Produces: `bool`
+
+## Used by
+
+[sugar/assert](../sugar/assert.md)

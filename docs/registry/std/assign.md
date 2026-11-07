@@ -31,4 +31,4 @@ Kind: `statement`
 
 ## Used by
 
-[std/for](for.md)
+[std/for](for.md), [sugar/add_assign](../sugar/add_assign.md), [sugar/div_assign](../sugar/div_assign.md), [sugar/forin](../sugar/forin.md), [sugar/mod_assign](../sugar/mod_assign.md), [sugar/mul_assign](../sugar/mul_assign.md), [sugar/sub_assign](../sugar/sub_assign.md)

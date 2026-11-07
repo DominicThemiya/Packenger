@@ -265,6 +265,27 @@ returns an `int` (negative values are errors). `cstr(s)` gives a string's
 bytes as a zero-terminated C string. See
 [examples/upcase.pkg](../examples/upcase.pkg).
 
+## More syntax: the sugar truck
+
+`std` is deliberately small. The [`sugar` truck](registry/sugar.md) adds
+shorthands, every one an expansion into `std`:
+
+```
+use std
+use sugar
+
+let words = make([str], 2)
+words[0] = "tree"
+words[1] = "package"
+let letters = 0
+for w in words           // each element of a slice, or each byte of a str
+  letters += len(w)      // also -=, *=, /=, %=
+end
+assert letters == 11     // otherwise: "assertion failed at app.pkg:11:1", exit 2
+```
+
+Its words (`in`, `assert`) are reserved only in programs that use it.
+
 ## Libraries
 
 A package can ship code: functions, structs, globals and constants that are

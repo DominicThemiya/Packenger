@@ -1,0 +1,9 @@
+use std
+use sugar
+
+// a failing assertion: the position on stderr, exit status 2
+let items = make([int], 2)
+assert len(items) == 2
+print "first holds"
+  assert len(items) > 5
+print "not reached"

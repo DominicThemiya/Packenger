@@ -30,3 +30,7 @@ Kind: `infix`, precedence 60, left-associative
 | `right` | expression | `int` |
 
 Produces: `int`
+
+## Used by
+
+[sugar/mod_assign](../sugar/mod_assign.md)

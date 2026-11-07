@@ -31,3 +31,7 @@ Kind: `statement`
 | slot | takes | type |
 |---|---|---|
 | `e` | expression | `any` |
+
+## Used by
+
+[sugar/assert](../sugar/assert.md)

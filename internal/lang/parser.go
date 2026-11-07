@@ -697,24 +697,30 @@ func describeConstraint(arg, subst string) string {
 	return "of the form " + r.Replace(subst)
 }
 
-// typeNewvars gives a variable declared "of" the given slot its type. With
-// several slots listed (of t value), the first one present wins.
+// typeNewvars gives a variable declared "of" the given slot its type, or
+// with "of slot[]" the type of its elements (u8 for a str). With several
+// slots listed (of t value), the first one present wins.
 func (p *Parser) typeNewvars(n *Node, slot string, c *Node) error {
-	typ := c.Type
 	for _, name := range n.Order {
 		v := n.Slots[name]
 		if v.Kind != "var" || v.Var == nil || v.Str == "" {
 			continue
 		}
 		of := strings.Fields(v.Str)
-		rank := -1
+		rank, elem := -1, false
 		for i, o := range of {
-			if o == slot {
-				rank = i
+			if o == slot || o == slot+"[]" {
+				rank, elem = i, o != slot
 			}
 		}
 		if rank < 0 || (v.Int > 0 && int(v.Int)-1 < rank) {
 			continue
+		}
+		typ := c.Type
+		if elem {
+			if typ = Elem(typ); typ == "" {
+				typ = "?"
+			}
 		}
 		if _, isStruct := p.types.Structs[typ]; isStruct {
 			return p.failHard(c.Pos, "%s can't hold a struct value; use ptr %s", v.Var.Name, typ)
@@ -1399,6 +1405,11 @@ func (p *Parser) expand(r *Rule, n *Node, s snapshot) (*Node, error) {
 	for _, t := range r.tmpl {
 		if t.Kind != THole {
 			toks = append(toks, t)
+			continue
+		}
+		if t.Text == "@pos" {
+			// where the construct is used, as a string: "app.pkg:12:3"
+			toks = append(toks, Token{Kind: TStr, Text: n.Pos.String(), Pos: t.Pos})
 			continue
 		}
 		if name, ok := strings.CutPrefix(t.Text, "$"); ok {

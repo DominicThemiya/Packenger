@@ -32,4 +32,4 @@ Produces: `int`
 
 ## Used by
 
-[std/for](for.md)
+[std/for](for.md), [sugar/add_assign](../sugar/add_assign.md), [sugar/forin](../sugar/forin.md)

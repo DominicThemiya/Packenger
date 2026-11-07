@@ -41,4 +41,4 @@ while {cond: expr bool} {body: block} [ next {step: block} ] end
 
 ## Used by
 
-[std/for](for.md)
+[std/for](for.md), [sugar/forin](../sugar/forin.md)

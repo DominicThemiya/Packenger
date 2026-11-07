@@ -1,0 +1,22 @@
+doc Compound assignment: x %= y, short for x = x % y.
+  ```
+  let n = 10
+  n %= 4
+  print n           // 2
+  ```
+
+  The left side can be any place of type `int`: a variable, a field, a
+  slice element or `*p`. It is evaluated once, so `counts[next()] %= 1`
+  calls `next` once:
+
+  ```
+  let ptr_ = &x
+  *ptr_ = *ptr_ % y
+  ```
+
+needs std/let std/addr std/deref std/assign std/mod
+syntax statement
+  {x: place int} %= {y: expr int}
+expand
+  let {$p} = &{x}
+  *{$p} = *{$p} % {y}

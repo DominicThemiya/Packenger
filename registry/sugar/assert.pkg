@@ -1,0 +1,35 @@
+doc Assertion: assert cond stops the program if cond is false.
+  ```
+  assert len(items) > 0
+  assert total == 42
+  ```
+
+  If the condition is false, the program writes where the assertion is
+  to stderr and exits with status 2, like other runtime errors:
+
+  ```
+  assertion failed at app.pkg:12:3
+  ```
+
+  It writes with a system call, so output buffered by `rt/io` and not yet
+  flushed is lost. The position comes from `{@pos}` in the expansion:
+
+  ```
+  if !cond
+    syscall(1, 2, cstr("assertion failed at "), 20)
+    syscall(1, 2, cstr("app.pkg:12:3"), len("app.pkg:12:3"))
+    syscall(1, 2, cstr("\n"), 1)
+    syscall(60, 2)
+  end
+  ```
+
+needs std/if std/not std/syscall std/cstr std/len std/exprstmt
+syntax statement
+  assert {cond: expr bool}
+expand
+  if !{cond}
+    syscall(1, 2, cstr("assertion failed at "), 20)
+    syscall(1, 2, cstr({@pos}), len({@pos}))
+    syscall(1, 2, cstr("\n"), 1)
+    syscall(60, 2)
+  end

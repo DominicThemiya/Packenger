@@ -96,7 +96,7 @@ same type as that slot).
 | `place` | an expression that can be assigned to | a type constraint |
 | `block` | statements up to the next literal | — |
 | `type` | a type, e.g. `int`, `ptr Node`, `[u8]` | a type constraint |
-| `newvar` | a name; declares a variable | `of <slot> ...`: take the type of the first of those slots present |
+| `newvar` | a name; declares a variable | `of <slot> ...`: take the type of the first of those slots present; `of <slot>[]`: the type of its elements (`u8` for a `str`) |
 | `var` | an existing variable | a type constraint |
 | `ident` | any name | — |
 | `func` | the name of a function; has the function's result type | — |
@@ -176,6 +176,12 @@ expand
     {a} = {b}
     {b} = {$t}
   ```
+- `{@pos}` is **where the construct is used**, as a string literal such as
+  `"app.pkg:12:3"`, for messages. [sugar/assert](registry/sugar/assert.md)
+  uses it to say which assertion failed.
+- A loop variable can take the **element type** of another slot with
+  `of <slot>[]`, as in [sugar/forin](registry/sugar/forin.md):
+  `for {x: newvar of xs[]} in {xs: expr [T]} {body: block} end`.
 - List the packages the template uses in `needs`, so they're loaded even
   when the user loads only this package.
 - Expression slots are pasted inside parentheses, so precedence is kept.

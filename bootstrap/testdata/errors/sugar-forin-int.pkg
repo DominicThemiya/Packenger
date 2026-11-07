@@ -1,0 +1,6 @@
+use std
+use sugar
+
+for x in 42
+  print x
+end

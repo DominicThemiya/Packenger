@@ -26,3 +26,7 @@ len ( {x: expr str} ) -> int
 | `x` | expression | `str` |
 
 Produces: `int`
+
+## Used by
+
+[sugar/assert](../sugar/assert.md), [sugar/forin](../sugar/forin.md)

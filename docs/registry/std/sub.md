@@ -29,3 +29,7 @@ Kind: `infix`, precedence 50, left-associative
 | `right` | expression | `int` |
 
 Produces: `int`
+
+## Used by
+
+[sugar/sub_assign](../sugar/sub_assign.md)

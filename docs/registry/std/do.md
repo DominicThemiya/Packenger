@@ -32,4 +32,4 @@ do {body: block} end
 
 ## Used by
 
-[std/for](for.md)
+[std/for](for.md), [sugar/forin](../sugar/forin.md)

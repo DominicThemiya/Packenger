@@ -88,7 +88,7 @@ instruction comes from a package.
 | [`bootstrap/`](../bootstrap) | the comparison harness and its corpus |
 | [`internal/ui`](../internal/ui) | the `-vb` report and error formatting |
 | [`internal/pkgdoc`](../internal/pkgdoc) | the package reference generator and registry checks |
-| [`registry/`](../registry) | the hosted packages: the `std`, `bintables`, `ctables`, `webtables`, `rt` and `pkc` trucks |
+| [`registry/`](../registry) | the hosted packages: the `std`, `sugar`, `bintables`, `ctables`, `webtables`, `rt` and `pkc` trucks |
 
 ## Design notes
 

@@ -1,0 +1,5 @@
+use std
+use sugar
+
+let xs = make([u8], 2)
+xs[0] += 1

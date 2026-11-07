@@ -1,0 +1,5 @@
+use std
+use sugar
+
+let s = "a"
+s += 1

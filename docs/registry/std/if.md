@@ -39,3 +39,7 @@ if {cond: expr bool} {then: block} [ elif {cond: expr bool} {then: block} ]* [ e
 | `cond` (optional) | expression | `bool` |
 | `then` (optional) | block of statements | — |
 | `else` (optional) | block of statements | — |
+
+## Used by
+
+[sugar/assert](../sugar/assert.md)
