@@ -1,0 +1,24 @@
+use std
+use rt/path
+use rt/test
+
+test_str(path_join("registry", "std/if.pkg"), "registry/std/if.pkg", "join")
+test_str(path_join("registry/", "std"), "registry/std", "join after slash")
+test_str(path_join("", "std"), "std", "join empty")
+test_str(path_join("a", ""), "a", "join nothing")
+test_str(path_join("a", "/etc"), "/etc", "join absolute")
+test_str(path_dir("registry/std/if.pkg"), "registry/std", "dir")
+test_str(path_dir("if.pkg"), ".", "dir of a name")
+test_str(path_dir("/if.pkg"), "/", "dir at the root")
+test_str(path_dir("a/b/"), "a", "dir ignores a trailing slash")
+test_str(path_base("registry/std/if.pkg"), "if.pkg", "base")
+test_str(path_base("a/b/"), "b", "base ignores a trailing slash")
+test_str(path_base("/"), "/", "base of the root")
+test_str(path_ext("registry/std/if.pkg"), ".pkg", "ext")
+test_str(path_ext("archive.tar.gz"), ".gz", "ext is the last")
+test_str(path_ext("Makefile"), "", "no ext")
+test_str(path_ext(".profile"), "", "dotfile")
+test_str(path_ext("v1.2/notes"), "", "dot in a folder")
+test_true(path_is_abs("/tmp"), "absolute")
+test_true(!path_is_abs("tmp"), "relative")
+return test_done()

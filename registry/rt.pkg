@@ -1,4 +1,4 @@
-doc The runtime truck: memory, vectors, strings, maps, files, processes, time and terminals.
+doc The runtime truck: memory, vectors, strings, maps, files, folders, processes, sorting and formatting.
   Library packages written in Packenger itself, on top of `std` and system
   calls. They are what `pkc`, the self-hosted compiler, is built on.
 
@@ -25,6 +25,10 @@ doc The runtime truck: memory, vectors, strings, maps, files, processes, time an
   | `rt/time` | monotonic clock and duration text |
   | `rt/term` | terminal detection and colors |
   | `rt/sha256` | `sha256_hex`: SHA-256 of a string |
+  | `rt/sort` | sorting vectors and slices, with a comparison function or by int or string |
+  | `rt/fmt` | sizes, thousands, percentages, fixed point, hex and bar charts as text |
+  | `rt/path` | joining paths and taking them apart |
+  | `rt/fs` | listing and walking directories |
   | `rt/test` | checks for tests written in Packenger |
 
   Every name is prefixed with its package (`vec_push`, `str_find`), since
@@ -42,4 +46,8 @@ truck
   time
   term
   sha256
+  sort
+  fmt
+  path
+  fs
   test

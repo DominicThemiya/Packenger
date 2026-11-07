@@ -2,7 +2,7 @@
 
 # rt
 
-> The runtime truck: memory, vectors, strings, maps, files, processes, time and terminals.
+> The runtime truck: memory, vectors, strings, maps, files, folders, processes, sorting and formatting.
 
 [source](../../registry/rt.pkg) · truck
 
@@ -32,6 +32,10 @@ io_flush()
 | `rt/time` | monotonic clock and duration text |
 | `rt/term` | terminal detection and colors |
 | `rt/sha256` | `sha256_hex`: SHA-256 of a string |
+| `rt/sort` | sorting vectors and slices, with a comparison function or by int or string |
+| `rt/fmt` | sizes, thousands, percentages, fixed point, hex and bar charts as text |
+| `rt/path` | joining paths and taking them apart |
+| `rt/fs` | listing and walking directories |
 | `rt/test` | checks for tests written in Packenger |
 
 Every name is prefixed with its package (`vec_push`, `str_find`), since
@@ -52,6 +56,10 @@ Each package's tests are in [tests/rt](../../tests/rt).
 | [rt/time](rt/time.md) | Time: a monotonic clock in nanoseconds, and durations as text. |
 | [rt/term](rt/term.md) | Terminals: detecting one, and ANSI colors that respect NO_COLOR. |
 | [rt/sha256](rt/sha256.md) | SHA-256: the hash that lock files pin packages with. |
+| [rt/sort](rt/sort.md) | Sorting: vectors of ints or strings, or of anything, with a comparison function. |
+| [rt/fmt](rt/fmt.md) | Formatting numbers for people: sizes, thousands, percentages, fixed point, hex and bars. |
+| [rt/path](rt/path.md) | File paths as strings: joining them and taking them apart. |
+| [rt/fs](rt/fs.md) | Directories: listing them, walking them, and telling folders from files. |
 | [rt/test](rt/test.md) | A tiny test library: checks that print FAIL lines, and a final PASS or FAILED. |
 
 ## Used by

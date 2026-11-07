@@ -140,11 +140,15 @@ pkc/types
 pkc/ui
 pkc/util
 rt
+rt/fmt
+rt/fs
 rt/io
 rt/map
 rt/mem
 rt/os
+rt/path
 rt/sha256
+rt/sort
 rt/str
 rt/term
 rt/test

@@ -565,9 +565,9 @@ func TestCBootstrap(t *testing.T) {
 	}
 }
 
-// webSkip are programs that need what WASI doesn't have: processes and the
-// environment.
-var webSkip = map[string]bool{"tools.pkg": true, "os.pkg": true}
+// webSkip are programs that need what WASI doesn't have: processes, the
+// environment and reading directories.
+var webSkip = map[string]bool{"tools.pkg": true, "os.pkg": true, "fs.pkg": true}
 
 // The WebAssembly backend: every compiler must generate the same module, and
 // every program must behave the same as with bintables.

@@ -85,6 +85,7 @@ The [`examples/`](../examples) folder has:
 | `letters.pkg` | stdx `for x in xs` over a string's bytes and a slice, with `break`: a letter histogram |
 | `roman.pkg` | stdx `match`/`case` on bytes, numbers and strings: Roman numerals |
 | `bsearch.pkg` | stdx `assert`: binary search with its invariants checked; `-- unsorted` makes one fail |
+| `sorting.pkg` | function values: comparators for `rt/sort`'s `sort_by`, a column chosen by a function, a slice of functions |
 | `web/` | a package registry server written in Packenger, and a program that gets packages from it |
 
 ### Your own registry

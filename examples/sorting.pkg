@@ -1,0 +1,91 @@
+use std
+use rt
+
+// Function values: a function's name without () is a value of type
+// fn(<parameters>) -> <result>. Values can be passed, stored in slices and
+// called. Here rt/sort's sort_by takes one to compare planets, and show
+// takes one to pick the column it prints.
+//
+//   packenger run examples/sorting.pkg
+
+struct Planet
+  name: str
+  radius: int      // mean radius, km
+  year: int        // orbital period, Earth days
+end
+
+fn planet(list: ptr Vec, name: str, radius: int, year: int)
+  let p = new Planet
+  p.name = name
+  p.radius = radius
+  p.year = year
+  vec_push(list, p as int)
+end
+
+// comparisons for sort_by: true when a goes before b. A Vec holds words,
+// so the planets come in as ints and are converted back with as.
+fn by_name(a: int, b: int) -> bool
+  return str_cmp((a as ptr Planet).name, (b as ptr Planet).name) < 0
+end
+
+fn by_size(a: int, b: int) -> bool
+  return (a as ptr Planet).radius > (b as ptr Planet).radius
+end
+
+fn by_year(a: int, b: int) -> bool
+  return (a as ptr Planet).year < (b as ptr Planet).year
+end
+
+// columns for show
+fn radius_of(p: ptr Planet) -> int
+  return p.radius
+end
+
+fn year_of(p: ptr Planet) -> int
+  return p.year
+end
+
+fn show(title: str, list: ptr Vec, column: fn(ptr Planet) -> int, unit: str)
+  print title
+  let max = 0
+  for i = 0 to vec_len(list) - 1
+    let v = column(vec_get(list, i) as ptr Planet)
+    if v > max
+      max = v
+    end
+  end
+  for i = 0 to vec_len(list) - 1
+    let p = vec_get(list, i) as ptr Planet
+    let v = column(p)
+    let cells = str_concat(str_pad(p.name, 9), str_lpad(fmt_commas(v), 7))
+    print str_concat(str_concat(str_concat(cells, unit), "  "), fmt_bar(v, max, 24))
+  end
+  print ""
+end
+
+let planets = vec_new()
+planet(planets, "Mercury", 2440, 88)
+planet(planets, "Venus", 6052, 225)
+planet(planets, "Earth", 6371, 365)
+planet(planets, "Mars", 3390, 687)
+planet(planets, "Jupiter", 69911, 4333)
+planet(planets, "Saturn", 58232, 10759)
+planet(planets, "Uranus", 25362, 30687)
+planet(planets, "Neptune", 24622, 60190)
+
+sort_by(planets, by_size)
+show("largest first", planets, radius_of, " km")
+
+sort_by(planets, by_year)
+show("shortest year first", planets, year_of, " days")
+
+// function values in a slice, applied in turn
+let orders = make([fn(int, int) -> bool], 3)
+orders[0] = by_year
+orders[1] = by_size
+orders[2] = by_name
+for i = 0 to len(orders) - 1
+  sort_by(planets, orders[i])
+end
+let first = vec_get(planets, 0) as ptr Planet
+print str_concat("alphabetically first: ", first.name)

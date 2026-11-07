@@ -98,4 +98,4 @@ end
 
 ## Used by
 
-[rt/map](map.md), [rt/os](os.md)
+[rt/fs](fs.md), [rt/map](map.md), [rt/os](os.md), [rt/sort](sort.md)

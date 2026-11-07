@@ -1,0 +1,39 @@
+use std
+use rt
+use rt/test
+
+// builds a small tree in /tmp, lists it, and removes it
+let root = str_concat("/tmp/packenger-fs-test-", str_from_int(syscall(39)))
+os_remove_all(root)
+syscall(83, cstr(root), 493)
+syscall(83, cstr(path_join(root, "sub")), 493)
+syscall(83, cstr(path_join(root, "sub/deep")), 493)
+io_write_file(path_join(root, "b.txt"), "b")
+io_write_file(path_join(root, "a.pkg"), "a")
+io_write_file(path_join(root, ".hidden"), "h")
+io_write_file(path_join(root, "sub/c.pkg"), "c")
+io_write_file(path_join(root, "sub/deep/d.pkg"), "d")
+
+test_true(fs_is_dir(root), "is a folder")
+test_true(!fs_is_dir(path_join(root, "a.pkg")), "a file isn't")
+test_true(!fs_is_dir(path_join(root, "missing")), "missing isn't")
+
+let ok = false
+let names = fs_list(root, &ok)
+test_true(ok, "list ok")
+test_int(vec_len(names), 4, "list count")
+test_str(vec_get(names, 0) as str, ".hidden", "list sorted, first")
+test_str(vec_get(names, 3) as str, "sub", "list sorted, last")
+fs_list(path_join(root, "missing"), &ok)
+test_true(!ok, "list of a missing folder")
+
+let files = fs_walk(root, false)
+test_int(vec_len(files), 4, "walk count")
+test_str(vec_get(files, 0) as str, "a.pkg", "walk first")
+test_str(vec_get(files, 2) as str, "sub/c.pkg", "walk nested")
+test_str(vec_get(files, 3) as str, "sub/deep/d.pkg", "walk deep")
+test_int(vec_len(fs_walk(root, true)), 5, "walk with hidden files")
+
+os_remove_all(root)
+test_true(!fs_is_dir(root), "removed")
+return test_done()

@@ -1,0 +1,78 @@
+use std
+use rt/str
+use rt/vec
+use rt/sort
+use rt/test
+
+fn by_length(a: int, b: int) -> bool
+  return len(a as str) < len(b as str)
+end
+
+fn desc(a: int, b: int) -> bool
+  return a > b
+end
+
+fn joined(v: ptr Vec) -> str
+  let b = sb_new()
+  for i = 0 to vec_len(v) - 1
+    if i > 0
+      sb_add(b, ",")
+    end
+    sb_add(b, vec_get(v, i) as str)
+  end
+  return sb_str(b)
+end
+
+// ints, including duplicates and negatives
+let v = vec_new()
+let seed = 7
+for i = 1 to 200
+  seed = (seed * 1103515245 + 12345) % 2147483648
+  vec_push(v, seed % 50 - 25)
+end
+sort_ints(v)
+let sorted = true
+for i = 1 to vec_len(v) - 1
+  sorted = sorted && vec_get(v, i - 1) <= vec_get(v, i)
+end
+test_true(sorted, "ints ascending")
+test_int(vec_len(v), 200, "nothing lost")
+
+// strings
+let s = vec_new()
+vec_push(s, "pear" as int)
+vec_push(s, "fig" as int)
+vec_push(s, "apple" as int)
+vec_push(s, "Banana" as int)
+vec_push(s, "fig" as int)
+sort_strs(s)
+test_str(joined(s), "Banana,apple,fig,fig,pear", "strings in byte order")
+
+// by a function, stably: equal lengths keep their order
+let w = vec_new()
+vec_push(w, "ccc" as int)
+vec_push(w, "a" as int)
+vec_push(w, "bb" as int)
+vec_push(w, "zz" as int)
+vec_push(w, "y" as int)
+sort_by(w, by_length)
+test_str(joined(w), "a,y,bb,zz,ccc", "by length, stable")
+
+// slices, and the empty and one-item cases
+let xs = make([int], 5)
+xs[0] = 3
+xs[1] = 9
+xs[2] = 1
+xs[3] = 9
+xs[4] = -4
+sort_slice(xs, desc)
+test_int(xs[0], 9, "slice descending first")
+test_int(xs[4], -4, "slice descending last")
+let empty = vec_new()
+sort_ints(empty)
+test_int(vec_len(empty), 0, "empty")
+let one = vec_new()
+vec_push(one, 5)
+sort_ints(one)
+test_int(vec_get(one, 0), 5, "one item")
+return test_done()

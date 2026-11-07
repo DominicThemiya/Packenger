@@ -59,27 +59,8 @@ fn ts_heading(title: str)
   ts_line(ts_paint(title, TERM_BOLD))
 end
 
-fn ts_size(n: int) -> str
-  if n < 1024
-    return u_cat(str_from_int(n), " B")
-  end
-  let tenths = n * 10 / 1024
-  return u_cat4(str_from_int(tenths / 10), ".", str_from_int(tenths % 10), " KB")
-end
-
 fn ts_bar(n: int, max: int, width: int) -> str
-  let b = sb_new()
-  let full = 0
-  if max > 0
-    full = n * width / max
-  end
-  if full == 0 && n > 0
-    full = 1
-  end
-  for i = 1 to full
-    sb_add(b, "█")
-  end
-  return ts_paint(sb_str(b), TERM_CYAN)
+  return ts_paint(fmt_bar(n, max, width), TERM_CYAN)
 end
 
 // ts_row pads cells to widths; a negative width aligns right.
@@ -196,35 +177,19 @@ fn ts_len(v: ptr Vec) -> int
   return vec_len(v)
 end
 
-fn ts_sort_strs(v: ptr Vec)
-  for i = 1 to vec_len(v) - 1
-    let x = u_get(v, i)
-    let j = i - 1
-    while j >= 0 && str_cmp(u_get(v, j), x) > 0
-      vec_set(v, j + 1, vec_get(v, j))
-      j -= 1
-    end
-    vec_set(v, j + 1, x as int)
-  end
+// the values ts_sort_desc sorts by: a function value can't capture them
+global ts_sort_key: ptr Map
+
+fn ts_more(a: int, b: int) -> bool
+  let va = ts_count(ts_sort_key, a as str)
+  let vb = ts_count(ts_sort_key, b as str)
+  return va > vb || va == vb && str_cmp(a as str, b as str) < 0
 end
 
 // ts_sort_desc sorts names by their value in m, largest first, then by name.
 fn ts_sort_desc(names: ptr Vec, m: ptr Map)
-  for i = 1 to vec_len(names) - 1
-    let x = u_get(names, i)
-    let j = i - 1
-    while j >= 0
-      let y = u_get(names, j)
-      let vx = ts_count(m, x)
-      let vy = ts_count(m, y)
-      if vy > vx || vy == vx && str_cmp(y, x) < 0
-        break
-      end
-      vec_set(names, j + 1, vec_get(names, j))
-      j -= 1
-    end
-    vec_set(names, j + 1, x as int)
-  end
+  ts_sort_key = m
+  sort_by(names, ts_more)
 end
 
 // ---- fetching ----
@@ -500,14 +465,14 @@ fn ts_overview(reg: str, how: str, rounds: int, took: int, downloads: int)
   let w = ts_widths(10, 0, 0, 0)
   ts_line(ts_row(ts_cells("packages", str_from_int(vec_len(ts_names)), "", ""), w))
   ts_line(ts_row(ts_cells("trucks", str_from_int(trucks), "", ""), w))
-  ts_line(ts_row(ts_cells("size", ts_size(bytes), "", ""), w))
+  ts_line(ts_row(ts_cells("size", fmt_size(bytes), "", ""), w))
   ts_line(ts_row(ts_cells("lines", str_from_int(lines), "", ""), w))
   if map_len(ts_external) > 0
-    ts_line(ts_row(ts_cells("external", u_cat4(ts_plural(map_len(ts_external), "package", "packages"), " (", ts_size(ts_ext_bytes), ") from the fallback, not counted here"), "", ""), w))
+    ts_line(ts_row(ts_cells("external", u_cat4(ts_plural(map_len(ts_external), "package", "packages"), " (", fmt_size(ts_ext_bytes), ") from the fallback, not counted here"), "", ""), w))
   end
   if vec_len(ts_names) > 0
-    ts_line(ts_row(ts_cells("average", ts_size(bytes / vec_len(ts_names)), "", ""), w))
-    ts_line(ts_row(ts_cells("largest", u_cat4(largest, " (", ts_size(ts_count(ts_sizes, largest)), ")"), "", ""), w))
+    ts_line(ts_row(ts_cells("average", fmt_size(bytes / vec_len(ts_names)), "", ""), w))
+    ts_line(ts_row(ts_cells("largest", u_cat4(largest, " (", fmt_size(ts_count(ts_sizes, largest)), ")"), "", ""), w))
   end
 end
 
@@ -593,9 +558,9 @@ fn ts_trucks(tops: ptr Vec)
         end
       end
     end
-    let row = ts_cells(t, ts_kind(t), str_from_int(count), ts_size(bytes))
+    let row = ts_cells(t, ts_kind(t), str_from_int(count), fmt_size(bytes))
     if largest != ""
-      u_push(row, u_cat4(largest, " (", ts_size(ts_count(ts_sizes, largest)), ")"))
+      u_push(row, u_cat4(largest, " (", fmt_size(ts_count(ts_sizes, largest)), ")"))
     else
       u_push(row, "")
     end
@@ -632,7 +597,7 @@ fn ts_costs(tops: ptr Vec)
   ts_line(ts_paint(ts_row(head, w), TERM_DIM))
   for i = 0 to vec_len(roots) - 1
     let t = u_get(roots, i)
-    let row = ts_cells(t, str_from_int(ts_count(counts, t)), ts_size(ts_count(bytes, t)), str_from_int(ts_count(depth, t)))
+    let row = ts_cells(t, str_from_int(ts_count(counts, t)), fmt_size(ts_count(bytes, t)), str_from_int(ts_count(depth, t)))
     ts_line(u_cat3(ts_row(row, w), "  ", ts_bar(ts_count(bytes, t), max, 20)))
   end
 
@@ -661,7 +626,7 @@ fn ts_costs(tops: ptr Vec)
   end
   for i = 0 to shown - 1
     let n = u_get(single, i)
-    let row = ts_cells(n, str_from_int(ts_count(scount, n)), ts_size(ts_count(sbytes, n)), "")
+    let row = ts_cells(n, str_from_int(ts_count(scount, n)), fmt_size(ts_count(sbytes, n)), "")
     ts_line(ts_row(row, ts_widths(20, -6, -9, 0)))
   end
 end
@@ -748,8 +713,8 @@ fn ts_language(tops: ptr Vec)
         end
       end
     end
-    ts_sort_strs(words)
-    ts_sort_strs(symbols)
+    sort_strs(words)
+    sort_strs(symbols)
     let fresh_words = 0
     for k = 0 to vec_len(words) - 1
       if !u_in(earlier, u_get(words, k))
@@ -933,7 +898,7 @@ for k = 0 to map_len(ts_files) - 1
     u_push(ts_names, map_key(ts_files, k))
   end
 end
-ts_sort_strs(ts_names)
+sort_strs(ts_names)
 let tops = vec_new()
 for k = 0 to vec_len(ts_names) - 1
   let t = ts_top(u_get(ts_names, k))

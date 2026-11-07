@@ -144,6 +144,9 @@ print pick(41)                          // 42
 ```
 
 Calls through a value are checked against its type like direct calls.
+[`examples/sorting.pkg`](../examples/sorting.pkg) sorts with
+[rt/sort](registry/rt/sort.md)'s `sort_by`, which takes a comparison
+function.
 Calling `null` stops the program with `panic: call of a null function`.
 Functions don't capture variables (there are no closures); pass what they
 need as arguments, or use a global.

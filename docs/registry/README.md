@@ -24,7 +24,7 @@ format.
   - [pkc/report](pkc/report.md) — pkc: the -vb build report (port of internal/ui's Reporter).
   - [pkc/tree](pkc/tree.md) — pkc: packenger tree — which packages built the program (port of Result.Tree).
   - [pkc/main](pkc/main.md) — pkc: the command line — the same commands, flags and messages as the Go compiler.
-- **[rt](rt.md)** (truck) — The runtime truck: memory, vectors, strings, maps, files, processes, time and terminals.
+- **[rt](rt.md)** (truck) — The runtime truck: memory, vectors, strings, maps, files, folders, processes, sorting and formatting.
   - [rt/mem](rt/mem.md) — Raw memory: an allocator on mmap, plus copy, fill, compare and pointer arithmetic.
   - [rt/vec](rt/vec.md) — Growable arrays of 64-bit words (ints, or pointers and strings with as).
   - [rt/str](rt/str.md) — Strings: slicing, searching, joining, numbers, and a string builder.
@@ -34,6 +34,10 @@ format.
   - [rt/time](rt/time.md) — Time: a monotonic clock in nanoseconds, and durations as text.
   - [rt/term](rt/term.md) — Terminals: detecting one, and ANSI colors that respect NO_COLOR.
   - [rt/sha256](rt/sha256.md) — SHA-256: the hash that lock files pin packages with.
+  - [rt/sort](rt/sort.md) — Sorting: vectors of ints or strings, or of anything, with a comparison function.
+  - [rt/fmt](rt/fmt.md) — Formatting numbers for people: sizes, thousands, percentages, fixed point, hex and bars.
+  - [rt/path](rt/path.md) — File paths as strings: joining them and taking them apart.
+  - [rt/fs](rt/fs.md) — Directories: listing them, walking them, and telling folders from files.
   - [rt/test](rt/test.md) — A tiny test library: checks that print FAIL lines, and a final PASS or FAILED.
 - **[std](std.md)** (truck) — The standard language: typed, C-style statements, closed with end instead of braces.
   - [std/types](std/types.md) — The primitive types: int, u8, bool and str.
