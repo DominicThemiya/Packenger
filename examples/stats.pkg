@@ -1,0 +1,83 @@
+use std
+use stdx
+use rt/str
+
+// Compound assignment, from stdx: x += y is short for x = x + y, and the
+// same for -=, *=, /= and %=. The left side can be a variable, a field, a
+// slice element or *p, and it is evaluated only once.
+//
+//   packenger run examples/stats.pkg
+
+struct Stats
+  count: int
+  sum: int
+  min: int
+  max: int
+end
+
+fn add(s: ptr Stats, x: int)
+  s.count += 1                    // a field
+  s.sum += x
+  if s.count == 1 || x < s.min
+    s.min = x
+  end
+  if s.count == 1 || x > s.max
+    s.max = x
+  end
+end
+
+fn show(label: str, n: int)
+  print str_concat(str_pad(label, 10), str_from_int(n))
+end
+
+// a week of noon temperatures, in tenths of a degree
+let temps = make([int], 7)
+temps[0] = 182
+temps[1] = 205
+temps[2] = 199
+temps[3] = 231
+temps[4] = 174
+temps[5] = 168
+temps[6] = 213
+
+let s = new Stats
+for i = 0 to len(temps) - 1
+  add(s, temps[i])
+end
+show("days", s.count)
+
+let mean = s.sum
+mean /= s.count                   // a variable
+show("mean", mean)
+
+let spread = s.max
+spread -= s.min
+show("spread", spread)
+
+// how many days were warmer than the day before
+let warmer = 0
+let rises = &warmer
+for i = 1 to len(temps) - 1
+  if temps[i] > temps[i - 1]
+    *rises += 1                   // through a pointer
+  end
+end
+show("warmer", warmer)
+
+// days per band of 2 degrees: 16-18, 18-20, 20-22, 22-24
+let bands = make([int], 4)
+for i = 0 to len(temps) - 1
+  bands[(temps[i] - 160) / 20] += 1   // a slice element, index computed once
+end
+for b = 0 to len(bands) - 1
+  show(str_concat(str_concat(str_from_int(16 + 2 * b), "-"), str_from_int(18 + 2 * b)), bands[b])
+end
+
+// a checksum: multiply, add and reduce, the way string hashes work
+let hash = 7
+for i = 0 to len(temps) - 1
+  hash *= 31
+  hash += temps[i]
+  hash %= 1000003
+end
+show("checksum", hash)

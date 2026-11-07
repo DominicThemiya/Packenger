@@ -1,0 +1,60 @@
+use std
+use stdx
+
+// assert, from stdx: states something that must be true. If it isn't, the
+// program stops with "assertion failed at <file>:<line>:<col>" on stderr
+// and exit status 2.
+//
+//   packenger run examples/bsearch.pkg              every assertion holds
+//   packenger run examples/bsearch.pkg -- unsorted  breaks the input, and
+//                                                   the check on it fails
+
+// search returns the index of the first element of xs that is at least
+// want, or len(xs) if there is none. xs must be sorted.
+fn search(xs: [int], want: int) -> int
+  let lo = 0
+  let hi = len(xs)
+  while lo < hi
+    // the answer is always within lo..hi
+    assert 0 <= lo && lo < hi && hi <= len(xs)
+    let mid = (lo + hi) / 2
+    if xs[mid] < want
+      lo = mid + 1
+    else
+      hi = mid
+    end
+  end
+  // everything before lo is smaller, everything from lo on is not
+  assert lo == 0 || xs[lo - 1] < want
+  assert lo == len(xs) || xs[lo] >= want
+  return lo
+end
+
+// the squares 0, 1, 4, ... 361
+let squares = make([int], 20)
+for i = 0 to len(squares) - 1
+  squares[i] = i * i
+end
+let args = argv
+if len(args) > 1 && args[1] == "unsorted"
+  squares[3] = 100
+end
+
+// binary search only works on sorted input, so check that first
+for i = 1 to len(squares) - 1
+  assert squares[i - 1] <= squares[i]
+end
+
+let queries = make([int], 4)
+queries[0] = 49
+queries[1] = 50
+queries[2] = 0
+queries[3] = 400
+for q in queries
+  let at = search(squares, q)
+  if at < len(squares) && squares[at] == q
+    print at
+  else
+    print -1
+  end
+end

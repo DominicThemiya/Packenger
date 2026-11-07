@@ -1,0 +1,61 @@
+use std
+use stdx
+use rt/str
+
+// for x in xs, from stdx: loops over the elements of a slice, or the
+// bytes (u8) of a string. break and continue work as in any loop.
+//
+//   packenger run examples/letters.pkg
+//   packenger run examples/letters.pkg -- "Hello, world"
+
+let text = "The quick brown fox jumps over the lazy dog"
+let args = argv
+if len(args) > 1
+  text = args[1]
+end
+
+// count each letter, ignoring case
+let counts = make([int], 26)
+for c in text                     // each byte of a string
+  if c >= 'A' && c <= 'Z'
+    counts[(c as int) - 65] += 1
+  elif c >= 'a' && c <= 'z'
+    counts[(c as int) - 97] += 1
+  end
+end
+
+// one bar per letter that appears
+let letter = 0
+let missing = 0
+for n in counts                   // each element of a slice
+  if n == 0
+    missing += 1
+  else
+    let row = sb_new()
+    sb_byte(row, (letter + 97) as u8)
+    sb_add(row, " ")
+    for i = 1 to n
+      sb_add(row, "#")
+    end
+    sb_add(row, " ")
+    sb_int(row, n)
+    print sb_str(row)
+  end
+  letter += 1
+end
+
+if missing == 0
+  print "every letter appears: a pangram"
+else
+  print str_concat(str_from_int(missing), " letters don't appear")
+end
+
+// the first word, stopping at the first space with break
+let first = sb_new()
+for c in text
+  if c == ' '
+    break
+  end
+  sb_byte(first, c)
+end
+print str_concat("first word: ", sb_str(first))

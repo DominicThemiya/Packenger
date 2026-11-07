@@ -224,6 +224,8 @@ func TestExamples(t *testing.T) {
 		"words.pkg":    "5\n8\n",
 		"upcase.pkg":   "",
 		"fizzbuzz.pkg": "1\n2\nFizz\n4\nBuzz\nFizz\n7\n8\nFizz\nBuzz\n11\nFizz\n13\n14\nFizzBuzz\n",
+		"roman.pkg":    "XIV = 14\nMCMXCIV = 1994\nMMXXVI = 2026 (this year)\nXLIX = 49\n",
+		"bsearch.pkg":  "7\n-1\n0\n-1\n",
 	}
 	files, _ := filepath.Glob("../../examples/*.pkg")
 	for _, f := range files {

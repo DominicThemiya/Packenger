@@ -296,7 +296,9 @@ end
 ```
 
 Its words (`in`, `match`, `case`, `assert`) are reserved only in programs
-that use it.
+that use it. There's an example of each feature in [`examples/`](../examples):
+`stats.pkg` (`+=` and friends), `letters.pkg` (`for x in`), `roman.pkg`
+(`match`) and `bsearch.pkg` (`assert`).
 
 ## Libraries
 

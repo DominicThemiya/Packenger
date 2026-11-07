@@ -81,6 +81,10 @@ The [`examples/`](../examples) folder has:
 | `tools.pkg` | the `rt` truck: runs `nasm` and `curl --parallel` and times them |
 | `exitcode.pkg` | the top-level `return` becomes the exit code |
 | `mandelbrot.pkg` | fixed-point arithmetic, `argv`, `rt/str`'s string builder |
+| `stats.pkg` | [stdx](registry/stdx.md) compound assignment: `+=`, `-=`, `*=`, `/=`, `%=` on variables, fields, elements and `*p` |
+| `letters.pkg` | stdx `for x in xs` over a string's bytes and a slice, with `break`: a letter histogram |
+| `roman.pkg` | stdx `match`/`case` on bytes, numbers and strings: Roman numerals |
+| `bsearch.pkg` | stdx `assert`: binary search with its invariants checked; `-- unsorted` makes one fail |
 | `web/` | a package registry server written in Packenger, and a program that gets packages from it |
 
 ### Your own registry
