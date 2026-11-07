@@ -51,4 +51,4 @@ Produces: `u8`
 
 ## Used by
 
-[sugar/forin](../sugar/forin.md)
+[stdx/forin](../stdx/forin.md)

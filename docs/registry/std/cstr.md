@@ -30,4 +30,4 @@ Produces: `ptr u8`
 
 ## Used by
 
-[sugar/assert](../sugar/assert.md)
+[stdx/assert](../stdx/assert.md)

@@ -31,3 +31,7 @@ Kind: `infix`, precedence 30, left-associative
 | `right` | expression | `T` |
 
 Produces: `bool`
+
+## Used by
+
+[stdx/match](../stdx/match.md)

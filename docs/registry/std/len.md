@@ -29,4 +29,4 @@ Produces: `int`
 
 ## Used by
 
-[sugar/assert](../sugar/assert.md), [sugar/forin](../sugar/forin.md)
+[stdx/assert](../stdx/assert.md), [stdx/forin](../stdx/forin.md)

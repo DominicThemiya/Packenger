@@ -1602,6 +1602,160 @@ code
     return lx_new(kind, text, at.file, at.line, at.col)
   end
 
+  // ps_fill pastes the slots of n into r.tmpl[from:to] and appends the
+  // result to toks. names and items are the {each} loop variables in scope,
+  // innermost last (port of fill in parser.go).
+  fn ps_fill(p: ptr Parser, r: ptr LgRule, n: ptr PNode, tmpl: ptr Vec, lo: int, hi: int, names: ptr Vec, items: ptr Vec, toks: ptr Vec) -> bool
+    let i = lo
+    while i < hi
+      let t = lx_tok(tmpl, i)
+      if t.kind != TK_HOLE
+        vec_push(toks, t as int)
+        i = i + 1
+        continue
+      end
+      if t.text == "@pos"
+        // where the construct is used, as a string: "app.pkg:12:3"
+        vec_push(toks, ps_tok_copy(TK_STR, ps_pos(n), t) as int)
+        i = i + 1
+        continue
+      end
+      if str_starts(t.text, "$")
+        let name = str_slice(t.text, 1, len(t.text))
+        let text = u_cat4("__", name, "_", u_cat4(str_from_int(n.line), "_", str_from_int(n.col), u_cat("_", str_from_int(p.depth))))
+        vec_push(toks, ps_tok_copy(TK_IDENT, text, t) as int)
+        i = i + 1
+        continue
+      end
+      let f = u_fields(t.text)
+      if vec_len(f) > 0 && u_get(f, 0) == "each"
+        // {each name in list} ... {end}, or {each list} with the name "it"
+        let var_ = "it"
+        let list = ""
+        if vec_len(f) == 2
+          list = u_get(f, 1)
+        elif vec_len(f) == 4 && u_get(f, 2) == "in"
+          var_ = u_get(f, 1)
+          list = u_get(f, 3)
+        else
+          return u_fail(u_cat(lx_pos(t), ": expected {each <name> in <list>}"))
+        end
+        let depth = 1
+        let j = i + 1
+        while j < hi
+          let tj = lx_tok(tmpl, j)
+          if tj.kind == TK_HOLE && (tj.text == "end" || str_starts(tj.text, "each "))
+            if tj.text == "end"
+              depth = depth - 1
+            else
+              depth = depth + 1
+            end
+            if depth == 0
+              break
+            end
+          end
+          j = j + 1
+        end
+        if j == hi
+          return u_fail(u_cat(lx_pos(t), ": {each} without {end}"))
+        end
+        let found = false
+        let c = ps_lookup_hole(r, n, list, names, items, t, &found)
+        if !found
+          return false
+        end
+        if c != null
+          if c.kind != "groups" && c.kind != "args"
+            return u_fail(u_cat4(lx_pos(t), ": {each} needs a repeated group or an args slot, but {", list, u_cat("} is ", c.kind)))
+          end
+          for k = 0 to vec_len(c.items) - 1
+            let inner_names = vec_new()
+            let inner_items = vec_new()
+            for m = 0 to vec_len(names) - 1
+              vec_push(inner_names, vec_get(names, m))
+              vec_push(inner_items, vec_get(items, m))
+            end
+            u_push(inner_names, var_)
+            vec_push(inner_items, vec_get(c.items, k))
+            if !ps_fill(p, r, n, tmpl, i + 1, j, inner_names, inner_items, toks)
+              return false
+            end
+          end
+        end
+        i = j + 1
+        continue
+      end
+      if t.text == "end"
+        return u_fail(u_cat(lx_pos(t), ": {end} without {each}"))
+      end
+      let found = false
+      let c = ps_lookup_hole(r, n, t.text, names, items, t, &found)
+      if !found
+        return false
+      end
+      if c != null
+        let count = c.stop - c.start
+        let wrap = c.kind != "block" && count > 1
+        if wrap
+          vec_push(toks, ps_tok_copy(TK_PUNCT, "(", lx_tok(c.toks, c.start)) as int)
+        end
+        for k = c.start to c.stop - 1
+          vec_push(toks, vec_get(c.toks, k))
+        end
+        if wrap
+          vec_push(toks, ps_tok_copy(TK_PUNCT, ")", lx_tok(c.toks, c.stop - 1)) as int)
+        end
+      end
+      i = i + 1
+    end
+    return true
+  end
+
+  // ps_lookup_hole finds what {name} or {name.slot} refers to: a loop
+  // variable (or one of its item's slots), else a slot of n. It returns
+  // null with *found true for an optional slot that was not given, and sets
+  // *found false (with pk_err) for an unknown one.
+  fn ps_lookup_hole(r: ptr LgRule, n: ptr PNode, text: str, names: ptr Vec, items: ptr Vec, t: ptr Tok, found: ptr bool) -> ptr PNode
+    *found = true
+    let dot = str_find_byte(text, '.', 0)
+    let head = text
+    let sub = ""
+    if dot >= 0
+      head = str_slice(text, 0, dot)
+      sub = str_slice(text, dot + 1, len(text))
+    end
+    let k = vec_len(names) - 1
+    while k >= 0
+      if u_get(names, k) == head
+        let item = vec_get(items, k) as ptr PNode
+        if dot < 0
+          return item
+        end
+        let c = ps_slot(item, sub)
+        if c != null
+          return c
+        end
+        if ps_has_slot(r.pat.elems, sub)
+          return null
+        end
+        *found = false
+        u_fail(u_cat4(lx_pos(t), ": expand template uses unknown slot {", text, "}"))
+        return null
+      end
+      k = k - 1
+    end
+    let c = ps_slot(n, text)
+    if c != null
+      return c
+    end
+    if ps_has_slot(r.pat.elems, text)
+      return null
+    end
+    *found = false
+    u_fail(u_cat4(lx_pos(t), ": expand template uses unknown slot {", text, "}"))
+    return null
+  end
+
   // ps_expand rewrites a matched node with its package's expand template and
   // parses the result again.
   fn ps_expand(p: ptr Parser, r: ptr LgRule, n: ptr PNode, s: ptr PSnap) -> ptr PNode
@@ -1613,44 +1767,10 @@ code
     let outer = p.toks
     ps_unwind(p, s)
     let toks = vec_new()
-    for i = 0 to vec_len(r.tmpl) - 1
-      let t = lx_tok(r.tmpl, i)
-      if t.kind != TK_HOLE
-        vec_push(toks, t as int)
-        continue
-      end
-      if t.text == "@pos"
-        // where the construct is used, as a string: "app.pkg:12:3"
-        vec_push(toks, ps_tok_copy(TK_STR, ps_pos(n), t) as int)
-        continue
-      end
-      if str_starts(t.text, "$")
-        let name = str_slice(t.text, 1, len(t.text))
-        let text = u_cat4("__", name, "_", u_cat4(str_from_int(n.line), "_", str_from_int(n.col), u_cat("_", str_from_int(p.depth))))
-        vec_push(toks, ps_tok_copy(TK_IDENT, text, t) as int)
-        continue
-      end
-      let c = ps_slot(n, t.text)
-      if c == null
-        if ps_has_slot(r.pat.elems, t.text)
-          continue
-        end
-        pk_err = u_cat4(lx_pos(t), ": expand template uses unknown slot {", t.text, "}")
-        p.toks = outer
-        p.i = stop
-        return null
-      end
-      let count = c.stop - c.start
-      let wrap = c.kind != "block" && count > 1
-      if wrap
-        vec_push(toks, ps_tok_copy(TK_PUNCT, "(", lx_tok(c.toks, c.start)) as int)
-      end
-      for k = c.start to c.stop - 1
-        vec_push(toks, vec_get(c.toks, k))
-      end
-      if wrap
-        vec_push(toks, ps_tok_copy(TK_PUNCT, ")", lx_tok(c.toks, c.stop - 1)) as int)
-      end
+    if !ps_fill(p, r, n, r.tmpl, 0, vec_len(r.tmpl), vec_new(), vec_new(), toks)
+      p.toks = outer
+      p.i = stop
+      return null
     end
     let at = lx_new(TK_NL, "", n.file, n.line, n.col)
     vec_push(toks, at as int)

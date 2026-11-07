@@ -32,4 +32,4 @@ Produces: `int`
 
 ## Used by
 
-[sugar/sub_assign](../sugar/sub_assign.md)
+[stdx/sub_assign](../stdx/sub_assign.md)

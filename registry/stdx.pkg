@@ -1,0 +1,41 @@
+doc Extensions to std: compound assignment, for-in loops, match and assertions.
+  Shorthands that `std` doesn't have. Every package here `expand`s into
+  `std` constructs, so they work with every backend and have no backend
+  packages of their own.
+
+  ```
+  use std
+  use stdx
+
+  let total = 0
+  for n in make([int], 3)
+    total += n + 1
+  end
+  assert total == 3
+  ```
+
+  | package | syntax | becomes |
+  |---|---|---|
+  | `stdx/add_assign` | `x += y` | `x = x + y` |
+  | `stdx/sub_assign` | `x -= y` | `x = x - y` |
+  | `stdx/mul_assign` | `x *= y` | `x = x * y` |
+  | `stdx/div_assign` | `x /= y` | `x = x / y` |
+  | `stdx/mod_assign` | `x %= y` | `x = x % y` |
+  | `stdx/forin` | `for x in xs ... end` | a loop over a slice's elements or a string's bytes |
+  | `stdx/match` | `match x`, `case a, b`, `else`, `end` | an `if`/`elif` chain comparing `x` with `==` |
+  | `stdx/assert` | `assert cond` | stop with status 2 and the position if `cond` is false |
+
+  `stdx` is a separate truck, not part of `std`, so its words (`in`,
+  `match`, `case`, `assert`) are only reserved in programs that use it,
+  and programs and lock files that only use `std` are unaffected. Use single packages
+  (`use stdx/forin`) to take just one.
+
+truck
+  add_assign
+  sub_assign
+  mul_assign
+  div_assign
+  mod_assign
+  forin
+  match
+  assert

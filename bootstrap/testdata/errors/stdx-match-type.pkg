@@ -1,0 +1,7 @@
+use std
+use stdx
+
+match 1
+case "one"
+  print 1
+end

@@ -1,5 +1,5 @@
 use std
-use sugar
+use stdx
 
 for x in 42
   print x

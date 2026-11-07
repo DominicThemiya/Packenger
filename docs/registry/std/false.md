@@ -19,3 +19,7 @@ false -> bool
 ```
 
 Produces: `bool`
+
+## Used by
+
+[stdx/match](../stdx/match.md)

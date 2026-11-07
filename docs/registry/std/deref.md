@@ -31,4 +31,4 @@ Produces: `T`
 
 ## Used by
 
-[sugar/add_assign](../sugar/add_assign.md), [sugar/div_assign](../sugar/div_assign.md), [sugar/mod_assign](../sugar/mod_assign.md), [sugar/mul_assign](../sugar/mul_assign.md), [sugar/sub_assign](../sugar/sub_assign.md)
+[stdx/add_assign](../stdx/add_assign.md), [stdx/div_assign](../stdx/div_assign.md), [stdx/mod_assign](../stdx/mod_assign.md), [stdx/mul_assign](../stdx/mul_assign.md), [stdx/sub_assign](../stdx/sub_assign.md)

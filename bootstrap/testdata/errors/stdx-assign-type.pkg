@@ -1,5 +1,5 @@
 use std
-use sugar
+use stdx
 
 let s = "a"
 s += 1

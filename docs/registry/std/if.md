@@ -42,4 +42,4 @@ if {cond: expr bool} {then: block} [ elif {cond: expr bool} {then: block} ]* [ e
 
 ## Used by
 
-[sugar/assert](../sugar/assert.md)
+[stdx/assert](../stdx/assert.md), [stdx/match](../stdx/match.md)

@@ -87,14 +87,15 @@ format.
   - [std/bxor](std/bxor.md) — ^ : bitwise exclusive or
   - [std/shl](std/shl.md) — << : shift left
   - [std/shr](std/shr.md) — >> : arithmetic shift right (keeps the sign)
-- **[sugar](sugar.md)** (truck) — Syntactic sugar: compound assignment, for-in loops and assertions.
-  - [sugar/add_assign](sugar/add_assign.md) — Compound assignment: x += y, short for x = x + y.
-  - [sugar/sub_assign](sugar/sub_assign.md) — Compound assignment: x -= y, short for x = x - y.
-  - [sugar/mul_assign](sugar/mul_assign.md) — Compound assignment: x *= y, short for x = x * y.
-  - [sugar/div_assign](sugar/div_assign.md) — Compound assignment: x /= y, short for x = x / y.
-  - [sugar/mod_assign](sugar/mod_assign.md) — Compound assignment: x %= y, short for x = x % y.
-  - [sugar/forin](sugar/forin.md) — Loop over a slice or a string: for x in xs ... end
-  - [sugar/assert](sugar/assert.md) — Assertion: assert cond stops the program if cond is false.
+- **[stdx](stdx.md)** (truck) — Extensions to std: compound assignment, for-in loops, match and assertions.
+  - [stdx/add_assign](stdx/add_assign.md) — Compound assignment: x += y, short for x = x + y.
+  - [stdx/sub_assign](stdx/sub_assign.md) — Compound assignment: x -= y, short for x = x - y.
+  - [stdx/mul_assign](stdx/mul_assign.md) — Compound assignment: x *= y, short for x = x * y.
+  - [stdx/div_assign](stdx/div_assign.md) — Compound assignment: x /= y, short for x = x / y.
+  - [stdx/mod_assign](stdx/mod_assign.md) — Compound assignment: x %= y, short for x = x % y.
+  - [stdx/forin](stdx/forin.md) — Loop over a slice or a string: for x in xs ... end
+  - [stdx/match](stdx/match.md) — Choosing by value: match x, then case a, b ... else ... end
+  - [stdx/assert](stdx/assert.md) — Assertion: assert cond stops the program if cond is false.
 - **[bintables](bintables.md)** (truck) — Backend truck: translates Packenger packages to NASM for x86-64 Linux.
   - [bintables/add](bintables/add.md) — + : `add`.
   - [bintables/addr](bintables/addr.md) — Address of: renders the operand's addr section.
@@ -328,10 +329,11 @@ format.
 | [std/syscall](std/syscall.md) | [bintables/syscall](bintables/syscall.md), [ctables/syscall](ctables/syscall.md), [webtables/syscall](webtables/syscall.md) |
 | [std/true](std/true.md) | [bintables/true](bintables/true.md), [ctables/true](ctables/true.md), [webtables/true](webtables/true.md) |
 | [std/while](std/while.md) | [bintables/while](bintables/while.md), [ctables/while](ctables/while.md), [webtables/while](webtables/while.md) |
-| [sugar/add_assign](sugar/add_assign.md) | expands into [std/let](std/let.md), [std/addr](std/addr.md), [std/deref](std/deref.md), [std/assign](std/assign.md), [std/add](std/add.md) |
-| [sugar/assert](sugar/assert.md) | expands into [std/if](std/if.md), [std/not](std/not.md), [std/syscall](std/syscall.md), [std/cstr](std/cstr.md), [std/len](std/len.md), [std/exprstmt](std/exprstmt.md) |
-| [sugar/div_assign](sugar/div_assign.md) | expands into [std/let](std/let.md), [std/addr](std/addr.md), [std/deref](std/deref.md), [std/assign](std/assign.md), [std/div](std/div.md) |
-| [sugar/forin](sugar/forin.md) | expands into [std/do](std/do.md), [std/let](std/let.md), [std/while](std/while.md), [std/lt](std/lt.md), [std/len](std/len.md), [std/index](std/index.md), [std/assign](std/assign.md), [std/add](std/add.md) |
-| [sugar/mod_assign](sugar/mod_assign.md) | expands into [std/let](std/let.md), [std/addr](std/addr.md), [std/deref](std/deref.md), [std/assign](std/assign.md), [std/mod](std/mod.md) |
-| [sugar/mul_assign](sugar/mul_assign.md) | expands into [std/let](std/let.md), [std/addr](std/addr.md), [std/deref](std/deref.md), [std/assign](std/assign.md), [std/mul](std/mul.md) |
-| [sugar/sub_assign](sugar/sub_assign.md) | expands into [std/let](std/let.md), [std/addr](std/addr.md), [std/deref](std/deref.md), [std/assign](std/assign.md), [std/sub](std/sub.md) |
+| [stdx/add_assign](stdx/add_assign.md) | expands into [std/let](std/let.md), [std/addr](std/addr.md), [std/deref](std/deref.md), [std/assign](std/assign.md), [std/add](std/add.md) |
+| [stdx/assert](stdx/assert.md) | expands into [std/if](std/if.md), [std/not](std/not.md), [std/syscall](std/syscall.md), [std/cstr](std/cstr.md), [std/len](std/len.md), [std/exprstmt](std/exprstmt.md) |
+| [stdx/div_assign](stdx/div_assign.md) | expands into [std/let](std/let.md), [std/addr](std/addr.md), [std/deref](std/deref.md), [std/assign](std/assign.md), [std/div](std/div.md) |
+| [stdx/forin](stdx/forin.md) | expands into [std/do](std/do.md), [std/let](std/let.md), [std/while](std/while.md), [std/lt](std/lt.md), [std/len](std/len.md), [std/index](std/index.md), [std/assign](std/assign.md), [std/add](std/add.md) |
+| [stdx/match](stdx/match.md) | expands into [std/do](std/do.md), [std/let](std/let.md), [std/if](std/if.md), [std/eq](std/eq.md), [std/or](std/or.md), [std/false](std/false.md) |
+| [stdx/mod_assign](stdx/mod_assign.md) | expands into [std/let](std/let.md), [std/addr](std/addr.md), [std/deref](std/deref.md), [std/assign](std/assign.md), [std/mod](std/mod.md) |
+| [stdx/mul_assign](stdx/mul_assign.md) | expands into [std/let](std/let.md), [std/addr](std/addr.md), [std/deref](std/deref.md), [std/assign](std/assign.md), [std/mul](std/mul.md) |
+| [stdx/sub_assign](stdx/sub_assign.md) | expands into [std/let](std/let.md), [std/addr](std/addr.md), [std/deref](std/deref.md), [std/assign](std/assign.md), [std/sub](std/sub.md) |

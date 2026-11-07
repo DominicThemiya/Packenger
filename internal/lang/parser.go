@@ -1401,39 +1401,9 @@ func (p *Parser) expand(r *Rule, n *Node, s snapshot) (*Node, error) {
 	}
 	end, outer := p.i, p.toks
 	p.unwind(s) // declarations made while matching are redone by the expansion
-	var toks []Token
-	for _, t := range r.tmpl {
-		if t.Kind != THole {
-			toks = append(toks, t)
-			continue
-		}
-		if t.Text == "@pos" {
-			// where the construct is used, as a string: "app.pkg:12:3"
-			toks = append(toks, Token{Kind: TStr, Text: n.Pos.String(), Pos: t.Pos})
-			continue
-		}
-		if name, ok := strings.CutPrefix(t.Text, "$"); ok {
-			// a private name: unique to this expansion
-			toks = append(toks, Token{Kind: TIdent, Pos: t.Pos,
-				Text: fmt.Sprintf("__%s_%d_%d_%d", name, n.Pos.Line, n.Pos.Col, p.depth)})
-			continue
-		}
-		c, ok := n.Slots[t.Text]
-		if !ok {
-			if hasSlot(r.Pat.Elems, t.Text) {
-				continue // optional slot that was not given
-			}
-			return nil, fmt.Errorf("%s: expand template uses unknown slot {%s}", t.Pos, t.Text)
-		}
-		span := c.toks[c.start:c.end]
-		wrap := c.Kind != "block" && len(span) > 1
-		if wrap {
-			toks = append(toks, Token{Kind: TPunct, Text: "(", Pos: span[0].Pos})
-		}
-		toks = append(toks, span...)
-		if wrap {
-			toks = append(toks, Token{Kind: TPunct, Text: ")", Pos: span[len(span)-1].Pos})
-		}
+	toks, err := p.fill(r, n, r.tmpl, nil, nil)
+	if err != nil {
+		return nil, err
 	}
 	toks = append(toks, Token{Kind: TNewline, Pos: n.Pos}, Token{Kind: TEOF, Pos: n.Pos})
 
@@ -1470,6 +1440,128 @@ func (p *Parser) expand(r *Rule, n *Node, s snapshot) (*Node, error) {
 	out.Expanded = append([]string{r.Pkg.Name}, out.Expanded...)
 	out.toks, out.start, out.end = outer, n.start, end
 	return out, nil
+}
+
+// a loop variable of {each name in list}: the item it stands for
+type binding struct {
+	name string
+	item *Node
+}
+
+// fill pastes the slots of n into template tmpl and appends the result to
+// toks. env holds the {each} loop variables in scope, innermost last.
+func (p *Parser) fill(r *Rule, n *Node, tmpl []Token, env []binding, toks []Token) ([]Token, error) {
+	for i := 0; i < len(tmpl); i++ {
+		t := tmpl[i]
+		if t.Kind != THole {
+			toks = append(toks, t)
+			continue
+		}
+		if t.Text == "@pos" {
+			// where the construct is used, as a string: "app.pkg:12:3"
+			toks = append(toks, Token{Kind: TStr, Text: n.Pos.String(), Pos: t.Pos})
+			continue
+		}
+		if name, ok := strings.CutPrefix(t.Text, "$"); ok {
+			// a private name: unique to this expansion
+			toks = append(toks, Token{Kind: TIdent, Pos: t.Pos,
+				Text: fmt.Sprintf("__%s_%d_%d_%d", name, n.Pos.Line, n.Pos.Col, p.depth)})
+			continue
+		}
+		if f := strings.Fields(t.Text); len(f) > 0 && f[0] == "each" {
+			// {each name in list} ... {end}, or {each list} with the name "it"
+			name, list := "it", ""
+			switch {
+			case len(f) == 2:
+				list = f[1]
+			case len(f) == 4 && f[2] == "in":
+				name, list = f[1], f[3]
+			default:
+				return nil, fmt.Errorf("%s: expected {each <name> in <list>}", t.Pos)
+			}
+			depth, j := 1, i+1
+			for ; j < len(tmpl); j++ {
+				if tmpl[j].Kind == THole && (tmpl[j].Text == "end" || strings.HasPrefix(tmpl[j].Text, "each ")) {
+					if tmpl[j].Text == "end" {
+						depth--
+					} else {
+						depth++
+					}
+					if depth == 0 {
+						break
+					}
+				}
+			}
+			if j == len(tmpl) {
+				return nil, fmt.Errorf("%s: {each} without {end}", t.Pos)
+			}
+			c, err := p.lookupHole(r, n, list, env, t)
+			if err != nil {
+				return nil, err
+			}
+			if c != nil {
+				if c.Kind != "groups" && c.Kind != "args" {
+					return nil, fmt.Errorf("%s: {each} needs a repeated group or an args slot, but {%s} is %s", t.Pos, list, c.Kind)
+				}
+				for _, item := range c.Items {
+					if toks, err = p.fill(r, n, tmpl[i+1:j], append(env[:len(env):len(env)], binding{name, item}), toks); err != nil {
+						return nil, err
+					}
+				}
+			}
+			i = j
+			continue
+		}
+		if t.Text == "end" {
+			return nil, fmt.Errorf("%s: {end} without {each}", t.Pos)
+		}
+		c, err := p.lookupHole(r, n, t.Text, env, t)
+		if err != nil {
+			return nil, err
+		}
+		if c == nil {
+			continue // optional slot that was not given
+		}
+		span := c.toks[c.start:c.end]
+		wrap := c.Kind != "block" && len(span) > 1
+		if wrap {
+			toks = append(toks, Token{Kind: TPunct, Text: "(", Pos: span[0].Pos})
+		}
+		toks = append(toks, span...)
+		if wrap {
+			toks = append(toks, Token{Kind: TPunct, Text: ")", Pos: span[len(span)-1].Pos})
+		}
+	}
+	return toks, nil
+}
+
+// lookupHole finds what {name} or {name.slot} refers to: a loop variable
+// (or one of its item's slots), else a slot of n. It returns nil for an
+// optional slot that was not given.
+func (p *Parser) lookupHole(r *Rule, n *Node, text string, env []binding, t Token) (*Node, error) {
+	head, sub, dotted := strings.Cut(text, ".")
+	for k := len(env) - 1; k >= 0; k-- {
+		if env[k].name != head {
+			continue
+		}
+		if !dotted {
+			return env[k].item, nil
+		}
+		if c, ok := env[k].item.Slots[sub]; ok {
+			return c, nil
+		}
+		if hasSlot(r.Pat.Elems, sub) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("%s: expand template uses unknown slot {%s}", t.Pos, text)
+	}
+	if c, ok := n.Slots[text]; ok {
+		return c, nil
+	}
+	if hasSlot(r.Pat.Elems, text) {
+		return nil, nil
+	}
+	return nil, fmt.Errorf("%s: expand template uses unknown slot {%s}", t.Pos, text)
 }
 
 func hasSlot(es []pkgfile.Elem, name string) bool {

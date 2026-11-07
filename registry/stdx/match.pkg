@@ -1,0 +1,52 @@
+doc Choosing by value: match x, then case a, b ... else ... end
+  ```
+  match day
+  case 0, 6
+    print "weekend"
+  case 1, 2, 3, 4, 5
+    print "weekday"
+  else
+    print "not a day"
+  end
+  ```
+
+  `x` is evaluated once and compared with `==` to each case's values in
+  order; the first case with an equal value runs, and no other. With no
+  match, `else` runs if there is one. Values can be any type `==` takes:
+  `int`, `u8`, `bool`, `str` (by content) and pointers. `break`,
+  `continue` and `return` inside a case act on the enclosing loop or
+  function. Lines between `match` and the first `case` run before the
+  comparisons.
+
+  It expands into an `if` chain, made with `{each}` in the template:
+
+  ```
+  do
+    let x_ = day
+    if false
+    elif false || x_ == 0 || x_ == 6
+      print "weekend"
+    elif false || x_ == 1 || ...
+      print "weekday"
+    else
+      print "not a day"
+    end
+  end
+  ```
+
+needs std/do std/let std/if std/eq std/or std/false
+syntax statement
+  match {x: expr T} {head: block} [case {v: args} {then: block}]* [else {else: block}] end
+expand
+  do
+    let {$x} = {x}
+    {head}
+    if false
+    {each c in case}
+    elif false{each v in c.v} || {$x} == {v}{end}
+      {c.then}
+    {end}
+    else
+      {else}
+    end
+  end

@@ -33,4 +33,4 @@ Produces: `int`
 
 ## Used by
 
-[sugar/mod_assign](../sugar/mod_assign.md)
+[stdx/mod_assign](../stdx/mod_assign.md)

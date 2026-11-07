@@ -1,5 +1,5 @@
 use std
-use sugar
+use stdx
 
 // a failing assertion: the position on stderr, exit status 2
 let items = make([int], 2)

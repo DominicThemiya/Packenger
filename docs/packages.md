@@ -177,10 +177,33 @@ expand
     {b} = {$t}
   ```
 - `{@pos}` is **where the construct is used**, as a string literal such as
-  `"app.pkg:12:3"`, for messages. [sugar/assert](registry/sugar/assert.md)
+  `"app.pkg:12:3"`, for messages. [stdx/assert](registry/stdx/assert.md)
   uses it to say which assertion failed.
+- `{each name in list}` … `{end}` **repeats** part of the template for
+  each occurrence of a repeated group, or each expression of an `args`
+  slot. Inside, `{name}` is the item and `{name.slot}` one of its slots;
+  loops can nest. [stdx/match](registry/stdx/match.md) turns its `case`
+  groups into an `elif` chain this way:
+
+  ```
+  syntax statement
+    match {x: expr T} {head: block} [case {v: args} {then: block}]* [else {else: block}] end
+  expand
+    do
+      let {$x} = {x}
+      {head}
+      if false
+      {each c in case}
+      elif false{each v in c.v} || {$x} == {v}{end}
+        {c.then}
+      {end}
+      else
+        {else}
+      end
+    end
+  ```
 - A loop variable can take the **element type** of another slot with
-  `of <slot>[]`, as in [sugar/forin](registry/sugar/forin.md):
+  `of <slot>[]`, as in [stdx/forin](registry/stdx/forin.md):
   `for {x: newvar of xs[]} in {xs: expr [T]} {body: block} end`.
 - List the packages the template uses in `needs`, so they're loaded even
   when the user loads only this package.

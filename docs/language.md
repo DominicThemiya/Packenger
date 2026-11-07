@@ -265,14 +265,14 @@ returns an `int` (negative values are errors). `cstr(s)` gives a string's
 bytes as a zero-terminated C string. See
 [examples/upcase.pkg](../examples/upcase.pkg).
 
-## More syntax: the sugar truck
+## More syntax: the stdx truck
 
-`std` is deliberately small. The [`sugar` truck](registry/sugar.md) adds
+`std` is deliberately small. The [`stdx` truck](registry/stdx.md) adds
 shorthands, every one an expansion into `std`:
 
 ```
 use std
-use sugar
+use stdx
 
 let words = make([str], 2)
 words[0] = "tree"
@@ -284,7 +284,19 @@ end
 assert letters == 11     // otherwise: "assertion failed at app.pkg:11:1", exit 2
 ```
 
-Its words (`in`, `assert`) are reserved only in programs that use it.
+```
+match letters % 3
+case 0
+  print "fizz"
+case 1, 2
+  print "no fizz"        // the first case with an equal value runs
+else
+  print "never"
+end
+```
+
+Its words (`in`, `match`, `case`, `assert`) are reserved only in programs
+that use it.
 
 ## Libraries
 

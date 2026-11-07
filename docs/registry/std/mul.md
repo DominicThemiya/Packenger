@@ -32,4 +32,4 @@ Produces: `int`
 
 ## Used by
 
-[sugar/mul_assign](../sugar/mul_assign.md)
+[stdx/mul_assign](../stdx/mul_assign.md)

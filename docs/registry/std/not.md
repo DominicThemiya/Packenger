@@ -30,4 +30,4 @@ Produces: `bool`
 
 ## Used by
 
-[sugar/assert](../sugar/assert.md)
+[stdx/assert](../stdx/assert.md)
