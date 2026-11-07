@@ -55,6 +55,8 @@ Statement expressions need GCC or Clang; `cc` must be one of them.
 | [ctables/break](ctables/break.md) | `break`: jumps to the end of the innermost loop. |
 | [ctables/bxor](ctables/bxor.md) | Bitwise xor: `^` on two `int`s. |
 | [ctables/call](ctables/call.md) | Function call: the arguments are evaluated right to left, then passed. |
+| [ctables/callfn](ctables/callfn.md) | Calling a function value: cast the word to a C function pointer and call it. |
+| [ctables/funcref](ctables/funcref.md) | Function value: a function's name used without a call is its address, as a word. |
 | [ctables/const](ctables/const.md) | Constant declaration: nothing at run time; uses are replaced by the value. |
 | [ctables/continue](ctables/continue.md) | `continue`: jumps to the `next` block of the innermost loop. |
 | [ctables/cstr](ctables/cstr.md) | C string: the address of a string's bytes, which end with a 0. |

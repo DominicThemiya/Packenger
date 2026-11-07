@@ -1,0 +1,4 @@
+doc Function value: a function's name used without a call is its address, as a word.
+
+emit
+  ((W)(intptr_t)&{label})

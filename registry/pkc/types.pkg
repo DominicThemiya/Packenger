@@ -1,5 +1,6 @@
 doc pkc: type expressions, constraints with type variables, struct layout (port of types.go).
-  Types are canonical strings (`int`, `ptr Node`, `[u8]`, `?`). Constraints
+  Types are canonical strings (`int`, `ptr Node`, `[u8]`, `fn(int) -> str`,
+  `?`). Constraints
   in patterns may add type variables (`T`) and slot references (`{slot}`);
   a `TyBinder` matches them as slots are parsed and fills results in.
 
@@ -9,6 +10,11 @@ code
     kind: str
     name: str
     elem: ptr Ty
+    // fn: parameters (ptr Ty), the result (null if none), and whether the
+    // parameters are "..." (any, in constraints)
+    params: ptr Vec
+    ret: ptr Ty
+    anyp: bool
   end
 
   fn ty_new(kind: str, name: str, elem: ptr Ty) -> ptr Ty
@@ -16,7 +22,90 @@ code
     t.kind = kind
     t.name = name
     t.elem = elem
+    t.params = vec_new()
     return t
+  end
+
+  // ty_fn_type renders the type of a function with these parameter types
+  // (strs) and result type ("" for none).
+  fn ty_fn_type(params: ptr Vec, ret: str) -> str
+    let s = u_cat3("fn(", u_join(params, ", "), ")")
+    if ret != ""
+      s = u_cat3(s, " -> ", ret)
+    end
+    return s
+  end
+
+  fn ty_is_fn(t: str) -> bool
+    return str_starts(t, "fn(")
+  end
+
+  // ty_fn_parts splits a function type into its parameter types (pushed to
+  // params) and result type.
+  fn ty_fn_parts(t: str, params: ptr Vec, ret: ptr str) -> bool
+    let saved = pk_err
+    let ft = ty_parse(t)
+    pk_err = saved
+    if ft == null || ft.kind != "fn" || ft.anyp
+      return false
+    end
+    for i = 0 to vec_len(ft.params) - 1
+      u_push(params, ty_string(vec_get(ft.params, i) as ptr Ty))
+    end
+    *ret = ""
+    if ft.ret != null
+      *ret = ty_string(ft.ret)
+    end
+    return true
+  end
+
+  // ty_parse_fn reads the rest of a function type after "fn(".
+  fn ty_parse_fn(s: str, rest: ptr str) -> ptr Ty
+    let t = ty_new("fn", "", null)
+    let r = ty_trim_left(s)
+    if str_starts(r, "...)")
+      t.anyp = true
+      r = str_slice(r, 4, len(r))
+    elif str_starts(r, ")")
+      r = str_slice(r, 1, len(r))
+    else
+      while true
+        let after = ""
+        let p = ty_parse_prefix(r, &after)
+        if p == null
+          return null
+        end
+        vec_push(t.params, p as int)
+        after = ty_trim_left(after)
+        if str_starts(after, ",")
+          r = str_slice(after, 1, len(after))
+          continue
+        end
+        if !str_starts(after, ")")
+          u_fail("missing ')' in function type")
+          return null
+        end
+        r = str_slice(after, 1, len(after))
+        break
+      end
+    end
+    let r2 = ty_trim_left(r)
+    if str_starts(r2, "->")
+      let after = ""
+      let ret = ty_parse_prefix(str_slice(r2, 2, len(r2)), &after)
+      if ret == null
+        return null
+      end
+      t.ret = ret
+      r = after
+    end
+    *rest = r
+    return t
+  end
+
+  // ty_is_null: is t null's type, ptr ?
+  fn ty_is_null(t: ptr Ty) -> bool
+    return t.kind == "ptr" && t.elem.kind == "wild"
   end
 
   fn ty_trim_left(s: str) -> str
@@ -64,6 +153,9 @@ code
       end
       *rest = str_slice(s, stop + 1, len(s))
       return ty_new("slot", u_trim(str_slice(s, 1, stop)), null)
+    end
+    if str_starts(s, "fn(")
+      return ty_parse_fn(str_slice(s, 3, len(s)), rest)
     end
     let stop = 0
     while stop < len(s) && ty_word_char(s[stop])
@@ -114,6 +206,20 @@ code
       return "?"
     elif t.kind == "slot"
       return u_cat3("{", t.name, "}")
+    elif t.kind == "fn"
+      let ps = vec_new()
+      for i = 0 to vec_len(t.params) - 1
+        u_push(ps, ty_string(vec_get(t.params, i) as ptr Ty))
+      end
+      if t.anyp
+        ps = vec_new()
+        u_push(ps, "...")
+      end
+      let ret = ""
+      if t.ret != null
+        ret = ty_string(t.ret)
+      end
+      return ty_fn_type(ps, ret)
     end
     return t.name
   end
@@ -122,8 +228,22 @@ code
     if a.kind == "wild" || b.kind == "wild"
       return true
     end
+    if ty_is_null(a) && b.kind == "fn" || ty_is_null(b) && a.kind == "fn"
+      return true
+    end
     if a.kind != b.kind || a.name != b.name
       return false
+    end
+    if a.kind == "fn"
+      if vec_len(a.params) != vec_len(b.params) || (a.ret == null) != (b.ret == null)
+        return false
+      end
+      for i = 0 to vec_len(a.params) - 1
+        if !ty_unify(vec_get(a.params, i) as ptr Ty, vec_get(b.params, i) as ptr Ty)
+          return false
+        end
+      end
+      return a.ret == null || ty_unify(a.ret, b.ret)
     end
     if a.elem != null
       return ty_unify(a.elem, b.elem)
@@ -189,6 +309,36 @@ code
       return actual.kind == "name" && actual.name == pat.name
     elif pat.kind == "ptr" || pat.kind == "slice"
       return actual.kind == pat.kind && ty_match(b, pat.elem, actual.elem)
+    elif pat.kind == "fn"
+      if actual.kind != "fn"
+        return false
+      end
+      if !pat.anyp
+        if vec_len(pat.params) != vec_len(actual.params)
+          return false
+        end
+        for i = 0 to vec_len(pat.params) - 1
+          if !ty_match(b, vec_get(pat.params, i) as ptr Ty, vec_get(actual.params, i) as ptr Ty)
+            return false
+          end
+        end
+      end
+      if pat.ret == null
+        return pat.anyp || actual.ret == null
+      end
+      if actual.ret == null
+        // fn(...) -> R on a function without a result: R is no value
+        if pat.ret.kind == "var"
+          if map_has(b.vars, pat.ret.name)
+            let bound = map_get(b.vars, pat.ret.name) as ptr Ty
+            return bound.kind == "name" && bound.name == ""
+          end
+          map_set(b.vars, pat.ret.name, ty_new("name", "", null) as int)
+          return true
+        end
+        return false
+      end
+      return ty_match(b, pat.ret, actual.ret)
     end
     return false
   end
@@ -239,6 +389,24 @@ code
         return null
       end
       return ty_new(t.kind, "", e)
+    elif t.kind == "fn"
+      let out = ty_new("fn", "", null)
+      out.anyp = t.anyp
+      for i = 0 to vec_len(t.params) - 1
+        let w = ty_subst_walk(b, vec_get(t.params, i) as ptr Ty)
+        if w == null
+          return null
+        end
+        vec_push(out.params, w as int)
+      end
+      if t.ret != null
+        let w = ty_subst_walk(b, t.ret)
+        if w == null
+          return null
+        end
+        out.ret = w
+      end
+      return out
     end
     return t
   end
@@ -294,7 +462,7 @@ code
   // ty_size: bytes a value of type t takes in a field or slice element;
   // -1 with pk_err set if t has no size.
   fn ty_size(ts: ptr Types, t: str) -> int
-    if str_starts(t, "ptr ") || str_starts(t, "[") || t == "?"
+    if str_starts(t, "ptr ") || str_starts(t, "[") || t == "?" || ty_is_fn(t)
       return 8
     end
     if map_has(ts.prims, t)

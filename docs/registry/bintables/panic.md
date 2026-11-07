@@ -36,6 +36,10 @@ __pk_panic_len:
 lea rsi, [rel __pk_msg_len]
 mov edx, __pk_msg_len_len
 jmp __pk_panic
+__pk_panic_nullfn:
+lea rsi, [rel __pk_msg_nullfn]
+mov edx, __pk_msg_nullfn_len
+jmp __pk_panic
 __pk_panic_oom:
 lea rsi, [rel __pk_msg_oom]
 mov edx, __pk_msg_oom_len
@@ -51,6 +55,8 @@ __pk_msg_index: db "panic: index out of range", 10
 __pk_msg_index_len equ $ - __pk_msg_index
 __pk_msg_len: db "panic: negative length in make", 10
 __pk_msg_len_len equ $ - __pk_msg_len
+__pk_msg_nullfn: db "panic: call of a null function", 10
+__pk_msg_nullfn_len equ $ - __pk_msg_nullfn
 __pk_msg_oom: db "panic: out of memory", 10
 __pk_msg_oom_len equ $ - __pk_msg_oom
 section .text
@@ -58,4 +64,4 @@ section .text
 
 ## Used by
 
-[bintables/alloc](alloc.md), [bintables/index](index.md)
+[bintables/alloc](alloc.md), [bintables/callfn](callfn.md), [bintables/index](index.md)

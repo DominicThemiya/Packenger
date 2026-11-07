@@ -1,0 +1,22 @@
+doc Calling a function value: push the arguments, then call the address in rax.
+  The same convention as [call](call.md): arguments pushed right to left,
+  popped after the call. The function value is evaluated after the
+  arguments, and a null one jumps to the panic helper.
+
+emit when args empty
+  {f}
+  test rax, rax
+  jz __pk_panic_nullfn
+  call rax
+  @panic
+emit
+  {each args reverse}
+  {it}
+  push rax
+  {end}
+  {f}
+  test rax, rax
+  jz __pk_panic_nullfn
+  call rax
+  add rsp, {args.stack}
+  @panic

@@ -1,0 +1,6 @@
+// calling a null function value panics, with the same message everywhere
+use std
+
+let f: fn(int) -> int = null
+print 1
+print f(2)

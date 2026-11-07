@@ -1,0 +1,12 @@
+use std
+
+fn inc(n: int) -> int
+  return n + 1
+end
+
+fn hi()
+  print "hi"
+end
+
+let h = hi
+let x = h()

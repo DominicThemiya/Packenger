@@ -45,6 +45,8 @@ truck
   break
   bxor
   call
+  callfn
+  funcref
   const
   continue
   cstr

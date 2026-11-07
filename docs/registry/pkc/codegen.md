@@ -30,6 +30,8 @@ struct Gen
   back: ptr Map
   types: ptr Types
   funcs: ptr Map
+  // functions used as values, in definition order (strs)
+  table: ptr Vec
   data: ptr Vec
   support: ptr Vec
   used: ptr Map
@@ -50,6 +52,7 @@ fn cg_new(target: str, back: ptr Map, prog: ptr PProg) -> ptr Gen
   g.back = back
   g.types = prog.types
   g.funcs = map_new()
+  g.table = vec_new()
   g.data = vec_new()
   g.support = vec_new()
   g.used = map_new()
@@ -74,7 +77,7 @@ end
 // ---------------------------------------------------------------- reachability
 
 fn cg_visit(n: ptr PNode, by_name: ptr Map, seen: ptr Map)
-  if n.kind == "func" && !map_has(seen, n.ident)
+  if (n.kind == "func" || n.kind == "funcref") && !map_has(seen, n.ident)
     map_set(seen, n.ident, 1)
     let f = map_get(by_name, n.ident) as ptr PNode
     if f != null
@@ -168,7 +171,39 @@ fn cg_append(out: ptr Vec, more: ptr Vec)
   end
 end
 
+fn cg_mark_values(n: ptr PNode, used: ptr Map)
+  if n.kind == "funcref"
+    map_set(used, n.ident, 1)
+  end
+  for i = 0 to ps_nslots(n) - 1
+    cg_mark_values(ps_nd(n.svals, i), used)
+  end
+  for i = 0 to ps_nitems(n) - 1
+    cg_mark_values(ps_nd(n.items, i), used)
+  end
+end
+
+// cg_value_funcs lists the functions the program uses as values, in
+// definition order: a backend may need a table of them (webtables'
+// call_indirect).
+fn cg_value_funcs(prog: ptr PProg, reach: ptr Vec) -> ptr Vec
+  let used = map_new()
+  cg_mark_values(prog.main, used)
+  for i = 0 to vec_len(reach) - 1
+    cg_mark_values(ps_nd(reach, i), used)
+  end
+  let out = vec_new()
+  for i = 0 to vec_len(reach) - 1
+    let f = ps_nd(reach, i)
+    if map_has(used, f.frame.name)
+      u_push(out, f.frame.name)
+    end
+  end
+  return out
+end
+
 fn cg_program(g: ptr Gen, prog: ptr PProg) -> str
+  g.table = cg_value_funcs(prog, cg_reachable(prog))
   for i = 0 to vec_len(prog.globals) - 1
     let v = vec_get(prog.globals, i) as ptr PVar
     let d = ""
@@ -196,6 +231,21 @@ fn cg_program(g: ptr Gen, prog: ptr PProg) -> str
   root.ident = ""
   root.sval = ""
   root.frame = prog.frame
+  let values = new PNode
+  values.kind = "groups"
+  values.ty = ""
+  values.ident = ""
+  values.sval = ""
+  values.items = vec_new()
+  for i = 0 to vec_len(g.table) - 1
+    let it = new PNode
+    it.kind = "ident"
+    it.ty = ""
+    it.sval = ""
+    it.ident = u_get(g.table, i)
+    vec_push(values.items, it as int)
+  end
+  ps_set_slot(root, "fnvalues", values)
   let pkg = map_get(g.back, "program") as ptr PfFile
   let em = cg_choose(g, pkg, "", root)
   if em == null
@@ -759,9 +809,20 @@ fn cg_attr(g: ptr Gen, n: ptr PNode, a: str, out: ptr str) -> bool
       end
       *out = u_cat("pk_", n.ident)
       return true
-    elif n.kind == "newfunc" || n.kind == "ident"
+    elif n.kind == "newfunc" || n.kind == "ident" || n.kind == "funcref"
       *out = u_cat("pk_", n.ident)
       return true
+    end
+  elif a == "index"
+    // a function value's number: its place in the table of functions
+    // used as values, from 1 (0 is null)
+    if n.kind == "funcref"
+      for i = 0 to vec_len(g.table) - 1
+        if u_get(g.table, i) == n.ident
+          *out = str_from_int(i + 1)
+          return true
+        end
+      end
     end
   elif a == "name"
     if n.vr != null

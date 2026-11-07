@@ -59,6 +59,7 @@ compile time.
 | `ptr T` | pointer to a `T`, or `null` | `new T`, `&x`, `null` |
 | `[T]` | slice: a growable-capacity array of `T` | `make([T], n)` |
 | struct | a record with named fields | `struct Name ... end`, used as `ptr Name` |
+| `fn(A, B) -> R` | a function, or `null` | a function's name, without `()` |
 
 The primitive types come from [std/types](registry/std/types.md). Every value
 fits in one machine register; strings, slices and struct pointers are
@@ -118,6 +119,34 @@ print square(9)
   uses a bare `return`.
 - Falling off the end of a function that has a result returns zero.
 - At the top level, `return n` ends the program with exit code `n`.
+
+### Functions as values
+
+A function's name without parentheses is a value of a function type:
+`fn(<parameter types>) -> <result type>`, or `fn(<parameter types>)` for a
+function without a result. Function values can be stored in variables,
+fields and slices, passed, returned, compared with `null`, and called like
+functions:
+
+```
+fn twice(f: fn(int) -> int, x: int) -> int
+  return f(f(x))
+end
+
+fn inc(n: int) -> int
+  return n + 1
+end
+
+print twice(inc, 5)                     // 7
+let ops = make([fn(int, int) -> int], 2)
+let pick: fn(int) -> int = inc
+print pick(41)                          // 42
+```
+
+Calls through a value are checked against its type like direct calls.
+Calling `null` stops the program with `panic: call of a null function`.
+Functions don't capture variables (there are no closures); pass what they
+need as arguments, or use a global.
 
 ## Structs and pointers
 
@@ -362,7 +391,8 @@ Compile errors point at the source:
 ## Limits
 
 - Memory is never freed.
-- No generic functions; slices and pointers are the only parameterized types.
+- No generic functions; slices, pointers and function types are the only
+  parameterized types. Function values don't capture variables.
 - `print` writes immediately, while `rt/io`'s `io_out` is buffered; call
   `io_flush()` before mixing them or exiting.
 

@@ -1,0 +1,21 @@
+doc Calling a function value: call_indirect through the program's function table.
+  Every generated function has the type `() -> i64` and takes its arguments
+  from the memory stack, so one table type covers them all. The arguments
+  are pushed right to left as in [call](call.md), then the value is
+  evaluated: an index into the table from 1, where 0 is `null` and panics.
+
+emit
+  (block (result i64)
+  {each args reverse}
+  (call $__pk_push
+  {it}
+  )
+  {end}
+  (call $__pk_callfn
+  {f}
+  ))
+  @panic
+support
+  (func $__pk_callfn (param $f i64) (result i64)
+  (if (i64.eqz (local.get $f)) (then (call $__pk_panic_nullfn)))
+  (call_indirect $__pk_fns (type $__pk_fnt) (i32.wrap_i64 (i64.sub (local.get $f) (i64.const 1)))))

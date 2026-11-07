@@ -1,0 +1,5 @@
+doc Function value: a function's name used without a call is its address.
+  [callfn](callfn.md) calls it with `call rax`.
+
+emit
+  lea rax, [rel {label}]

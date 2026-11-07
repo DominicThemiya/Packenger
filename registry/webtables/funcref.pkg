@@ -1,0 +1,7 @@
+doc Function value: its index in the program's function table, from 1.
+  [program](program.md) lists every function used as a value in a table,
+  which [callfn](callfn.md) calls through with `call_indirect`; 0 is left
+  for `null`.
+
+emit
+  (i64.const {index})

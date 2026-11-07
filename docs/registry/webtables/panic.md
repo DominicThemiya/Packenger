@@ -37,8 +37,9 @@ The first variant whose condition holds is used.
 (func $__pk_panic_index (call $__pk_panic (i32.const 128) (i32.const 26)))
 (func $__pk_panic_len (call $__pk_panic (i32.const 160) (i32.const 31)))
 (func $__pk_panic_oom (call $__pk_panic (i32.const 192) (i32.const 21)))
+(func $__pk_panic_nullfn (call $__pk_panic (i32.const 288) (i32.const 31)))
 ```
 
 ## Used by
 
-[webtables/alloc](alloc.md), [webtables/index](index.md)
+[webtables/alloc](alloc.md), [webtables/callfn](callfn.md), [webtables/index](index.md)

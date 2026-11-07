@@ -27,6 +27,7 @@ packenger asm examples/fib.pkg --target webtables    # print the module
 | addresses | `i64` values, wrapped to `i32` for loads and stores |
 | variables | in linear memory, because `&x` needs an address: a stack with frames like bintables', and a globals area |
 | arguments | pushed on the memory stack right to left by the caller, popped by the callee |
+| functions | all of type `() -> i64`; those used as values are listed in a table, and a function value is its index from 1 (0 is `null`), called with `call_indirect` ([callfn](webtables/callfn.md)) |
 | order of evaluation | the same as bintables |
 | control flow | `block`, `loop` and `br`: structured, with the same labels |
 | memory layout | strings, slices and structs as in every backend |
@@ -39,7 +40,7 @@ packenger asm examples/fib.pkg --target webtables    # print the module
 | 0–15 | unused, so that `null` is not a valid address of anything |
 | 16–63 | scratch for WASI calls: I/O vectors, results, the clock |
 | 64–95 | the buffer `print` converts numbers in |
-| 128–279 | runtime messages and constants |
+| 128–319 | runtime messages and constants |
 | 1024–1151 | scratch for file status |
 | 4096–65535 | globals, 8 bytes each, in declaration order |
 | 65536–8454143 | the stack (8 MB), growing down from 8454144 |
@@ -70,6 +71,8 @@ packenger asm examples/fib.pkg --target webtables    # print the module
 | [webtables/break](webtables/break.md) | `break`: leaves the innermost loop's outer block. |
 | [webtables/bxor](webtables/bxor.md) | Bitwise xor: `^`, with `i64.xor`. |
 | [webtables/call](webtables/call.md) | Function call: the arguments are pushed on the memory stack right to left. |
+| [webtables/callfn](webtables/callfn.md) | Calling a function value: call_indirect through the program's function table. |
+| [webtables/funcref](webtables/funcref.md) | Function value: its index in the program's function table, from 1. |
 | [webtables/const](webtables/const.md) | Constant declaration: nothing at run time; uses are replaced by the value. |
 | [webtables/continue](webtables/continue.md) | `continue`: leaves the body block of the innermost loop, so its `next` block runs. |
 | [webtables/cstr](webtables/cstr.md) | C string: the address of a string's bytes, which end with a 0. |

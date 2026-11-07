@@ -68,7 +68,7 @@ func nodeLine(n *Node) string {
 			where = "global"
 		}
 		s += fmt.Sprintf(" %s %s %d", n.Var.Name, where, n.Var.Index)
-	case "ident", "func", "newfunc", "newtype", "fielddecl", "newconst":
+	case "ident", "func", "funcref", "newfunc", "newtype", "fielddecl", "newconst":
 		s += " " + n.Ident
 	case "field":
 		s += " " + n.Ident

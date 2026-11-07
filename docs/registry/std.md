@@ -38,7 +38,7 @@ print sum(a)      // 42
 | group | packages |
 |---|---|
 | types | `types` (`int`, `u8`, `bool`, `str`), `struct`, `as`, `true`, `false`, `null` |
-| functions | `fn`, `call`, `return` |
+| functions | `fn`, `call`, `return`, `callfn` (calling a function value) |
 | variables | `let`, `assign`, `global`, `const` |
 | memory | `new`, `make`, `len`, `index` `a[i]`, `dot` `p.x`, `deref` `*p`, `addr` `&x` |
 | control flow | `if`/`elif`/`else`, `while`/`next`, `for`, `do`, `break`, `continue` |
@@ -67,6 +67,7 @@ same name (`types` and `struct` only declare types and need no code);
 | [std/struct](std/struct.md) | Struct declaration: struct Name ... end, one name: type field per line. |
 | [std/fn](std/fn.md) | Function definition: fn name(param: type, ...) [-> type] ... end |
 | [std/call](std/call.md) | Function call: name(arg, ...) |
+| [std/callfn](std/callfn.md) | Calling a function value: f(a, b), where f is any expression of a function type. |
 | [std/return](std/return.md) | Return from a function; at the top level, exit with that code. |
 | [std/let](std/let.md) | Declare a variable: let name [: type] = value |
 | [std/assign](std/assign.md) | Assign to a variable, a field, a slice element or a dereferenced pointer. |

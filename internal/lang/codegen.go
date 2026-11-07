@@ -17,6 +17,7 @@ type Gen struct {
 	Back     map[string]*pkgfile.File // kind -> backend package
 	Types    *Types
 	funcs    map[string]*Node
+	table    []string // functions used as values, in definition order
 	data     []string
 	support  []string
 	used     map[string]bool
@@ -48,7 +49,7 @@ func Reachable(prog *Program) []*Node {
 	var visit func(n *Node)
 	visit = func(n *Node) {
 		Walk(n, func(c *Node) {
-			if c.Kind == "func" && !seen[c.Ident] {
+			if (c.Kind == "func" || c.Kind == "funcref") && !seen[c.Ident] {
 				seen[c.Ident] = true
 				if f := byName[c.Ident]; f != nil {
 					visit(f)
@@ -104,7 +105,30 @@ func Includes(f *pkgfile.File) []string {
 	return out
 }
 
+// valueFuncs lists the functions the program uses as values, in definition
+// order: a backend may need a table of them (webtables' call_indirect).
+func valueFuncs(prog *Program, reach []*Node) []string {
+	used := map[string]bool{}
+	mark := func(c *Node) {
+		if c.Kind == "funcref" {
+			used[c.Ident] = true
+		}
+	}
+	Walk(prog.Main, mark)
+	for _, f := range reach {
+		Walk(f, mark)
+	}
+	var out []string
+	for _, f := range reach {
+		if used[f.Frame.Name] {
+			out = append(out, f.Frame.Name)
+		}
+	}
+	return out
+}
+
 func (g *Gen) Program(prog *Program) (string, error) {
+	g.table = valueFuncs(prog, Reachable(prog))
 	for _, v := range prog.Globals {
 		d, err := g.storage(v, "decl")
 		if err != nil {
@@ -125,6 +149,11 @@ func (g *Gen) Program(prog *Program) (string, error) {
 		funcs = append(funcs, code...)
 	}
 	root := &Node{Kind: "program", Slots: map[string]*Node{}, Frame: prog.Frame}
+	values := &Node{Kind: "groups", Slots: map[string]*Node{}}
+	for _, name := range g.table {
+		values.Items = append(values.Items, &Node{Kind: "ident", Ident: name, Slots: map[string]*Node{}})
+	}
+	root.setSlot("fnvalues", values)
 	pkg := g.Back["program"]
 	em, err := g.choose(pkg, "", root)
 	if err != nil {
@@ -555,8 +584,18 @@ func (g *Gen) attr(n *Node, a string) (string, error) {
 				return "", fmt.Errorf("%s: unknown function %s", n.Pos, n.Ident)
 			}
 			return "pk_" + n.Ident, nil
-		case "newfunc", "ident":
+		case "newfunc", "ident", "funcref":
 			return "pk_" + n.Ident, nil
+		}
+	case "index":
+		// a function value's number: its place in the program's table of
+		// functions used as values, from 1 (0 is null)
+		if n.Kind == "funcref" {
+			for i, name := range g.table {
+				if name == n.Ident {
+					return strconv.Itoa(i + 1), nil
+				}
+			}
 		}
 	case "name":
 		if n.Var != nil {

@@ -12,17 +12,51 @@ import (
 //	Node                   a struct, declared with the struct syntax
 //	ptr T                  pointer to T
 //	[T]                    slice of T
+//	fn(A, B) -> R          function taking A and B, returning R
+//	fn(A)                  function without a result
 //	?                      unknown: matches any type (null, and the first parse pass)
 //	""                     no value (a function without a result)
 //
 // In package constraints a type may also contain type variables (a single
 // capital letter, e.g. ptr T) and slot references ({slot}: the type of that
-// slot).
+// slot), and fn(...) -> R matches any function type, binding R to its result
+// ("" if it has none).
 
 type typ struct {
-	kind string // name, ptr, slice, var, slot, wild
-	name string
-	elem *typ
+	kind   string // name, ptr, slice, fn, var, slot, wild
+	name   string
+	elem   *typ
+	params []*typ // fn
+	ret    *typ   // fn: nil if the function has no result
+	any    bool   // fn(...): any parameters (constraints only)
+}
+
+// FnType renders the type of a function with these parameter and result
+// types (ret "" for none).
+func FnType(params []string, ret string) string {
+	s := "fn(" + strings.Join(params, ", ") + ")"
+	if ret != "" {
+		s += " -> " + ret
+	}
+	return s
+}
+
+// IsFn reports whether t is a function type.
+func IsFn(t string) bool { return strings.HasPrefix(t, "fn(") }
+
+// FnParts splits a function type into its parameter and result types.
+func FnParts(t string) (params []string, ret string, ok bool) {
+	ft, err := parseType(t)
+	if err != nil || ft.kind != "fn" || ft.any {
+		return nil, "", false
+	}
+	for _, p := range ft.params {
+		params = append(params, p.String())
+	}
+	if ft.ret != nil {
+		ret = ft.ret.String()
+	}
+	return params, ret, true
 }
 
 func parseType(s string) (*typ, error) {
@@ -59,6 +93,8 @@ func parseTypePrefix(s string) (*typ, string, error) {
 			return nil, "", fmt.Errorf("missing '}' in type")
 		}
 		return &typ{kind: "slot", name: strings.TrimSpace(s[1:end])}, s[end+1:], nil
+	case strings.HasPrefix(s, "fn("):
+		return parseFnType(s[3:])
 	}
 	end := 0
 	for end < len(s) && (unicode.IsLetter(rune(s[end])) || unicode.IsDigit(rune(s[end])) || s[end] == '_') {
@@ -83,8 +119,59 @@ func parseTypePrefix(s string) (*typ, string, error) {
 	return &typ{kind: "name", name: word}, rest, nil
 }
 
+// parseFnType reads the rest of a function type after "fn(".
+func parseFnType(s string) (*typ, string, error) {
+	t := &typ{kind: "fn"}
+	rest := strings.TrimLeft(s, " ")
+	switch {
+	case strings.HasPrefix(rest, "...)"):
+		t.any, rest = true, rest[4:]
+	case strings.HasPrefix(rest, ")"):
+		rest = rest[1:]
+	default:
+		for {
+			p, r, err := parseTypePrefix(rest)
+			if err != nil {
+				return nil, "", err
+			}
+			t.params = append(t.params, p)
+			r = strings.TrimLeft(r, " ")
+			if strings.HasPrefix(r, ",") {
+				rest = r[1:]
+				continue
+			}
+			if !strings.HasPrefix(r, ")") {
+				return nil, "", fmt.Errorf("missing ')' in function type")
+			}
+			rest = r[1:]
+			break
+		}
+	}
+	if r := strings.TrimLeft(rest, " "); strings.HasPrefix(r, "->") {
+		ret, r, err := parseTypePrefix(r[2:])
+		if err != nil {
+			return nil, "", err
+		}
+		t.ret, rest = ret, r
+	}
+	return t, rest, nil
+}
+
 func (t *typ) String() string {
 	switch t.kind {
+	case "fn":
+		var ps []string
+		for _, p := range t.params {
+			ps = append(ps, p.String())
+		}
+		if t.any {
+			ps = []string{"..."}
+		}
+		ret := ""
+		if t.ret != nil {
+			ret = t.ret.String()
+		}
+		return FnType(ps, ret)
 	case "ptr":
 		return "ptr " + t.elem.String()
 	case "slice":
@@ -97,13 +184,30 @@ func (t *typ) String() string {
 	return t.name
 }
 
+// isNull reports whether t is null's type, ptr ?.
+func isNull(t *typ) bool { return t.kind == "ptr" && t.elem.kind == "wild" }
+
 // unify reports whether two concrete types are compatible; ? matches anything.
 func unify(a, b *typ) bool {
 	if a.kind == "wild" || b.kind == "wild" {
 		return true
 	}
+	if isNull(a) && b.kind == "fn" || isNull(b) && a.kind == "fn" {
+		return true // null is also a function value
+	}
 	if a.kind != b.kind || a.name != b.name {
 		return false
+	}
+	if a.kind == "fn" {
+		if len(a.params) != len(b.params) || (a.ret == nil) != (b.ret == nil) {
+			return false
+		}
+		for i := range a.params {
+			if !unify(a.params[i], b.params[i]) {
+				return false
+			}
+		}
+		return a.ret == nil || unify(a.ret, b.ret)
 	}
 	if a.elem != nil {
 		return unify(a.elem, b.elem)
@@ -163,6 +267,35 @@ func (b *binder) match(pat *typ, actual *typ) bool {
 		return actual.kind == "name" && actual.name == pat.name
 	case "ptr", "slice":
 		return actual.kind == pat.kind && b.match(pat.elem, actual.elem)
+	case "fn":
+		if actual.kind != "fn" {
+			return false
+		}
+		if !pat.any {
+			if len(pat.params) != len(actual.params) {
+				return false
+			}
+			for i := range pat.params {
+				if !b.match(pat.params[i], actual.params[i]) {
+					return false
+				}
+			}
+		}
+		switch {
+		case pat.ret == nil:
+			return pat.any || actual.ret == nil
+		case actual.ret == nil:
+			// fn(...) -> R on a function without a result: R is no value
+			if pat.ret.kind == "var" {
+				if bound, ok := b.vars[pat.ret.name]; ok {
+					return bound.kind == "name" && bound.name == ""
+				}
+				b.vars[pat.ret.name] = &typ{kind: "name", name: ""}
+				return true
+			}
+			return false
+		}
+		return b.match(pat.ret, actual.ret)
 	}
 	return false
 }
@@ -215,6 +348,23 @@ func (b *binder) Subst(result string) (string, error) {
 				return nil, err
 			}
 			return &typ{kind: t.kind, elem: e}, nil
+		case "fn":
+			out := &typ{kind: "fn", any: t.any}
+			for _, p := range t.params {
+				w, err := walk(p)
+				if err != nil {
+					return nil, err
+				}
+				out.params = append(out.params, w)
+			}
+			if t.ret != nil {
+				w, err := walk(t.ret)
+				if err != nil {
+					return nil, err
+				}
+				out.ret = w
+			}
+			return out, nil
 		}
 		return t, nil
 	}
@@ -260,7 +410,7 @@ type Types struct {
 // field or slice element). Every value occupies one register.
 func (ts *Types) Size(t string) (int, error) {
 	switch {
-	case strings.HasPrefix(t, "ptr ") || strings.HasPrefix(t, "["):
+	case strings.HasPrefix(t, "ptr ") || strings.HasPrefix(t, "[") || IsFn(t):
 		return 8, nil
 	case t == "?":
 		return 8, nil

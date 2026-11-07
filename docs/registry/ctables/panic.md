@@ -33,8 +33,9 @@ _exit(2);
 static void __pk_panic_index(void) { __pk_panic("panic: index out of range\n"); }
 static void __pk_panic_len(void) { __pk_panic("panic: negative length in make\n"); }
 static void __pk_panic_oom(void) { __pk_panic("panic: out of memory\n"); }
+static void __pk_panic_nullfn(void) { __pk_panic("panic: call of a null function\n"); }
 ```
 
 ## Used by
 
-[ctables/alloc](alloc.md), [ctables/index](index.md)
+[ctables/alloc](alloc.md), [ctables/callfn](callfn.md), [ctables/index](index.md)

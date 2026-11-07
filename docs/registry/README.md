@@ -40,6 +40,7 @@ format.
   - [std/struct](std/struct.md) — Struct declaration: struct Name ... end, one name: type field per line.
   - [std/fn](std/fn.md) — Function definition: fn name(param: type, ...) [-> type] ... end
   - [std/call](std/call.md) — Function call: name(arg, ...)
+  - [std/callfn](std/callfn.md) — Calling a function value: f(a, b), where f is any expression of a function type.
   - [std/return](std/return.md) — Return from a function; at the top level, exit with that code.
   - [std/let](std/let.md) — Declare a variable: let name [: type] = value
   - [std/assign](std/assign.md) — Assign to a variable, a field, a slice element or a dereferenced pointer.
@@ -110,6 +111,8 @@ format.
   - [bintables/break](bintables/break.md) — break: jump to the end of the enclosing loop.
   - [bintables/bxor](bintables/bxor.md) — ^ : `xor`.
   - [bintables/call](bintables/call.md) — Call: push arguments right to left, call, then pop them.
+  - [bintables/callfn](bintables/callfn.md) — Calling a function value: push the arguments, then call the address in rax.
+  - [bintables/funcref](bintables/funcref.md) — Function value: a function's name used without a call is its address.
   - [bintables/const](bintables/const.md) — Constant declaration: no code; the value is copied to every use.
   - [bintables/continue](bintables/continue.md) — continue: jump to the enclosing loop's next label.
   - [bintables/cstr](bintables/cstr.md) — cstr: a string's bytes start 8 bytes after its address.
@@ -170,6 +173,8 @@ format.
   - [ctables/break](ctables/break.md) — `break`: jumps to the end of the innermost loop.
   - [ctables/bxor](ctables/bxor.md) — Bitwise xor: `^` on two `int`s.
   - [ctables/call](ctables/call.md) — Function call: the arguments are evaluated right to left, then passed.
+  - [ctables/callfn](ctables/callfn.md) — Calling a function value: cast the word to a C function pointer and call it.
+  - [ctables/funcref](ctables/funcref.md) — Function value: a function's name used without a call is its address, as a word.
   - [ctables/const](ctables/const.md) — Constant declaration: nothing at run time; uses are replaced by the value.
   - [ctables/continue](ctables/continue.md) — `continue`: jumps to the `next` block of the innermost loop.
   - [ctables/cstr](ctables/cstr.md) — C string: the address of a string's bytes, which end with a 0.
@@ -228,6 +233,8 @@ format.
   - [webtables/break](webtables/break.md) — `break`: leaves the innermost loop's outer block.
   - [webtables/bxor](webtables/bxor.md) — Bitwise xor: `^`, with `i64.xor`.
   - [webtables/call](webtables/call.md) — Function call: the arguments are pushed on the memory stack right to left.
+  - [webtables/callfn](webtables/callfn.md) — Calling a function value: call_indirect through the program's function table.
+  - [webtables/funcref](webtables/funcref.md) — Function value: its index in the program's function table, from 1.
   - [webtables/const](webtables/const.md) — Constant declaration: nothing at run time; uses are replaced by the value.
   - [webtables/continue](webtables/continue.md) — `continue`: leaves the body block of the innermost loop, so its `next` block runs.
   - [webtables/cstr](webtables/cstr.md) — C string: the address of a string's bytes, which end with a 0.
@@ -290,6 +297,7 @@ format.
 | [std/break](std/break.md) | [bintables/break](bintables/break.md), [ctables/break](ctables/break.md), [webtables/break](webtables/break.md) |
 | [std/bxor](std/bxor.md) | [bintables/bxor](bintables/bxor.md), [ctables/bxor](ctables/bxor.md), [webtables/bxor](webtables/bxor.md) |
 | [std/call](std/call.md) | [bintables/call](bintables/call.md), [ctables/call](ctables/call.md), [webtables/call](webtables/call.md) |
+| [std/callfn](std/callfn.md) | [bintables/callfn](bintables/callfn.md), [ctables/callfn](ctables/callfn.md), [webtables/callfn](webtables/callfn.md) |
 | [std/const](std/const.md) | [bintables/const](bintables/const.md), [ctables/const](ctables/const.md), [webtables/const](webtables/const.md) |
 | [std/continue](std/continue.md) | [bintables/continue](bintables/continue.md), [ctables/continue](ctables/continue.md), [webtables/continue](webtables/continue.md) |
 | [std/cstr](std/cstr.md) | [bintables/cstr](bintables/cstr.md), [ctables/cstr](ctables/cstr.md), [webtables/cstr](webtables/cstr.md) |

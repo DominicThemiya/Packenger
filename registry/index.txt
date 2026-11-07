@@ -15,6 +15,7 @@ bintables/bor
 bintables/break
 bintables/bxor
 bintables/call
+bintables/callfn
 bintables/const
 bintables/continue
 bintables/cstr
@@ -26,6 +27,7 @@ bintables/eq
 bintables/exprstmt
 bintables/false
 bintables/fn
+bintables/funcref
 bintables/ge
 bintables/global
 bintables/gt
@@ -75,6 +77,7 @@ ctables/bor
 ctables/break
 ctables/bxor
 ctables/call
+ctables/callfn
 ctables/const
 ctables/continue
 ctables/cstr
@@ -86,6 +89,7 @@ ctables/eq
 ctables/exprstmt
 ctables/false
 ctables/fn
+ctables/funcref
 ctables/ge
 ctables/global
 ctables/gt
@@ -158,6 +162,7 @@ std/bor
 std/break
 std/bxor
 std/call
+std/callfn
 std/const
 std/continue
 std/cstr
@@ -220,6 +225,7 @@ webtables/bor
 webtables/break
 webtables/bxor
 webtables/call
+webtables/callfn
 webtables/const
 webtables/continue
 webtables/cstr
@@ -231,6 +237,7 @@ webtables/eq
 webtables/exprstmt
 webtables/false
 webtables/fn
+webtables/funcref
 webtables/ge
 webtables/global
 webtables/gt

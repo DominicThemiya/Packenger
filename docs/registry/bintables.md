@@ -72,6 +72,8 @@ names and pass `--target <truck>`.
 | [bintables/break](bintables/break.md) | break: jump to the end of the enclosing loop. |
 | [bintables/bxor](bintables/bxor.md) | ^ : `xor`. |
 | [bintables/call](bintables/call.md) | Call: push arguments right to left, call, then pop them. |
+| [bintables/callfn](bintables/callfn.md) | Calling a function value: push the arguments, then call the address in rax. |
+| [bintables/funcref](bintables/funcref.md) | Function value: a function's name used without a call is its address. |
 | [bintables/const](bintables/const.md) | Constant declaration: no code; the value is copied to every use. |
 | [bintables/continue](bintables/continue.md) | continue: jump to the enclosing loop's next label. |
 | [bintables/cstr](bintables/cstr.md) | cstr: a string's bytes start 8 bytes after its address. |

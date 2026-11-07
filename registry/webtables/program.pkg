@@ -37,6 +37,14 @@ emit
   (data (i32.const 256) "true\0a")
   (data (i32.const 264) "false\0a")
   (data (i32.const 272) "\0a.")
+  (data (i32.const 288) "panic: call of a null function\0a")
+  (type $__pk_fnt (func (result i64)))
+  (table $__pk_fns {fnvalues.count} funcref)
+  (elem (table $__pk_fns) (i32.const 0) func
+  {each fnvalues}
+  ${it.label}
+  {end}
+  )
   (func $__pk_push (param $v i64)
   (global.set $sp (i32.sub (global.get $sp) (i32.const 8)))
   (i64.store (global.get $sp) (local.get $v)))

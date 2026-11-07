@@ -1,0 +1,70 @@
+// function values: fn types, names as values, calls through values
+use std
+
+struct Op
+  name: str
+  apply: fn(int, int) -> int
+end
+
+fn add(a: int, b: int) -> int
+  return a + b
+end
+
+fn mul(a: int, b: int) -> int
+  return a * b
+end
+
+fn twice(f: fn(int) -> int, x: int) -> int
+  return f(f(x))
+end
+
+fn inc(n: int) -> int
+  return n + 1
+end
+
+fn shout(s: str)
+  print s
+end
+
+fn pick(big: bool) -> fn(int, int) -> int
+  if big
+    return mul
+  end
+  return add
+end
+
+fn fold(xs: [int], f: fn(int, int) -> int, start: int) -> int
+  let acc = start
+  let i = 0
+  while i < len(xs)
+    acc = f(acc, xs[i])
+    i = i + 1
+  end
+  return acc
+end
+
+print twice(inc, 5)
+let g: fn(int) -> int = inc
+print g(41)
+let ops = make([fn(int, int) -> int], 2)
+ops[0] = add
+ops[1] = mul
+print ops[0](3, 4)
+print ops[1](3, 4)
+let op = new Op
+op.name = "mul"
+op.apply = mul
+print op.apply(6, 7)
+let say = shout
+say("no result")
+print pick(true)(5, 5)
+let xs = make([int], 4)
+xs[0] = 1
+xs[1] = 2
+xs[2] = 3
+xs[3] = 4
+print fold(xs, add, 0)
+print fold(xs, mul, 1)
+let none: fn(int) -> int = null
+print none == null
+print g != null

@@ -674,7 +674,7 @@ func (p *Parser) constrain(s *pkgfile.Slot, c *Node, b *binder, t Token, what st
 	}
 	if !ok {
 		want, _ := b.Subst(s.Arg)
-		if want == "?" || strings.Contains(s.Arg, "[") || strings.Contains(s.Arg, "ptr") {
+		if want == "?" || strings.Contains(s.Arg, "[") || strings.Contains(s.Arg, "ptr") || IsFn(s.Arg) {
 			want = describeConstraint(s.Arg, want)
 		}
 		return p.fail(t, "%s must be %s, but it is %s", what, want, describeType(c.Type))
@@ -690,6 +690,9 @@ func describeType(t string) string {
 }
 
 func describeConstraint(arg, subst string) string {
+	if strings.HasPrefix(subst, "fn(...)") {
+		return "a function"
+	}
 	if !strings.Contains(subst, "?") {
 		return subst
 	}
@@ -1262,6 +1265,34 @@ func (p *Parser) typeExpr() (string, error) {
 			return "", err
 		}
 		return "ptr " + elem, nil
+	case t.Kind == TIdent && t.Text == "fn" && p.isLit(p.toks[p.i+1], "("):
+		// a function type: fn(int, str) -> bool
+		p.i += 2
+		var params []string
+		for !p.isLit(p.tok(), ")") {
+			if len(params) > 0 {
+				if !p.isLit(p.tok(), ",") {
+					return "", p.fail(p.tok(), "expected ',' or ')' in the function type, found %s", p.tok())
+				}
+				p.i++
+			}
+			pt, err := p.typeExpr()
+			if err != nil {
+				return "", err
+			}
+			params = append(params, pt)
+		}
+		p.i++
+		ret := ""
+		if p.isLit(p.tok(), "->") {
+			p.i++
+			r, err := p.typeExpr()
+			if err != nil {
+				return "", err
+			}
+			ret = r
+		}
+		return FnType(params, ret), nil
 	case t.Kind == TIdent:
 		p.i++
 		if _, ok := p.L.Prims[t.Text]; ok {
@@ -1356,6 +1387,13 @@ func (p *Parser) prefix() (*Node, error) {
 			if c, ok := p.consts[t.Text]; ok {
 				p.i++
 				return clone(c), nil
+			}
+			if sig, ok := p.sigs[t.Text]; ok && !p.isLit(p.toks[p.i+1], "(") {
+				// a function used as a value
+				p.i++
+				n := p.node("funcref", t.Pos)
+				n.Ident, n.Type, n.start, n.end = t.Text, FnType(sig.Params, sig.Ret), start, p.i
+				return n, nil
 			}
 			if len(cands) > 0 && p.isLit(p.toks[p.i+1], "(") && ruleFar.err != nil {
 				// looks like a use of an expression package (e.g. a call): its error is the useful one
@@ -1628,6 +1666,26 @@ func (p *Parser) checkCalls(prog *Program) error {
 		}
 		for _, name := range n.Order {
 			c := n.Slots[name]
+			if c.Kind != "func" && IsFn(c.Type) {
+				// a call through a function value
+				params, _, ok := FnParts(c.Type)
+				for _, aname := range n.Order {
+					a := n.Slots[aname]
+					if !ok || a.Kind != "args" {
+						continue
+					}
+					if len(a.Items) != len(params) {
+						err = fmt.Errorf("%s: this %s takes %d argument(s), got %d", c.Pos, c.Type, len(params), len(a.Items))
+						return
+					}
+					for i, arg := range a.Items {
+						if !Compatible(params[i], arg.Type) {
+							err = fmt.Errorf("%s: argument %d of this %s must be %s, but it is %s", arg.Pos, i+1, c.Type, params[i], describeType(arg.Type))
+							return
+						}
+					}
+				}
+			}
 			if c.Kind != "func" {
 				continue
 			}
