@@ -141,6 +141,7 @@ In this order, each only if present:
 | `emit section=<quoted> [when slot=S op=O arg=<quoted>]` | for each emit section, followed by its lines |
 | `data` | followed by its lines |
 | `support` | followed by its lines |
+| `resolve` | then `  rename <kind> <quoted old> in <scope> to <quoted new>` for each rule |
 
 Body lines are printed as `  | text`, or `  |` for an empty line.
 Patterns are printed normalized: elements separated by single spaces, slots

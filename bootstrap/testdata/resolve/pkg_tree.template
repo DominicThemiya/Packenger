@@ -1,0 +1,6 @@
+tree
+  filesystem file://REG
+  fsuser file://REG
+  fixes file://REG
+  both file://REG
+  badfix file://REG

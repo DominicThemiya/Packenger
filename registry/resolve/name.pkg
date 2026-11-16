@@ -1,0 +1,9 @@
+doc Rename rule: one name a package or truck defines.
+  ```
+  resolve
+    rename name 'list_all' in filesystem/io to 'list_files'
+  end
+  ```
+
+  Like [prefix](prefix.md), for a single name: functions, globals,
+  constants and structs. It is an error if the scope doesn't define it.

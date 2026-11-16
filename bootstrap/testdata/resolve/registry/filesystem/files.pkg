@@ -1,0 +1,16 @@
+doc Counting entries, with names that clash with rt/fs.
+needs std
+code
+  global fs_calls: int = 0
+
+  const FS_LIMIT = 100
+
+  // fs_list counts the entries of a made-up listing
+  fn fs_list(dir: str) -> int
+    fs_calls = fs_calls + 1
+    return fs_count(dir) + 0 * FS_LIMIT
+  end
+
+  fn fs_count(dir: str) -> int
+    return len(dir)
+  end

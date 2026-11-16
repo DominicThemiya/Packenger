@@ -1,0 +1,4 @@
+doc A broken resolve section.
+resolve
+  rename symbol 'a' in x to 'b'
+end

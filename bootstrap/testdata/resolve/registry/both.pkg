@@ -1,0 +1,6 @@
+doc Needs both filesystem and rt, and calls fs_list: ambiguous once renamed.
+needs std rt filesystem
+code
+  fn both_call() -> int
+    return fs_list("x")
+  end

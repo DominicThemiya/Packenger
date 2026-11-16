@@ -268,6 +268,7 @@ phase 0 harness before moving on:
 |---|---|---|
 | `pkc/fetch` | `registry.go`, `tree.go` | same package bytes and routes; same errors |
 | `pkc/lock` | `lock.go` | same lock files; same errors |
+| `pkc/resolve` | `resolve.go` | same renames; same errors |
 | `pkc/pkgfile` | `pkgfile.go` | same parsed structure for every registry package |
 | `pkc/lexer` | `lexer.go` | `dump tokens` |
 | `pkc/parser` | `parser.go` | `dump ast` |

@@ -1,0 +1,6 @@
+doc Uses filesystem, so its calls are renamed with it.
+needs std filesystem
+code
+  fn fsuser_twice(dir: str) -> int
+    return fs_list(dir) + fs_list(dir)
+  end

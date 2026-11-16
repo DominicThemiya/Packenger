@@ -1,0 +1,5 @@
+doc A rule for a truck that isn't loaded.
+needs resolve
+resolve
+  rename prefix 'x_' in nosuch to 'y_'
+end

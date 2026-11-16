@@ -1,0 +1,5 @@
+doc A keyword rule for a word stdx doesn't use.
+needs resolve stdx
+resolve
+  rename keyword 'unless' in stdx to 'lest'
+end

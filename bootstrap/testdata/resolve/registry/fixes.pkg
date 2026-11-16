@@ -1,0 +1,8 @@
+doc Lets filesystem and rt/fs be used together, and frees the word in.
+needs resolve filesystem rt stdx
+resolve
+  // filesystem's names get their own prefix
+  rename prefix 'fs_' in filesystem to 'filesys_'
+  rename name 'FS_LIMIT' in filesystem/files to 'FILESYS_LIMIT'
+  rename keyword 'in' in stdx to 'within'
+end

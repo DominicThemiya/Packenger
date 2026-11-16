@@ -21,6 +21,18 @@ code
     emits: ptr Vec
     data: ptr Vec
     support: ptr Vec
+    // rules for resolving conflicts between other packages (ptr PfRename),
+    // or null without a resolve section
+    resolve: ptr Vec
+  end
+
+  // one rule of a resolve section: rename <kind> '<old>' in <scope> to '<new>'
+  struct PfRename
+    kind: str
+    old: str
+    scope: str
+    new_: str
+    line: int
   end
 
   struct PfType
@@ -85,8 +97,104 @@ code
     return name
   end
 
+  fn pf_rename_string(r: ptr PfRename) -> str
+    return u_cat4(u_cat3("rename ", r.kind, " '"), r.old, u_cat3("' in ", r.scope, " to '"), u_cat(r.new_, "'"))
+  end
+
+  fn pf_is_word(s: str) -> bool
+    if s == ""
+      return false
+    end
+    for i = 0 to len(s) - 1
+      let c = s[i]
+      if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_' || i > 0 && c >= '0' && c <= '9')
+        return false
+      end
+    end
+    return true
+  end
+
+  fn pf_is_package_name(s: str) -> bool
+    let segs = u_split(s, '/')
+    for i = 0 to vec_len(segs) - 1
+      if !pf_is_word(u_replace(u_get(segs, i), "-", "_"))
+        return false
+      end
+    end
+    return true
+  end
+
+  fn pf_unquote(w: str, ok: ptr bool) -> str
+    *ok = len(w) >= 2 && w[0] == '\'' && w[len(w) - 1] == '\''
+    if !*ok
+      return ""
+    end
+    return str_slice(w, 1, len(w) - 1)
+  end
+
+  // pf_parse_rename reads one rule: rename <kind> '<old>' in <scope> to '<new>'.
+  fn pf_parse_rename(line: str) -> ptr PfRename
+    let words = vec_new()
+    let rest = u_trim(line)
+    while rest != ""
+      if rest[0] == '\''
+        let stop = str_find_byte(rest, '\'', 1)
+        if stop < 0
+          u_fail(u_cat("missing closing ' in ", u_quote(line)))
+          return null
+        end
+        u_push(words, str_slice(rest, 0, stop + 1))
+        rest = u_trim(str_slice(rest, stop + 1, len(rest)))
+        continue
+      end
+      let stop = 0
+      while stop < len(rest) && rest[stop] != ' ' && rest[stop] != '\t'
+        stop = stop + 1
+      end
+      u_push(words, str_slice(rest, 0, stop))
+      rest = u_trim(str_slice(rest, stop, len(rest)))
+    end
+    let usage = "expected: rename prefix|name|keyword '<old>' in <package or truck> to '<new>'"
+    if vec_len(words) != 7
+      u_fail(usage)
+      return null
+    end
+    let kind = u_get(words, 1)
+    if u_get(words, 0) != "rename" || u_get(words, 3) != "in" || u_get(words, 5) != "to" || !(kind == "prefix" || kind == "name" || kind == "keyword")
+      u_fail(usage)
+      return null
+    end
+    let ok1 = false
+    let ok2 = false
+    let old = pf_unquote(u_get(words, 2), &ok1)
+    let nw = pf_unquote(u_get(words, 6), &ok2)
+    if !ok1 || !ok2
+      u_fail(usage)
+      return null
+    end
+    if !pf_is_word(old) || !pf_is_word(nw)
+      u_fail(u_cat4("'", old, "' and '", u_cat(nw, "' must be names: letters, digits and _")))
+      return null
+    end
+    let scope = u_get(words, 4)
+    if !pf_is_package_name(scope)
+      u_fail(u_cat(u_quote(scope), " is not a package or truck name"))
+      return null
+    end
+    if old == nw
+      u_fail(u_cat3("renaming '", old, "' to itself"))
+      return null
+    end
+    let r = new PfRename
+    r.kind = kind
+    r.old = old
+    r.scope = scope
+    r.new_ = nw
+    return r
+  end
+
   fn pf_is_section(kw: str) -> bool
-    return kw == "doc" || kw == "needs" || kw == "type" || kw == "truck" || kw == "syntax" || kw == "expand" || kw == "code" || kw == "emit" || kw == "data" || kw == "support"
+    return kw == "doc" || kw == "needs" || kw == "type" || kw == "truck" || kw == "syntax" || kw == "expand" || kw == "code" || kw == "emit" || kw == "data" || kw == "support" || kw == "resolve"
   end
 
   fn pf_is_slot_kind(k: str) -> bool
@@ -137,6 +245,8 @@ code
     let cur_syn: ptr PfSyntax = null
     let in_doc = false
     let in_code = false
+    // the line of an open resolve section, closed by end
+    let resolve_at = 0
     for idx = 0 to vec_len(lines) - 1
       let ln = idx + 1
       let raw = u_get(lines, idx)
@@ -164,8 +274,18 @@ code
       if !indented
         let fields = u_fields(trimmed)
         let kw = u_get(fields, 0)
+        if resolve_at > 0
+          if trimmed != "end"
+            return pf_errf(origin, ln, u_cat3("expected 'end' to close the resolve section of line ", str_from_int(resolve_at), ""))
+          end
+          resolve_at = 0
+          continue
+        end
+        if kw == "end"
+          return pf_errf(origin, ln, "'end' without a resolve section to close")
+        end
         if !pf_is_section(kw)
-          return pf_errf(origin, ln, u_cat3("unknown section ", u_quote(kw), " (expected one of doc, needs, type, truck, syntax, expand, code, emit, data, support)"))
+          return pf_errf(origin, ln, u_cat3("unknown section ", u_quote(kw), " (expected one of doc, needs, type, truck, syntax, expand, code, emit, data, support, resolve)"))
         end
         cur = null
         cur_syn = null
@@ -225,10 +345,23 @@ code
           cur = f.data
         elif kw == "support"
           cur = f.support
+        elif kw == "resolve"
+          if f.resolve != null
+            return pf_errf(origin, ln, "only one resolve section is allowed")
+          end
+          f.resolve = vec_new()
+          resolve_at = ln
         end
         continue
       end
-      if cur_syn != null
+      if resolve_at > 0
+        let r = pf_parse_rename(trimmed)
+        if r == null
+          return pf_errf(origin, ln, pk_err)
+        end
+        r.line = ln
+        vec_push(f.resolve, r as int)
+      elif cur_syn != null
         let p = pf_parse_pattern(trimmed)
         if p == null
           return pf_errf(origin, ln, pk_err)
@@ -243,6 +376,9 @@ code
       else
         return pf_errf(origin, ln, "indented line outside of a section")
       end
+    end
+    if resolve_at > 0
+      return pf_errf(origin, resolve_at, "the resolve section isn't closed: end it with a line 'end'")
     end
     pf_trim_blank_tail(f.doc_body)
     if f.code != null
@@ -763,6 +899,14 @@ code
     if vec_len(f.support) > 0
       sb_add(b, "support\n")
       pf_dump_body(b, f.support)
+    end
+    if f.resolve != null
+      sb_add(b, "resolve\n")
+      for i = 0 to vec_len(f.resolve) - 1
+        let r = vec_get(f.resolve, i) as ptr PfRename
+        sb_add(b, u_cat4("  rename ", r.kind, " ", pf_dquote(r.old)))
+        sb_add(b, u_cat4(" in ", r.scope, " to ", u_cat(pf_dquote(r.new_), "\n")))
+      end
     end
     return sb_str(b)
   end

@@ -9,3 +9,8 @@ emit when a size 1
   nop
 data
   d
+resolve
+  // a comment, then rules
+  rename prefix 'fs_' in filesystem to 'filesys_'
+  rename keyword 'in' in stdx to 'within'
+end

@@ -46,6 +46,95 @@ type File struct {
 	Emits   []*Emit
 	Data    []string
 	Support []string
+	Resolve []*Rename // rules for resolving conflicts between other packages
+}
+
+// A Rename is one rule of a resolve section:
+//
+//	rename prefix 'fs_' in filesystem to 'filesys_'
+//
+// Kind is prefix, name or keyword; Scope is a package or truck name.
+type Rename struct {
+	Kind, Old, Scope, New string
+	Line                  int
+}
+
+// String renders the rule as it is written.
+func (r *Rename) String() string {
+	return fmt.Sprintf("rename %s '%s' in %s to '%s'", r.Kind, r.Old, r.Scope, r.New)
+}
+
+// RenameKinds are the kinds of rename a resolve section can use.
+var RenameKinds = map[string]bool{"prefix": true, "name": true, "keyword": true}
+
+func isWord(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_' || i > 0 && c >= '0' && c <= '9') {
+			return false
+		}
+	}
+	return true
+}
+
+func isPackageName(s string) bool {
+	for _, seg := range strings.Split(s, "/") {
+		if !isWord(strings.ReplaceAll(seg, "-", "_")) {
+			return false
+		}
+	}
+	return true
+}
+
+// parseRename reads one rule: rename <kind> '<old>' in <scope> to '<new>'.
+func parseRename(line string) (*Rename, error) {
+	var words []string
+	for rest := strings.TrimSpace(line); rest != ""; rest = strings.TrimSpace(rest) {
+		if rest[0] == '\'' {
+			end := strings.IndexByte(rest[1:], '\'')
+			if end < 0 {
+				return nil, fmt.Errorf("missing closing ' in %q", line)
+			}
+			words = append(words, rest[:end+2])
+			rest = rest[end+2:]
+			continue
+		}
+		end := strings.IndexAny(rest, " \t")
+		if end < 0 {
+			end = len(rest)
+		}
+		words = append(words, rest[:end])
+		rest = rest[end:]
+	}
+	quoted := func(w string) (string, bool) {
+		if len(w) >= 2 && w[0] == '\'' && w[len(w)-1] == '\'' {
+			return w[1 : len(w)-1], true
+		}
+		return "", false
+	}
+	usage := fmt.Errorf("expected: rename prefix|name|keyword '<old>' in <package or truck> to '<new>'")
+	if len(words) != 7 || words[0] != "rename" || words[3] != "in" || words[5] != "to" || !RenameKinds[words[1]] {
+		return nil, usage
+	}
+	old, ok1 := quoted(words[2])
+	nw, ok2 := quoted(words[6])
+	if !ok1 || !ok2 {
+		return nil, usage
+	}
+	r := &Rename{Kind: words[1], Old: old, Scope: words[4], New: nw}
+	if !isWord(old) || !isWord(nw) {
+		return nil, fmt.Errorf("'%s' and '%s' must be names: letters, digits and _", old, nw)
+	}
+	if !isPackageName(r.Scope) {
+		return nil, fmt.Errorf("%q is not a package or truck name", r.Scope)
+	}
+	if old == nw {
+		return nil, fmt.Errorf("renaming '%s' to itself", old)
+	}
+	return r, nil
 }
 
 // Kind is the node kind this package defines: the last path segment.
@@ -114,7 +203,7 @@ type Cond struct {
 
 var sectionKeywords = map[string]bool{
 	"doc": true, "needs": true, "type": true, "truck": true, "syntax": true, "expand": true, "code": true,
-	"emit": true, "data": true, "support": true,
+	"emit": true, "data": true, "support": true, "resolve": true,
 }
 
 var slotKinds = map[string]bool{
@@ -137,6 +226,7 @@ func Parse(name, origin, src string) (*File, error) {
 	var cur *[]string // where body lines go
 	var curSyntax *Syntax
 	inDoc, inCode := false, false
+	resolveAt := 0 // the line of an open resolve section, closed by end
 	for idx, raw := range lines {
 		ln := idx + 1
 		trimmed := strings.TrimSpace(raw)
@@ -165,8 +255,18 @@ func Parse(name, origin, src string) (*File, error) {
 		if raw[0] != ' ' && raw[0] != '\t' {
 			fields := strings.Fields(trimmed)
 			kw := fields[0]
+			if resolveAt > 0 {
+				if trimmed != "end" {
+					return nil, errf(ln, "expected 'end' to close the resolve section of line %d", resolveAt)
+				}
+				resolveAt = 0
+				continue
+			}
+			if kw == "end" {
+				return nil, errf(ln, "'end' without a resolve section to close")
+			}
 			if !sectionKeywords[kw] {
-				return nil, errf(ln, "unknown section %q (expected one of doc, needs, type, truck, syntax, expand, code, emit, data, support)", kw)
+				return nil, errf(ln, "unknown section %q (expected one of doc, needs, type, truck, syntax, expand, code, emit, data, support, resolve)", kw)
 			}
 			cur, curSyntax = nil, nil
 			inDoc, inCode = kw == "doc", kw == "code"
@@ -219,10 +319,23 @@ func Parse(name, origin, src string) (*File, error) {
 				cur = &f.Data
 			case "support":
 				cur = &f.Support
+			case "resolve":
+				if f.Resolve != nil {
+					return nil, errf(ln, "only one resolve section is allowed")
+				}
+				f.Resolve = []*Rename{}
+				resolveAt = ln
 			}
 			continue
 		}
 		switch {
+		case resolveAt > 0:
+			r, err := parseRename(trimmed)
+			if err != nil {
+				return nil, errf(ln, "%v", err)
+			}
+			r.Line = ln
+			f.Resolve = append(f.Resolve, r)
 		case curSyntax != nil:
 			p, err := ParsePattern(trimmed)
 			if err != nil {
@@ -238,6 +351,9 @@ func Parse(name, origin, src string) (*File, error) {
 		default:
 			return nil, errf(ln, "indented line outside of a section")
 		}
+	}
+	if resolveAt > 0 {
+		return nil, errf(resolveAt, "the resolve section isn't closed: end it with a line 'end'")
 	}
 	for len(f.DocBody) > 0 && f.DocBody[len(f.DocBody)-1] == "" {
 		f.DocBody = f.DocBody[:len(f.DocBody)-1]

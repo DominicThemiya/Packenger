@@ -1,0 +1,4 @@
+doc A broken resolve section.
+resolve
+  rename keyword '+=' in x to 'plus'
+end

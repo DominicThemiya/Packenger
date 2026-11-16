@@ -1,0 +1,3 @@
+doc A truck that clashes with rt/fs: it defines fs_list too.
+truck
+  files

@@ -135,10 +135,15 @@ pkc/main
 pkc/parser
 pkc/pkgfile
 pkc/report
+pkc/resolve
 pkc/tree
 pkc/types
 pkc/ui
 pkc/util
+resolve
+resolve/keyword
+resolve/name
+resolve/prefix
 rt
 rt/fmt
 rt/fs

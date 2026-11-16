@@ -426,6 +426,13 @@ func (t *Tree) page(name string) string {
 	if len(f.Support) > 0 {
 		fmt.Fprintf(&b, "## Support code (once per program)\n\n```nasm\n%s\n```\n\n", strings.Join(f.Support, "\n"))
 	}
+	if len(f.Resolve) > 0 {
+		var rs []string
+		for _, r := range f.Resolve {
+			rs = append(rs, "  "+r.String())
+		}
+		fmt.Fprintf(&b, "## Resolve rules\n\nSee [resolve](%s).\n\n```\nresolve\n%s\nend\n```\n\n", link(name, "resolve"), strings.Join(rs, "\n"))
+	}
 	if users := t.usedBy(name); len(users) > 0 {
 		var ls []string
 		for _, u := range users {

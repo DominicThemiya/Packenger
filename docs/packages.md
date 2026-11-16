@@ -30,6 +30,7 @@ its body is indented by two spaces. Lines starting with `//` are comments.
 | `emit [<section>] [when <cond>]` | NASM template (backend packages) |
 | `data` | NASM lines for the data section, once per use |
 | `support` | NASM lines emitted once per program if the package is used |
+| `resolve` … `end` | rules that rename what other packages define, to resolve conflicts; closed by a line `end` (see [resolve](registry/resolve.md)) |
 
 ## Syntax
 

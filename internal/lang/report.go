@@ -33,6 +33,7 @@ type ParseInfo struct {
 	Tokens, Nodes, Statements int
 	Took                      time.Duration
 	Functions                 []FrameInfo
+	Resolved                  []ResolveInfo // rules of resolve sections, applied
 }
 
 type FrameInfo struct {

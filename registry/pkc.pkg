@@ -24,6 +24,7 @@ truck
   types
   parser
   codegen
+  resolve
   driver
   ui
   report

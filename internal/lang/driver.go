@@ -28,6 +28,8 @@ type Compiler struct {
 	// whole backend truck is fetched, not only what the program uses: this
 	// is how a lock file is made.
 	Sums map[string]string
+
+	keywordRenames map[*pkgfile.Rename]int // patterns each keyword rule changed
 }
 
 type Result struct {
@@ -195,6 +197,10 @@ func (c *Compiler) Lex(ctx context.Context, file, src string) ([]Token, *Lang, m
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
+	// resolve sections rename keywords before the grammar is built
+	if c.keywordRenames, err = resolvePatterns(front); err != nil {
+		return nil, nil, nil, nil, err
+	}
 	var syntaxPkgs []*pkgfile.File
 	for _, f := range front {
 		if !f.IsTruck {
@@ -226,7 +232,7 @@ func (c *Compiler) Compile(ctx context.Context, file, src string) (*Result, erro
 
 	// 2. parse with the grammar those packages define
 	t0 := time.Now()
-	units, err := libraryUnits(front, L)
+	units, resolved, err := c.libraryUnits(front, L)
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +247,7 @@ func (c *Compiler) Compile(ctx context.Context, file, src string) (*Result, erro
 	for _, f := range prog.Funcs {
 		Walk(f, func(*Node) { nodes++ })
 	}
-	info := ParseInfo{File: file, Tokens: len(toks), Nodes: nodes, Statements: len(prog.Main.Items), Took: time.Since(t0)}
+	info := ParseInfo{File: file, Tokens: len(toks), Nodes: nodes, Statements: len(prog.Main.Items), Took: time.Since(t0), Resolved: resolved}
 	for _, f := range prog.Funcs {
 		info.Functions = append(info.Functions, FrameInfo{f.Frame.Name, f.Frame.Params, f.Frame.Slots, f.Frame.Size()})
 	}
@@ -304,8 +310,10 @@ func (c *Compiler) Compile(ctx context.Context, file, src string) (*Result, erro
 
 // libraryUnits lexes the code sections of the loaded packages, in package
 // name order. Positions point into the package files.
-func libraryUnits(front map[string]*pkgfile.File, L *Lang) ([]Unit, error) {
-	var units []Unit
+// libraryUnits lexes the code sections of the loaded packages, with the
+// renames of their resolve sections applied.
+func (c *Compiler) libraryUnits(front map[string]*pkgfile.File, L *Lang) ([]Unit, []ResolveInfo, error) {
+	code := map[string][]Token{}
 	for _, name := range sortedKeys(front) {
 		f := front[name]
 		if f.Code == nil {
@@ -313,15 +321,23 @@ func libraryUnits(front map[string]*pkgfile.File, L *Lang) ([]Unit, error) {
 		}
 		toks, err := Lex(strings.Join(f.Code, "\n"), f.Name+".pkg", L.Puncts, false)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		for i := range toks {
 			toks[i].Pos.Line += f.CodeAt - 1
 			toks[i].Pos.Col += 2 // the code section is indented
 		}
-		units = append(units, Unit{Name: f.Name, Toks: toks, Lib: true})
+		code[name] = toks
 	}
-	return units, nil
+	resolved, err := resolveCode(front, code, c.keywordRenames)
+	if err != nil {
+		return nil, nil, err
+	}
+	var units []Unit
+	for _, name := range sortedKeys(code) {
+		units = append(units, Unit{Name: name, Toks: code[name], Lib: true})
+	}
+	return units, resolved, nil
 }
 
 func sortedKeys[V any](m map[string]V) []string {

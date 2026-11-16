@@ -241,6 +241,10 @@ func (r *Reporter) Parsed(p lang.ParseInfo) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.phase("parse")
+	for _, rv := range p.Resolved {
+		r.line("     %s %s %s", r.p.c(pad("resolve", 12), cyan), rv.Rule,
+			r.p.c("· "+plural(rv.Count, rv.Unit, rv.Unit+"s")+" · "+rv.Where, dim))
+	}
 	r.line("     %s %s · %s · %s · %s", r.p.c(pad(p.File, 12), cyan),
 		plural(p.Tokens, "token", "tokens"), plural(p.Nodes, "node", "nodes"),
 		plural(p.Statements, "top-level statement", "top-level statements"), Dur(p.Took))

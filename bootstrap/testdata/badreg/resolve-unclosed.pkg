@@ -1,0 +1,3 @@
+doc A broken resolve section.
+resolve
+  rename name 'a' in x to 'b'

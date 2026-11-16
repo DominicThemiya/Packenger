@@ -19,11 +19,16 @@ format.
   - [pkc/types](pkc/types.md) — pkc: type expressions, constraints with type variables, struct layout (port of types.go).
   - [pkc/parser](pkc/parser.md) — pkc: the parser (port of internal/lang/parser.go) and the dump ast format.
   - [pkc/codegen](pkc/codegen.md) — pkc: rendering the tree through a backend truck into NASM (port of codegen.go).
+  - [pkc/resolve](pkc/resolve.md) — pkc: conflict resolution, applying packages' resolve sections (port of resolve.go).
   - [pkc/driver](pkc/driver.md) — pkc: the compile pipeline (port of internal/lang/driver.go).
   - [pkc/ui](pkc/ui.md) — pkc: errors and the -vb report on stderr (port of internal/ui).
   - [pkc/report](pkc/report.md) — pkc: the -vb build report (port of internal/ui's Reporter).
   - [pkc/tree](pkc/tree.md) — pkc: packenger tree — which packages built the program (port of Result.Tree).
   - [pkc/main](pkc/main.md) — pkc: the command line — the same commands, flags and messages as the Go compiler.
+- **[resolve](resolve.md)** (truck) — Conflict resolution: rename what other packages define, without editing them.
+  - [resolve/prefix](resolve/prefix.md) — Rename rule: every name a package or truck defines that starts with a prefix.
+  - [resolve/name](resolve/name.md) — Rename rule: one name a package or truck defines.
+  - [resolve/keyword](resolve/keyword.md) — Rename rule: a word in the syntax of a package or truck.
 - **[rt](rt.md)** (truck) — The runtime truck: memory, vectors, strings, maps, files, folders, processes, sorting and formatting.
   - [rt/mem](rt/mem.md) — Raw memory: an allocator on mmap, plus copy, fill, compare and pointer arithmetic.
   - [rt/vec](rt/vec.md) — Growable arrays of 64-bit words (ints, or pointers and strings with as).

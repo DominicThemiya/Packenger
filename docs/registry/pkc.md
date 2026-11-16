@@ -34,6 +34,7 @@ report), `tr_` (tree) and `pkc_` (the command line).
 | [pkc/types](pkc/types.md) | pkc: type expressions, constraints with type variables, struct layout (port of types.go). |
 | [pkc/parser](pkc/parser.md) | pkc: the parser (port of internal/lang/parser.go) and the dump ast format. |
 | [pkc/codegen](pkc/codegen.md) | pkc: rendering the tree through a backend truck into NASM (port of codegen.go). |
+| [pkc/resolve](pkc/resolve.md) | pkc: conflict resolution, applying packages' resolve sections (port of resolve.go). |
 | [pkc/driver](pkc/driver.md) | pkc: the compile pipeline (port of internal/lang/driver.go). |
 | [pkc/ui](pkc/ui.md) | pkc: errors and the -vb report on stderr (port of internal/ui). |
 | [pkc/report](pkc/report.md) | pkc: the -vb build report (port of internal/ui's Reporter). |

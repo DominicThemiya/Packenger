@@ -135,5 +135,11 @@ func Dump(f *File) string {
 		line("support")
 		body(f.Support)
 	}
+	if f.Resolve != nil {
+		line("resolve")
+		for _, r := range f.Resolve {
+			line("  rename %s %s in %s to %s", r.Kind, Quote(r.Old), r.Scope, Quote(r.New))
+		}
+	}
 	return b.String()
 }

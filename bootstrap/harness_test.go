@@ -392,6 +392,54 @@ func TestLock(t *testing.T) {
 	}
 }
 
+// Conflict resolution: a package's resolve section renames what other
+// packages define. testdata/resolve has a truck (filesystem) that clashes
+// with rt/fs, a package using it, and fixes, which resolves the clash and
+// frees stdx's "in". Every compiler must resolve, report and reject the same.
+func TestResolve(t *testing.T) {
+	if _, err := exec.LookPath("nasm"); err != nil {
+		t.Skip("nasm not installed")
+	}
+	dir := t.TempDir()
+	reg, _ := filepath.Abs("testdata/resolve/registry")
+	tmpl, err := os.ReadFile("testdata/resolve/pkg_tree.template")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(dir, "pkg_tree.pkg"), []byte(strings.ReplaceAll(string(tmpl), "REG", reg)), 0o644)
+	app, err := os.ReadFile("testdata/resolve/app.pkg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	write := func(name, src string) string {
+		p := filepath.Join(dir, name)
+		os.WriteFile(p, []byte(src), 0o644)
+		return p
+	}
+	prog := write("app.pkg", string(app))
+	if o := agree(t, "run", prog); o.exit != 0 || o.stdout != "3\n8\n3\n100\ntrue\n3\n" {
+		t.Fatalf("resolved program:\n%s", o)
+	}
+	agreeIn(t, "report", unTimed, "run", "-vb", prog)
+	agree(t, "dump", "ast", prog)
+
+	// without the fixes, filesystem and rt/fs clash
+	if o := agree(t, "run", write("nofix.pkg", strings.Replace(string(app), "use fixes\n", "", 1))); o.exit == 0 || !strings.Contains(o.stderr, "already defined") {
+		t.Fatalf("the clash was accepted:\n%s", o)
+	}
+	// a package that can see both definitions can't be rewritten
+	if o := agree(t, "run", write("both.pkg", strings.Replace(string(app), "use fixes\n", "use fixes\nuse both\n", 1))); o.exit == 0 || !strings.Contains(o.stderr, "could mean") {
+		t.Fatalf("an ambiguous reference was accepted:\n%s", o)
+	}
+	// broken resolutions
+	for _, fix := range []string{"noresolve", "noscope", "nomatch", "nokeyword"} {
+		src := strings.Replace(string(app), "use fixes\n", "use badfix/"+fix+"\n", 1)
+		if o := agree(t, "run", write(fix+".pkg", src)); o.exit == 0 {
+			t.Errorf("badfix/%s was accepted:\n%s", fix, o)
+		}
+	}
+}
+
 // Tools: tools/treestat.pkg must build with every compiler and report the
 // same on this repository's registry (through index.txt and file://, so no
 // network), apart from timings.

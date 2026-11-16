@@ -24,6 +24,7 @@ grammar and tokenizing (`dr_lex`), lexing library code and parsing
 - [pkc/parser](parser.md)
 - [pkc/codegen](codegen.md)
 - [pkc/report](report.md)
+- [pkc/resolve](resolve.md)
 
 ## Library code
 
@@ -228,6 +229,10 @@ fn dr_lex(reg: str, file: str, src: str) -> ptr DrFront
   if front == null
     return null
   end
+  // resolve sections rename keywords before the grammar is built
+  if !rs_patterns(front)
+    return null
+  end
   let names = vec_new()
   for i = 0 to map_len(front) - 1
     if !(map_value(front, i) as ptr PfFile).is_truck
@@ -262,14 +267,15 @@ fn dr_lex(reg: str, file: str, src: str) -> ptr DrFront
 end
 
 // dr_library_units lexes the code sections of the loaded packages, in
-// name order, with positions in the package files.
+// name order, with positions in the package files and the renames of
+// their resolve sections applied.
 fn dr_library_units(front: ptr Map, L: ptr Lang) -> ptr Vec
   let names = vec_new()
   for i = 0 to map_len(front) - 1
     u_push(names, map_key(front, i))
   end
   sort_strs(names)
-  let units = vec_new()
+  let code = map_new()
   for i = 0 to vec_len(names) - 1
     let f = map_get(front, u_get(names, i)) as ptr PfFile
     if f.code == null
@@ -284,11 +290,21 @@ fn dr_library_units(front: ptr Map, L: ptr Lang) -> ptr Vec
       t.line = t.line + f.code_at - 1
       t.col = t.col + 2
     end
-    let u = new PUnit
-    u.name = f.name
-    u.toks = toks
-    u.lib = true
-    vec_push(units, u as int)
+    map_set(code, f.name, toks as int)
+  end
+  if !rs_code(front, code)
+    return null
+  end
+  let units = vec_new()
+  for i = 0 to vec_len(names) - 1
+    let name = u_get(names, i)
+    if map_has(code, name)
+      let u = new PUnit
+      u.name = name
+      u.toks = map_get(code, name) as ptr Vec
+      u.lib = true
+      vec_push(units, u as int)
+    end
   end
   return units
 end
@@ -339,6 +355,10 @@ fn dr_compile(reg: str, target: str, file: str, src: str) -> ptr DrResult
   let nodes = dr_count(prog.main)
   for i = 0 to vec_len(prog.funcs) - 1
     nodes = nodes + dr_count(ps_nd(prog.funcs, i))
+  end
+  for i = 0 to vec_len(rs_infos) - 1
+    let rv = vec_get(rs_infos, i) as ptr RsInfo
+    rp_resolved(rv.rule, rv.count, rv.unit, rv.at)
   end
   rp_parsed_file(file, vec_len(fr.toks), nodes, ps_nitems(prog.main), time_now() - t0)
   for i = 0 to vec_len(prog.funcs) - 1

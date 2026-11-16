@@ -84,6 +84,7 @@ instruction comes from a package.
 | [`internal/lang/codegen.go`](../internal/lang/codegen.go) | rendering emit templates: placeholders, conditions, `@include`, `{each}` |
 | [`internal/lang/driver.go`](../internal/lang/driver.go) | the pipeline, parallel fetching, `nasm`/`ld`, `tree` |
 | [`internal/lang/report.go`](../internal/lang/report.go) | the build events behind `-vb` |
+| [`internal/lang/resolve.go`](../internal/lang/resolve.go) | resolve sections: renaming keywords in patterns and names in library code |
 | [`internal/lang/dump.go`](../internal/lang/dump.go), [`internal/pkgfile/dump.go`](../internal/pkgfile/dump.go) | the `dump` formats |
 | [`bootstrap/`](../bootstrap) | the comparison harness and its corpus |
 | [`tools/`](../tools) | programs for working with registries, in Packenger ([tools](tools.md)) |

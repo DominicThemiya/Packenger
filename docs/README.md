@@ -12,6 +12,7 @@
 | [Dump formats](dumps.md) | `packenger dump` output and the comparison harness |
 | [Tools](tools.md) | programs for working with registries: `treestat` measures a package tree |
 | [Runtime library](registry/rt.md) | the `rt` truck: memory, vectors, strings, maps, files, folders, paths, processes, sorting, formatting |
+| [Conflict resolution](registry/resolve.md) | the `resolve` truck: renaming what other packages define, without editing them |
 | [Standard extensions](registry/stdx.md) | the `stdx` truck: `+=` and friends, `for x in xs`, `match`, `assert` |
 | [Package reference](registry/README.md) | generated: every truck and package in the registry |
 

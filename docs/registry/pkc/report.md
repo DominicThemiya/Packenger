@@ -265,6 +265,15 @@ fn rp_grammar(packages: int, forms: int, infix: int, prefix: int, keywords: ptr 
   rp_line(u_cat4("     ", rp_c(rp_pad("symbols", 9), UI_DIM), " ", rp_c(u_join(symbols, " "), UI_YELLOW)))
 end
 
+// rp_resolved reports one applied rule of a resolve section
+fn rp_resolved(rule: str, count: int, unit: str, at: str)
+  if !rp_on
+    return
+  end
+  rp_phase("parse")
+  rp_line(u_cat4("     ", rp_c(rp_pad("resolve", 12), UI_CYAN), " ", u_cat3(rule, " ", rp_c(u_cat4("· ", rp_plural(count, unit, u_cat(unit, "s")), " · ", at), UI_DIM))))
+end
+
 fn rp_parsed_file(file: str, tokens: int, nodes: int, statements: int, took: int)
   if !rp_on
     return

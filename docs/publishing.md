@@ -67,6 +67,28 @@ use acme          // from localhost:6464
   tree's routes and is used instead of it; run `packenger lock` again after
   changing the tree. `packenger run -vb` shows the routes in use.
 
+## Resolving conflicts
+
+Packages from different trees can clash: two trucks define `fs_list`, or
+one reserves a word (`in`) that a program needs as a name. Rather than
+editing either, publish a small package with a `resolve` section and use
+it next to them:
+
+```
+// myapp/fixes.pkg
+doc Lets filesystem and rt/fs be used together.
+needs resolve filesystem rt
+resolve
+  rename prefix 'fs_' in filesystem to 'filesys_'
+  rename keyword 'in' in stdx to 'within'
+end
+```
+
+The renames apply to the scope's definitions and to every package that
+needs it; programs use the new names. The [resolve](registry/resolve.md)
+truck documents the rules. A resolution package is fetched and locked like
+any other.
+
 ## Hosting a registry
 
 A registry is just files, so anything that serves a folder over HTTP will

@@ -1,0 +1,5 @@
+doc A rule without needs resolve.
+needs filesystem
+resolve
+  rename prefix 'fs_' in filesystem to 'filesys_'
+end

@@ -1,0 +1,327 @@
+doc pkc: conflict resolution, applying packages' resolve sections (port of resolve.go).
+  `rs_patterns(front)` checks every rule and applies keyword renames to the
+  syntax patterns in their scope, before the grammar is built;
+  `rs_code(front, code)` applies name renames (and keyword renames in
+  library code) to the lexed tokens of the packages that can see each
+  scope, and leaves what it did in `rs_infos` for the report. See
+  [resolve](../resolve.md) for the rules themselves.
+
+needs std rt pkc/util pkc/pkgfile pkc/lexer
+code
+  // one rule, with the package it is in
+  struct RsRule
+    f: ptr PfFile
+    r: ptr PfRename
+  end
+
+  // one applied rule, for the -vb report
+  struct RsInfo
+    at: str
+    rule: str
+    count: int
+    unit: str
+  end
+
+  // patterns each keyword rule changed: "package:line" -> count
+  global rs_counts: ptr Map
+  // the rules applied by rs_code (ptr RsInfo)
+  global rs_infos: ptr Vec
+
+  fn rs_key(ra: ptr RsRule) -> str
+    return u_cat3(ra.f.name, ":", str_from_int(ra.r.line))
+  end
+
+  fn rs_where(ra: ptr RsRule) -> str
+    return u_cat3(ra.f.origin, ":", str_from_int(ra.r.line))
+  end
+
+  fn rs_sorted_keys(m: ptr Map) -> ptr Vec
+    let out = vec_new()
+    for i = 0 to map_len(m) - 1
+      u_push(out, map_key(m, i))
+    end
+    sort_strs(out)
+    return out
+  end
+
+  // rs_rules lists every rename of the loaded packages, by package name,
+  // then in the order written.
+  fn rs_rules(front: ptr Map) -> ptr Vec
+    let out = vec_new()
+    let names = rs_sorted_keys(front)
+    for i = 0 to vec_len(names) - 1
+      let f = map_get(front, u_get(names, i)) as ptr PfFile
+      if f.resolve != null
+        for k = 0 to vec_len(f.resolve) - 1
+          let ra = new RsRule
+          ra.f = f
+          ra.r = vec_get(f.resolve, k) as ptr PfRename
+          vec_push(out, ra as int)
+        end
+      end
+    end
+    return out
+  end
+
+  fn rs_in_scope(name: str, scope: str) -> bool
+    return name == scope || str_starts(name, u_cat(scope, "/"))
+  end
+
+  fn rs_scope_of(front: ptr Map, scope: str) -> ptr Vec
+    let out = vec_new()
+    let names = rs_sorted_keys(front)
+    for i = 0 to vec_len(names) - 1
+      if rs_in_scope(u_get(names, i), scope)
+        u_push(out, u_get(names, i))
+      end
+    end
+    return out
+  end
+
+  // rs_rename_lits renames a literal in pattern elements; it returns how
+  // many it changed.
+  fn rs_rename_lits(elems: ptr Vec, old: str, nw: str) -> int
+    let n = 0
+    for i = 0 to vec_len(elems) - 1
+      let e = vec_get(elems, i) as ptr PfElem
+      if e.lit == old
+        e.lit = nw
+        n = n + 1
+      end
+      if e.optional != null
+        n = n + rs_rename_lits(e.optional, old, nw)
+      end
+    end
+    return n
+  end
+
+  // rs_patterns checks every rule and applies keyword renames to the
+  // syntax patterns in their scope.
+  fn rs_patterns(front: ptr Map) -> bool
+    rs_counts = map_new()
+    let rules = rs_rules(front)
+    for i = 0 to vec_len(rules) - 1
+      let ra = vec_get(rules, i) as ptr RsRule
+      let r = ra.r
+      if !map_has(front, u_cat("resolve/", r.kind))
+        return u_fail(u_cat4(rs_where(ra), ": rename ", r.kind, u_cat4(" needs the package resolve/", r.kind, "; add 'needs resolve'", "")))
+      end
+      let scope = rs_scope_of(front, r.scope)
+      if vec_len(scope) == 0
+        return u_fail(u_cat4(rs_where(ra), ": no package in ", r.scope, " is loaded; add it to the needs line"))
+      end
+      if r.kind != "keyword"
+        continue
+      end
+      let count = 0
+      for k = 0 to vec_len(scope) - 1
+        let f = map_get(front, u_get(scope, k)) as ptr PfFile
+        for s = 0 to vec_len(f.syntax) - 1
+          let syn = vec_get(f.syntax, s) as ptr PfSyntax
+          for p = 0 to vec_len(syn.patterns) - 1
+            if rs_rename_lits((vec_get(syn.patterns, p) as ptr PfPattern).elems, r.old, r.new_) > 0
+              count = count + 1
+            end
+          end
+        end
+      end
+      if count == 0
+        return u_fail(u_cat4(rs_where(ra), ": no syntax pattern in ", r.scope, u_cat3(" uses the keyword '", r.old, "'")))
+      end
+      map_set(rs_counts, rs_key(ra), count)
+    end
+    return true
+  end
+
+  // rs_definers: the keywords that start a definition, a pattern's first
+  // literal when a newfunc, newtype, newglobal or newconst slot follows it.
+  fn rs_definers(front: ptr Map) -> ptr Map
+    let out = map_new()
+    for i = 0 to map_len(front) - 1
+      let f = map_value(front, i) as ptr PfFile
+      for s = 0 to vec_len(f.syntax) - 1
+        let syn = vec_get(f.syntax, s) as ptr PfSyntax
+        for p = 0 to vec_len(syn.patterns) - 1
+          let es = (vec_get(syn.patterns, p) as ptr PfPattern).elems
+          if vec_len(es) >= 2
+            let e0 = vec_get(es, 0) as ptr PfElem
+            let e1 = vec_get(es, 1) as ptr PfElem
+            if e0.lit != "" && e1.slot != null
+              let k = e1.slot.kind
+              if k == "newfunc" || k == "newtype" || k == "newglobal" || k == "newconst"
+                map_set(out, e0.lit, 1)
+              end
+            end
+          end
+        end
+      end
+    end
+    return out
+  end
+
+  // rs_sees: the packages whose definitions name can use, itself and what
+  // it needs, transitively, with trucks' members
+  fn rs_sees(front: ptr Map, name: str) -> ptr Map
+    let seen = map_new()
+    map_set(seen, name, 1)
+    let queue = vec_new()
+    u_push(queue, name)
+    let at = 0
+    while at < vec_len(queue)
+      let f = map_get(front, u_get(queue, at)) as ptr PfFile
+      at = at + 1
+      if f == null
+        continue
+      end
+      let next_ = vec_new()
+      for i = 0 to vec_len(f.truck) - 1
+        u_push(next_, u_cat3(f.name, "/", u_get(f.truck, i)))
+      end
+      for i = 0 to vec_len(f.needs) - 1
+        u_push(next_, u_get(f.needs, i))
+      end
+      for i = 0 to vec_len(next_) - 1
+        let n = u_get(next_, i)
+        if !map_has(seen, n)
+          map_set(seen, n, 1)
+          u_push(queue, n)
+        end
+      end
+    end
+    return seen
+  end
+
+  fn rs_sees_scope(visible: ptr Map, scope: str) -> bool
+    for i = 0 to map_len(visible) - 1
+      if rs_in_scope(map_key(visible, i), scope)
+        return true
+      end
+    end
+    return false
+  end
+
+  // rs_code applies the rules to the lexed library code (code: package
+  // name -> token Vec), in place, and fills rs_infos.
+  fn rs_code(front: ptr Map, code: ptr Map) -> bool
+    rs_infos = vec_new()
+    let rules = rs_rules(front)
+    if vec_len(rules) == 0
+      return true
+    end
+    let def_kw = rs_definers(front)
+    let names = rs_sorted_keys(code)
+    // package -> the names it defines (a Map used as a set)
+    let defs = map_new()
+    let visible = map_new()
+    for i = 0 to vec_len(names) - 1
+      let name = u_get(names, i)
+      let toks = map_get(code, name) as ptr Vec
+      let d = map_new()
+      for k = 0 to vec_len(toks) - 2
+        let t = lx_tok(toks, k)
+        let t2 = lx_tok(toks, k + 1)
+        if t.kind == TK_IDENT && map_has(def_kw, t.text) && t2.kind == TK_IDENT
+          map_set(d, t2.text, 1)
+        end
+      end
+      map_set(defs, name, d as int)
+      map_set(visible, name, rs_sees(front, name) as int)
+    end
+    for i = 0 to vec_len(rules) - 1
+      let ra = vec_get(rules, i) as ptr RsRule
+      let r = ra.r
+      let info = new RsInfo
+      info.at = rs_key(ra)
+      info.rule = pf_rename_string(r)
+      // the packages with code that can see the scope
+      let users = vec_new()
+      for k = 0 to vec_len(names) - 1
+        if rs_sees_scope(map_get(visible, u_get(names, k)) as ptr Map, r.scope)
+          u_push(users, u_get(names, k))
+        end
+      end
+      if r.kind == "keyword"
+        for k = 0 to vec_len(users) - 1
+          let toks = map_get(code, u_get(users, k)) as ptr Vec
+          for m = 0 to vec_len(toks) - 1
+            let t = lx_tok(toks, m)
+            if t.kind == TK_IDENT && t.text == r.old
+              t.text = r.new_
+            end
+          end
+        end
+        info.count = map_get(rs_counts, rs_key(ra))
+        info.unit = "pattern"
+        vec_push(rs_infos, info as int)
+        continue
+      end
+      // the names the scope defines that the rule matches: old -> new
+      let ren = map_new()
+      for k = 0 to vec_len(names) - 1
+        let name = u_get(names, k)
+        if !rs_in_scope(name, r.scope)
+          continue
+        end
+        let d = map_get(defs, name) as ptr Map
+        for m = 0 to map_len(d) - 1
+          let old = map_key(d, m)
+          if r.kind == "name" && old == r.old
+            map_set(ren, old, r.new_ as int)
+          elif r.kind == "prefix" && str_starts(old, r.old)
+            map_set(ren, old, u_cat(r.new_, str_slice(old, len(r.old), len(old))) as int)
+          end
+        end
+      end
+      if map_len(ren) == 0
+        return u_fail(u_cat4(rs_where(ra), ": nothing defined in ", r.scope, u_cat4(" matches ", r.kind, u_cat3(" '", r.old, "'"), "")))
+      end
+      for k = 0 to vec_len(users) - 1
+        let name = u_get(users, k)
+        let toks = map_get(code, name) as ptr Vec
+        let seen = map_get(visible, name) as ptr Map
+        for m = 0 to vec_len(toks) - 1
+          let t = lx_tok(toks, m)
+          if t.kind != TK_IDENT || !map_has(ren, t.text)
+            continue
+          end
+          // outside the scope, another package this one can see may
+          // define the same name; inside it, its own definition wins
+          let others = vec_new()
+          if !rs_in_scope(name, r.scope)
+            for v = 0 to map_len(seen) - 1
+              let other = map_key(seen, v)
+              let od = map_get(defs, other) as ptr Map
+              if !rs_in_scope(other, r.scope) && od != null && map_has(od, t.text)
+                u_push(others, other)
+              end
+            end
+          end
+          if vec_len(others) > 0
+            sort_strs(others)
+            return u_fail(u_cat4(lx_pos(t), ": ", t.text, u_cat4(" in ", name, " could mean ", u_cat4(u_get(others, 0), "'s or the one ", ra.f.name, " renames; give one of them another name"))))
+          end
+          t.text = map_get(ren, t.text) as str
+        end
+      end
+      for k = 0 to vec_len(names) - 1
+        let name = u_get(names, k)
+        if rs_in_scope(name, r.scope)
+          let d = map_get(defs, name) as ptr Map
+          let fresh = map_new()
+          for m = 0 to map_len(d) - 1
+            let old = map_key(d, m)
+            if map_has(ren, old)
+              map_set(fresh, map_get(ren, old) as str, 1)
+            else
+              map_set(fresh, old, 1)
+            end
+          end
+          map_set(defs, name, fresh as int)
+        end
+      end
+      info.count = map_len(ren)
+      info.unit = "name"
+      vec_push(rs_infos, info as int)
+    end
+    return true
+  end

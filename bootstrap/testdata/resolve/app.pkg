@@ -1,0 +1,22 @@
+use pkg_tree
+use std
+use stdx
+use rt
+use filesystem
+use fsuser
+use fixes
+
+// filesystem's functions under their new names, rt/fs's under the old ones
+print filesys_list("abc")
+print fsuser_twice("abcd")
+print filesys_calls
+print FILESYS_LIMIT
+let ok = false
+fs_list("/", &ok)
+print ok
+// "in" is a name again, and for-in says "within"
+let in = 0
+for c within "hey"
+  in += 1
+end
+print in

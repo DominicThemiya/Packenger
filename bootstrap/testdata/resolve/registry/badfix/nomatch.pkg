@@ -1,0 +1,5 @@
+doc A rule that matches nothing.
+needs resolve filesystem
+resolve
+  rename prefix 'zz_' in filesystem to 'yy_'
+end
