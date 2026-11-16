@@ -1,0 +1,4 @@
+use std
+
+// doesn't compile: the compiler's error is the test's output
+print nosuch

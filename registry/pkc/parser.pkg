@@ -506,13 +506,18 @@ code
         if t.kind == TK_EOF
           break
         end
+        let n: ptr PNode = null
         if ps_is_closer(p, t)
-          pk_err = ps_errat(t.file, t.line, t.col, str_concat3("unexpected ", lx_describe(t), " (nothing to close)"))
-          return null
-        end
-        let n = ps_statement(p, true)
-        if n == null
-          return null
+          n = ps_closer_statement(p, true)
+          if n == null
+            pk_err = ps_errat(t.file, t.line, t.col, str_concat3("unexpected ", lx_describe(t), " (nothing to close)"))
+            return null
+          end
+        else
+          n = ps_statement(p, true)
+          if n == null
+            return null
+          end
         end
         ps_clear_far(p)
         if u.lib && n.frame == null && (n.rule == null || n.rule.syn.kind != "struct" && !n.rule.syn.top)
@@ -717,7 +722,14 @@ code
         c.toks = p.toks
         c.start = start
         c.stop = p.i
-        if !ps_constrain(p, e.slot, c, b, t, str_concat4("{", e.slot.name, "} of ", n.kind))
+        // when the literal after the slot is there too, the source has this
+        // pattern's shape, so a wrong type is the error to report
+        let hard = false
+        if ei + 1 < vec_len(es)
+          let nx = pf_elem(es, ei + 1)
+          hard = nx.lit != "" && ps_is_lit(ps_tok(p), nx.lit)
+        end
+        if !ps_constrain(p, e.slot, c, b, t, str_concat4("{", e.slot.name, "} of ", n.kind), hard)
           return false
         end
         ps_set_slot(n, e.slot.name, c)
@@ -739,11 +751,20 @@ code
     return str_concat("of the form ", str_replace(subst, "?", "…"))
   end
 
+  fn ps_constrain_fail(p: ptr Parser, t: ptr Tok, msg: str, hard: bool)
+    if hard
+      ps_fail_hard(p, t.file, t.line, t.col, msg)
+    else
+      ps_fail(p, t, msg)
+    end
+  end
+
   // ps_constrain checks a parsed slot against its pattern's constraint.
-  fn ps_constrain(p: ptr Parser, s: ptr PfSlot, c: ptr PNode, b: ptr TyBinder, t: ptr Tok, what: str) -> bool
+  // With hard, a mismatch is a definite error (ps_fail_hard).
+  fn ps_constrain(p: ptr Parser, s: ptr PfSlot, c: ptr PNode, b: ptr TyBinder, t: ptr Tok, what: str, hard: bool) -> bool
     if s.kind == "expr" || s.kind == "place"
       if c.ty == "" && s.arg != "any"
-        ps_fail(p, t, str_concat(what, " needs a value, but this has none"))
+        ps_constrain_fail(p, t, str_concat(what, " needs a value, but this has none"), hard)
         return false
       end
     elif s.kind != "var" && s.kind != "type"
@@ -761,7 +782,7 @@ code
       if want == "?" || str_has(s.arg, "[") || str_has(s.arg, "ptr") || ty_is_fn(s.arg)
         want = ps_describe_constraint(want)
       end
-      ps_fail(p, t, str_concat4(what, " must be ", want, str_concat(", but it is ", ps_describe_type(c.ty))))
+      ps_constrain_fail(p, t, str_concat4(what, " must be ", want, str_concat(", but it is ", ps_describe_type(c.ty))), hard)
       return false
     end
     return true
@@ -823,12 +844,40 @@ code
       ps_fail(p, t, str_concat4("expected ", what, ", found ", lx_describe(t)))
       return null
     end
-    if ps_keyword(p, t.text)
+    // keywords are names too, except those that are an expression alone
+    if map_has(p.lang.alone, t.text)
       ps_fail(p, t, str_concat4("expected ", what, ", found keyword ", lx_describe(t)))
       return null
     end
     p.i = p.i + 1
     return t
+  end
+
+  // ps_known: whether a word names a variable, constant or function in scope
+  fn ps_known(p: ptr Parser, name: str) -> bool
+    return ps_lookup(p, name) != null || map_get(p.consts, name) != 0 || map_get(p.sigs, name) != 0 || map_get(p.funcs, name) != 0
+  end
+
+  // ps_closer_statement: a block closer at the start of a line (end, next)
+  // that names something and has more after it on the line is tried as a
+  // statement. null if the word closes the block.
+  fn ps_closer_statement(p: ptr Parser, top: bool) -> ptr PNode
+    let t = ps_tok(p)
+    if t.kind != TK_IDENT || !ps_known(p, t.text)
+      return null
+    end
+    let k = lx_tok(p.toks, p.i + 1).kind
+    if k == TK_NL || k == TK_EOF
+      return null
+    end
+    let s = ps_save(p)
+    let far = ps_save_far(p)
+    let n = ps_statement(p, top)
+    if n == null
+      ps_restore(p, s)
+      ps_restore_far(p, far)
+    end
+    return n
   end
 
   fn ps_tok_node(p: ptr Parser, kind: str, t: ptr Tok) -> ptr PNode
@@ -1254,9 +1303,18 @@ code
     while true
       ps_skip_nl(p)
       let t = ps_tok(p)
-      if t.kind == TK_EOF || ps_is_closer(p, t)
+      if t.kind == TK_EOF
         vec_pop(f.scopes)
         return n
+      end
+      if ps_is_closer(p, t)
+        let cs = ps_closer_statement(p, false)
+        if cs == null
+          vec_pop(f.scopes)
+          return n
+        end
+        ps_add_item(n, cs)
+        continue
       end
       let s = ps_statement(p, false)
       if s == null
@@ -1317,10 +1375,10 @@ code
         cand.start = start
         cand.stop = p.i
         let b = ty_binder(cand as int)
-        let ok = ps_constrain(p, ls, left, b, t, str_concat3("left side of '", t.text, "'"))
+        let ok = ps_constrain(p, ls, left, b, t, str_concat3("left side of '", t.text, "'"), false)
         if ok
           ps_set_slot(cand, ls.name, left)
-          ok = ps_constrain(p, rs, right, b, rt, str_concat3("right side of '", t.text, "'"))
+          ok = ps_constrain(p, rs, right, b, rt, str_concat3("right side of '", t.text, "'"), false)
         end
         if ok
           ps_set_slot(cand, rs.name, right)
@@ -1364,7 +1422,7 @@ code
       n.start = start
       let b = ty_binder(n as int)
       let ls = pf_elem(r.pat.elems, 0).slot
-      let ok = ps_constrain(p, ls, left, b, t, str_concat3("the left side of '", t.text, "'"))
+      let ok = ps_constrain(p, ls, left, b, t, str_concat3("the left side of '", t.text, "'"), false)
       if ok
         ps_set_slot(n, ls.name, left)
         let rest = vec_new()
@@ -1493,7 +1551,7 @@ code
           n.start = start
           n.stop = p.i
           let b = ty_binder(n as int)
-          let ok = ps_constrain(p, sl, operand, b, ot, str_concat3("operand of '", t.text, "'"))
+          let ok = ps_constrain(p, sl, operand, b, ot, str_concat3("operand of '", t.text, "'"), false)
           if ok && sl.kind == "place" && !ps_is_place(operand)
             ps_fail(p, ot, str_concat3("the operand of '", t.text, "' can't have its address taken"))
             ok = false
@@ -1562,7 +1620,9 @@ code
       n.stop = p.i
       return n
     elif t.kind == TK_IDENT
-      if ps_keyword(p, t.text)
+      // a keyword is a name where its own syntax doesn't apply, if it names
+      // something declared before this point
+      if ps_keyword(p, t.text) && !ps_known(p, t.text)
         let lit = lg_rules(p.lang.expr_lit, t.text)
         if rule_far.has && lit != null && vec_len(lit) > 0
           ps_restore_far(p, rule_far)

@@ -1,0 +1,5 @@
+use std
+use rt/test
+
+test_int(2 + 3, 5, "addition")
+return test_done()

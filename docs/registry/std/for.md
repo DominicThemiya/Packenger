@@ -37,7 +37,8 @@ expanded. As an expansion:
 - the loop variable is an `int` that only exists inside the loop (the
   `do` block), so several loops in one block can all use `i`;
 - the upper bound is re-evaluated on every iteration;
-- `to` is a keyword and cannot be used as a variable name.
+- `to` is a keyword, but it can still name a variable: in
+  `for i = 0 to to` the second `to` is the variable.
 
 ## Syntax
 

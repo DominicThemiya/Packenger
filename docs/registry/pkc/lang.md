@@ -17,6 +17,7 @@ syntax packages in name order. Nothing in it is built in.
 - [pkc/util](util.md)
 - [pkc/pkgfile](pkgfile.md)
 - [pkc/lexer](lexer.md)
+- [pkc/resolve](resolve.md)
 
 ## Library code
 
@@ -43,7 +44,11 @@ struct Lang
   prims: ptr Map
   closers: ptr Map
   keywords: ptr Map
+  // keywords that are a whole expression on their own (true): never names
+  alone: ptr Map
   puncts: ptr Vec
+  // package -> its keyword and symbol renames (rs_token_rules)
+  tok_rules: ptr Map
 end
 
 fn lg_rule(v: ptr Vec, i: int) -> ptr LgRule
@@ -90,8 +95,10 @@ fn lg_fail(msg: str) -> ptr Lang
   return null
 end
 
-fn lg_new(pkgs: ptr Vec) -> ptr Lang
+fn lg_new(pkgs: ptr Vec, trs: ptr Map) -> ptr Lang
   let L = new Lang
+  L.alone = map_new()
+  L.tok_rules = trs
   L.pkgs = map_new()
   L.stmt_lit = map_new()
   L.stmt_slot = vec_new()
@@ -171,6 +178,9 @@ fn lg_new(pkgs: ptr Vec) -> ptr Lang
           end
           lg_add_rule(table, op, r)
         elif s.kind == "expr"
+          if first.lit != "" && vec_len(p.elems) == 1
+            map_set(L.alone, first.lit, 1)
+          end
           if first.lit != ""
             lg_add_rule(L.expr_lit, first.lit, r)
           else
@@ -224,8 +234,9 @@ fn lg_lex_all(L: ptr Lang, rules: ptr Vec) -> bool
   for i = 0 to vec_len(rules) - 1
     let r = lg_rule(rules, i)
     if r.pkg.expand != null && r.tmpl == null
-      let toks = lx_lex(str_join(r.pkg.expand, "\n"), str_concat(r.pkg.name, " (expand)"), L.puncts, true)
-      if toks == null
+      let trs = rs_tok_list(L.tok_rules, r.pkg.name)
+      let toks = lx_lex(str_join(r.pkg.expand, "\n"), str_concat(r.pkg.name, " (expand)"), rs_lex_puncts(L.puncts, trs), true)
+      if toks == null || !rs_apply_tokens(toks, trs, r.pkg.name)
         return false
       end
       vec_pop(toks)

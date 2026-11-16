@@ -5,6 +5,8 @@ packenger build <file.pkg> [-o exe]     compile to a native executable
 packenger run   <file.pkg> [-- args]    compile and run
 packenger asm   <file.pkg> [-o file]    print the generated NASM
 packenger tree  <file.pkg>              show which packages built the program
+packenger why   <file.pkg> <package>    explain why a package is part of the build
+packenger test  [file.pkg|dir ...]      run test programs and report which pass
 packenger lock  <file.pkg>              pin every package version in <file>.lock
 packenger dump  tokens|ast|asm <file>   print a compiler stage as stable text
 packenger dump  pkg <package>           print a registry package as parsed
@@ -27,6 +29,36 @@ program's exit code.
 `lock` compiles the program and writes `<file>.lock` next to it, pinning
 the registry and the SHA-256 of every package; every later command on that
 file uses it. See [lock files](publishing.md#lock-files).
+
+`why` compiles the program and explains how a package got into its build:
+the shortest chain of use lines, truck members, `needs`, backend
+translations and `@include`s from the program to the package, the other
+packages that also ask for it, and any `resolve` rules that rename things in
+it.
+
+```
+$ packenger why examples/fib.pkg bintables/add
+bintables/add is part of the build of fib.pkg:
+  fib.pkg uses std
+  std is a truck with member std/add
+  std/add is translated by bintables/add
+```
+
+`test` runs each test program with `packenger run` and reports which pass.
+A test passes when it exits with status 0, which is what
+[`rt/test`](registry/rt/test.md)'s `return test_done()` does when every
+check passed. A directory means every `.pkg` file under it (apart from
+`pkg_tree.pkg`), in name order; with no arguments, `tests/`. The output of
+a failing test is shown under it, and `test` exits with status 1 if any
+failed. `--target` and `--registry` are passed on to each run.
+
+```
+$ packenger test tests/rt
+ok    tests/rt/fmt.pkg       697 ms
+ok    tests/rt/fs.pkg        888 ms
+...
+14 passed, 0 failed
+```
 
 ## `-vb`: the build report
 
@@ -103,5 +135,6 @@ missing `nasm`:
 ```sh
 go run ./cmd/pkgdoc       # regenerate docs/registry and registry/index.txt
 packenger run tools/treestat.pkg    # measure a package tree (see tools.md)
+packenger run tools/pkfmt.pkg -- -w examples   # format source files (see tools.md)
 go test ./bootstrap/      # comparison harness (PKC=/path/to/pkc to add pkc)
 ```

@@ -17,6 +17,15 @@ print ok
 // "in" is a name again, and for-in says "within"
 let in = 0
 for c within "hey"
-  in += 1
+  in +:= 1
 end
 print in
+// while is spelled loop, and for and for-in, built from it, still work
+let n = 0
+loop n < 2
+  n +:= 1
+end
+for i = 1 to 3
+  n +:= i
+end
+print n

@@ -1,2 +1,3 @@
 use std
-let end = 1
+// true is an expression by itself, so it can never be a name
+let true = 1

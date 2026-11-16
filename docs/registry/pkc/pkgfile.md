@@ -130,6 +130,21 @@ fn pf_is_word(s: str) -> bool
   return true
 end
 
+// pf_is_symbol: whether s can be an operator symbol, punctuation but not
+// the compiler's own ( ) , or what starts a comment, string or slot
+fn pf_is_symbol(s: str) -> bool
+  if s == "" || str_has(s, "//")
+    return false
+  end
+  for i = 0 to len(s) - 1
+    let c = s[i]
+    if c <= ' ' || c > '~' || c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || str_find_byte("(),'\"{}", c, 0) >= 0
+      return false
+    end
+  end
+  return s != ":" && s != "[" && s != "]"
+end
+
 fn pf_is_package_name(s: str) -> bool
   let segs = str_split(s, '/')
   for i = 0 to vec_len(segs) - 1
@@ -170,13 +185,13 @@ fn pf_parse_rename(line: str) -> ptr PfRename
     vec_push_str(words, str_slice(rest, 0, stop))
     rest = str_trim(str_slice(rest, stop, len(rest)))
   end
-  let usage = "expected: rename prefix|name|keyword '<old>' in <package or truck> to '<new>'"
+  let usage = "expected: rename prefix|name|keyword|symbol '<old>' in <package or truck> to '<new>'"
   if vec_len(words) != 7
     u_fail(usage)
     return null
   end
   let kind = vec_get_str(words, 1)
-  if vec_get_str(words, 0) != "rename" || vec_get_str(words, 3) != "in" || vec_get_str(words, 5) != "to" || !(kind == "prefix" || kind == "name" || kind == "keyword")
+  if vec_get_str(words, 0) != "rename" || vec_get_str(words, 3) != "in" || vec_get_str(words, 5) != "to" || !(kind == "prefix" || kind == "name" || kind == "keyword" || kind == "symbol")
     u_fail(usage)
     return null
   end
@@ -188,7 +203,12 @@ fn pf_parse_rename(line: str) -> ptr PfRename
     u_fail(usage)
     return null
   end
-  if !pf_is_word(old) || !pf_is_word(nw)
+  if kind == "symbol"
+    if !pf_is_symbol(old) || !pf_is_symbol(nw)
+      u_fail(str_concat4("'", old, "' and '", str_concat(nw, "' must be symbols: punctuation other than ( ) , { } quotes and :, [ or ] alone")))
+      return null
+    end
+  elif !pf_is_word(old) || !pf_is_word(nw)
     u_fail(str_concat4("'", old, "' and '", str_concat(nw, "' must be names: letters, digits and _")))
     return null
   end
@@ -930,4 +950,4 @@ end
 
 ## Used by
 
-[pkc/codegen](codegen.md), [pkc/driver](driver.md), [pkc/lang](lang.md), [pkc/lexer](lexer.md), [pkc/main](main.md), [pkc/parser](parser.md), [pkc/resolve](resolve.md), [pkc/tree](tree.md)
+[pkc/codegen](codegen.md), [pkc/driver](driver.md), [pkc/lang](lang.md), [pkc/lexer](lexer.md), [pkc/main](main.md), [pkc/parser](parser.md), [pkc/resolve](resolve.md), [pkc/tree](tree.md), [pkc/why](why.md)

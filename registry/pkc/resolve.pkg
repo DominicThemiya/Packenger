@@ -1,9 +1,11 @@
 doc pkc: conflict resolution, applying packages' resolve sections (port of resolve.go).
-  `rs_patterns(front)` checks every rule and applies keyword renames to the
-  syntax patterns in their scope, before the grammar is built;
-  `rs_code(front, code)` applies name renames (and keyword renames in
-  library code) to the lexed tokens of the packages that can see each
-  scope, and leaves what it did in `rs_infos` for the report. See
+  `rs_patterns(front)` checks every rule and applies keyword and symbol
+  renames to the syntax patterns in their scope, before the grammar is
+  built; `rs_token_rules(front)` lists the keyword and symbol renames that
+  apply to each package's code and expand template, which
+  `rs_apply_tokens` applies as they are lexed; `rs_code(front, code)`
+  applies name renames to the lexed library code of the packages that can
+  see each scope, and leaves what it did in `rs_infos` for the report. See
   [resolve](../resolve.md) for the rules themselves.
 
 needs std rt pkc/util pkc/pkgfile pkc/lexer
@@ -110,7 +112,7 @@ code
       if vec_len(scope) == 0
         return u_fail(str_concat4(rs_where(ra), ": no package in ", r.scope, " is loaded; add it to the needs line"))
       end
-      if r.kind != "keyword"
+      if r.kind != "keyword" && r.kind != "symbol"
         continue
       end
       let count = 0
@@ -126,9 +128,127 @@ code
         end
       end
       if count == 0
-        return u_fail(str_concat4(rs_where(ra), ": no syntax pattern in ", r.scope, str_concat3(" uses the keyword '", r.old, "'")))
+        return u_fail(str_concat4(rs_where(ra), ": no syntax pattern in ", r.scope, str_concat4(" uses the ", r.kind, str_concat3(" '", r.old, "'"), "")))
       end
       map_set(rs_counts, rs_key(ra), count)
+    end
+    return true
+  end
+
+  // a keyword or symbol rename as it applies to one package's code and
+  // template; clash names a package outside the scope that the package can
+  // also see and whose syntax uses the old word or symbol
+  struct RsTokRule
+    r: ptr PfRename
+    owner: str
+    clash: str
+  end
+
+  // rs_uses_literal: whether a package's syntax patterns use a word or symbol
+  fn rs_uses_literal(f: ptr PfFile, lit: str) -> bool
+    for s = 0 to vec_len(f.syntax) - 1
+      let syn = vec_get(f.syntax, s) as ptr PfSyntax
+      for p = 0 to vec_len(syn.patterns) - 1
+        if vec_has_str(pf_literals(vec_get(syn.patterns, p) as ptr PfPattern), lit)
+          return true
+        end
+      end
+    end
+    return false
+  end
+
+  // rs_token_rules: for each loaded package (name -> ptr Vec of RsTokRule),
+  // the keyword and symbol renames whose scope it can see
+  fn rs_token_rules(front: ptr Map) -> ptr Map
+    let rules = rs_rules(front)
+    let out = map_new()
+    let names = rs_sorted_keys(front)
+    for i = 0 to vec_len(names) - 1
+      let name = vec_get_str(names, i)
+      let visible = rs_sorted_keys(rs_sees(front, name))
+      let list = vec_new()
+      for k = 0 to vec_len(rules) - 1
+        let ra = vec_get(rules, k) as ptr RsRule
+        let r = ra.r
+        if r.kind != "keyword" && r.kind != "symbol"
+          continue
+        end
+        let sees = false
+        for v = 0 to vec_len(visible) - 1
+          sees = sees || rs_in_scope(vec_get_str(visible, v), r.scope)
+        end
+        if !sees
+          continue
+        end
+        let tr = new RsTokRule
+        tr.r = r
+        tr.owner = ra.f.name
+        tr.clash = ""
+        if !rs_in_scope(name, r.scope)
+          for v = 0 to vec_len(visible) - 1
+            let vn = vec_get_str(visible, v)
+            let f = map_get(front, vn) as ptr PfFile
+            if f != null && !rs_in_scope(vn, r.scope) && rs_uses_literal(f, r.old)
+              tr.clash = vn
+              break
+            end
+          end
+        end
+        vec_push(list, tr as int)
+      end
+      if vec_len(list) > 0
+        map_set(out, name, list as int)
+      end
+    end
+    return out
+  end
+
+  // rs_tok_list: the token rules of package name (empty if none)
+  fn rs_tok_list(trs: ptr Map, name: str) -> ptr Vec
+    if trs == null || !map_has(trs, name)
+      return vec_new()
+    end
+    return map_get(trs, name) as ptr Vec
+  end
+
+  // rs_lex_puncts: the symbols to lex package code with, the grammar's and
+  // the ones symbol renames take away
+  fn rs_lex_puncts(puncts: ptr Vec, list: ptr Vec) -> ptr Vec
+    if vec_len(list) == 0
+      return puncts
+    end
+    let out = vec_new()
+    for i = 0 to vec_len(puncts) - 1
+      vec_push(out, vec_get(puncts, i))
+    end
+    for i = 0 to vec_len(list) - 1
+      let tr = vec_get(list, i) as ptr RsTokRule
+      if tr.r.kind == "symbol"
+        vec_push_str(out, tr.r.old)
+      end
+    end
+    return out
+  end
+
+  // rs_apply_tokens renames keywords and symbols in toks, the code or
+  // template of package name.
+  fn rs_apply_tokens(toks: ptr Vec, list: ptr Vec, name: str) -> bool
+    for i = 0 to vec_len(list) - 1
+      let tr = vec_get(list, i) as ptr RsTokRule
+      let kind = TK_IDENT
+      if tr.r.kind == "symbol"
+        kind = TK_PUNCT
+      end
+      for m = 0 to vec_len(toks) - 1
+        let t = lx_tok(toks, m)
+        if t.kind != kind || t.text != tr.r.old
+          continue
+        end
+        if tr.clash != ""
+          return u_fail(str_concat4(lx_pos(t), ": '", t.text, str_concat4("' in ", name, " could mean ", str_concat4(tr.clash, "'s or the one ", tr.owner, " renames; give one of them another name"))))
+        end
+        t.text = tr.r.new_
+      end
     end
     return true
   end
@@ -240,16 +360,8 @@ code
           vec_push_str(users, vec_get_str(names, k))
         end
       end
-      if r.kind == "keyword"
-        for k = 0 to vec_len(users) - 1
-          let toks = map_get(code, vec_get_str(users, k)) as ptr Vec
-          for m = 0 to vec_len(toks) - 1
-            let t = lx_tok(toks, m)
-            if t.kind == TK_IDENT && t.text == r.old
-              t.text = r.new_
-            end
-          end
-        end
+      if r.kind == "keyword" || r.kind == "symbol"
+        // already applied as the code was lexed (rs_token_rules)
         info.count = map_get(rs_counts, rs_key(ra))
         info.unit = "pattern"
         vec_push(rs_infos, info as int)

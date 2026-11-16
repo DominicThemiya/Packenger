@@ -417,11 +417,13 @@ func TestResolve(t *testing.T) {
 		return p
 	}
 	prog := write("app.pkg", string(app))
-	if o := agree(t, "run", prog); o.exit != 0 || o.stdout != "3\n8\n3\n100\ntrue\n3\n" {
+	if o := agree(t, "run", prog); o.exit != 0 || o.stdout != "3\n8\n3\n100\ntrue\n3\n8\n" {
 		t.Fatalf("resolved program:\n%s", o)
 	}
 	agreeIn(t, "report", unTimed, "run", "-vb", prog)
 	agree(t, "dump", "ast", prog)
+	agree(t, "why", prog, "filesystem/files")
+	agree(t, "why", prog, "std/while")
 
 	// without the fixes, filesystem and rt/fs clash
 	if o := agree(t, "run", write("nofix.pkg", strings.Replace(string(app), "use fixes\n", "", 1))); o.exit == 0 || !strings.Contains(o.stderr, "already defined") {
@@ -432,7 +434,7 @@ func TestResolve(t *testing.T) {
 		t.Fatalf("an ambiguous reference was accepted:\n%s", o)
 	}
 	// broken resolutions
-	for _, fix := range []string{"noresolve", "noscope", "nomatch", "nokeyword"} {
+	for _, fix := range []string{"noresolve", "noscope", "nomatch", "nokeyword", "nosymbol"} {
 		src := strings.Replace(string(app), "use fixes\n", "use badfix/"+fix+"\n", 1)
 		if o := agree(t, "run", write(fix+".pkg", src)); o.exit == 0 {
 			t.Errorf("badfix/%s was accepted:\n%s", fix, o)
@@ -440,8 +442,29 @@ func TestResolve(t *testing.T) {
 	}
 }
 
-// Tools: tools/treestat.pkg must build with every compiler and report the
-// same on this repository's registry (through index.txt and file://, so no
+// Commands: why explains why a package is in a build, and test runs test
+// programs. Every compiler must explain, run and report the same, apart
+// from timings.
+func TestCommands(t *testing.T) {
+	if _, err := exec.LookPath("nasm"); err != nil {
+		t.Skip("nasm not installed")
+	}
+	for _, pkg := range []string{"std/add", "bintables/add", "bintables/program", "std/while", "rt/str", "nosuch"} {
+		agree(t, "why", "../examples/fib.pkg", pkg)
+	}
+	agree(t, "why", "../examples/fib.pkg")
+	if o := agreeIn(t, "report", unTimed, "test", "testdata/pkgtest"); o.exit != 1 || !strings.Contains(o.stdout, "1 passed, 2 failed") {
+		t.Fatalf("test of testdata/pkgtest:\n%s", o)
+	}
+	if o := agreeIn(t, "report", unTimed, "test", "testdata/pkgtest/pass.pkg"); o.exit != 0 {
+		t.Fatalf("test of a passing test:\n%s", o)
+	}
+	agree(t, "test", "testdata/nosuch")
+	agree(t, "test", "testdata/badreg/../pkgtest/more/")
+}
+
+// Tools: tools/treestat.pkg and tools/pkfmt.pkg must build with every
+// compiler and do the same on this repository (through file://, so no
 // network), apart from timings.
 func TestTools(t *testing.T) {
 	if _, err := exec.LookPath("nasm"); err != nil {
@@ -450,6 +473,24 @@ func TestTools(t *testing.T) {
 	o := agreeIn(t, "report", unTimed, "run", "../tools/treestat.pkg", "--", registry, "--no-fallback")
 	if o.exit != 0 || !strings.Contains(o.stdout, "PACKAGE TREE") || !strings.Contains(o.stdout, "none ✓") {
 		t.Fatalf("treestat on the registry:\n%s", o)
+	}
+
+	// pkfmt: the repository is formatted (apart from examples/web/app.pkg,
+	// whose packages come from a local server), and messy files come out
+	// as the golden files say
+	check := []string{"run", "../tools/pkfmt.pkg", "--", "-l", "../tests", "../tools", "../registry", "pkc.pkg", "../examples/web/server.pkg"}
+	examples, _ := filepath.Glob("../examples/*.pkg")
+	if o := agree(t, append(check, examples...)...); o.exit != 0 || o.stdout != "" {
+		t.Fatalf("pkfmt -l: these files need formatting (run tools/pkfmt.pkg -- -w on them):\n%s", o)
+	}
+	for _, f := range []string{"messy", "messylib"} {
+		want, err := os.ReadFile("testdata/pkfmt/" + f + ".golden")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if o := agree(t, "run", "../tools/pkfmt.pkg", "--", "testdata/pkfmt/"+f+".pkg"); o.exit != 0 || o.stdout != string(want) {
+			t.Fatalf("pkfmt %s.pkg:\n%s\nwant:\n%s", f, o, want)
+		}
 	}
 }
 

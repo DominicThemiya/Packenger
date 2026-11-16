@@ -75,8 +75,9 @@ Header flags:
 
 A pattern is a sequence of:
 
-- **literals**: keywords (`if`, `end`) and symbols (`+`, `(`). Every
-  literal becomes reserved, and symbols are added to the lexer. Write
+- **literals**: keywords (`if`, `end`) and symbols (`+`, `(`). Symbols are
+  added to the lexer; keywords can still be names where their syntax
+  doesn't apply ([keywords as names](language.md#keywords-as-names)). Write
   `\[` for a literal bracket;
 - **slots** `{name: kind [arg]}`: the parts the user writes;
 - **optional groups** `[ ... ]`, which must start with a literal. The

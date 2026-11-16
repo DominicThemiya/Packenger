@@ -13,8 +13,8 @@ end
 ```
 
 The word changes in every syntax pattern of the scope, so `for x in xs`
-becomes `for x within xs`, and `in` is free to be a name in programs that
-load the scope. Library code of packages that need the scope is rewritten
-too. Expand templates are not: they are written in their own terms, often
-another truck's. Only words can be renamed, not symbols. It is an error if
-no pattern in the scope uses the word.
+becomes `for x within xs`. Library code and expand templates of packages
+that need the scope are rewritten too: renaming `while` in `std/while`
+keeps `for` working, since `for` expands into a `while` loop. Symbols are
+renamed with [resolve/symbol](symbol.md). It is an error if no pattern in
+the scope uses the word.

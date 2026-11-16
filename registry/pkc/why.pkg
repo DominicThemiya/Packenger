@@ -1,0 +1,162 @@
+doc pkc: packenger why — why a package is part of a program's build (port of Result.Why).
+  `wy_why(r, file, name, target)` returns the explanation: the shortest
+  chain of use lines, truck members, needs, translations and includes from
+  the program to the package, the other packages that ask for it, and the
+  resolve rules that rename things in it. It fails if the package isn't
+  part of the build.
+
+needs std rt pkc/util pkc/pkgfile pkc/parser pkc/codegen pkc/resolve pkc/driver
+code
+  // one reason a package is loaded: from asks for to
+  struct WyEdge
+    from: str
+    to: str
+    line: str
+  end
+
+  fn wy_add(out: ptr Vec, from: str, to: str, line: str)
+    let e = new WyEdge
+    e.from = from
+    e.to = to
+    e.line = line
+    vec_push(out, e as int)
+  end
+
+  fn wy_sorted(m: ptr Map) -> ptr Vec
+    let out = vec_new()
+    for i = 0 to map_len(m) - 1
+      vec_push_str(out, map_key(m, i))
+    end
+    sort_strs(out)
+    return out
+  end
+
+  // wy_edges lists every reason a package of the build is loaded, in the
+  // Go compiler's order.
+  fn wy_edges(r: ptr DrResult, file: str, target: str) -> ptr Vec
+    let out = vec_new()
+    let uses = r.front.uses
+    for i = 0 to vec_len(uses) - 1
+      let u = vec_get_str(uses, i)
+      wy_add(out, file, u, str_concat3(file, " uses ", u))
+    end
+    let front = r.front.front
+    let names = wy_sorted(front)
+    for i = 0 to vec_len(names) - 1
+      let f = map_get(front, vec_get_str(names, i)) as ptr PfFile
+      for k = 0 to vec_len(f.truck) - 1
+        let to = str_concat3(f.name, "/", vec_get_str(f.truck, k))
+        wy_add(out, f.name, to, str_concat3(f.name, " is a truck with member ", to))
+      end
+      for k = 0 to vec_len(f.needs) - 1
+        let n = vec_get_str(f.needs, k)
+        wy_add(out, f.name, n, str_concat3(f.name, " needs ", n))
+      end
+    end
+    // the front-end package that defines each kind of node
+    let definer = map_new()
+    for i = 0 to vec_len(names) - 1
+      let f = map_get(front, vec_get_str(names, i)) as ptr PfFile
+      if vec_len(f.syntax) > 0
+        map_set(definer, pf_kind(f.name), f.name as int)
+      end
+    end
+    let kinds = cg_kinds(r.prog)
+    for i = 0 to vec_len(kinds) - 1
+      let k = vec_get_str(kinds, i)
+      let b = map_get(r.back, k) as ptr PfFile
+      if b == null
+        continue
+      end
+      if map_has(definer, k)
+        let d = map_get(definer, k) as str
+        wy_add(out, d, b.name, str_concat3(d, " is translated by ", b.name))
+      else
+        wy_add(out, file, b.name, str_concat4(file, " has ", k, str_concat3(" nodes, which ", b.name, " translates")))
+      end
+    end
+    let backs = wy_sorted(r.back)
+    for i = 0 to vec_len(backs) - 1
+      let b = map_get(r.back, vec_get_str(backs, i)) as ptr PfFile
+      let incs = cg_includes(b)
+      for k = 0 to vec_len(incs) - 1
+        let to = str_concat3(target, "/", vec_get_str(incs, k))
+        wy_add(out, b.name, to, str_concat3(b.name, " includes ", to))
+      end
+      for k = 0 to vec_len(b.needs) - 1
+        let n = vec_get_str(b.needs, k)
+        wy_add(out, b.name, n, str_concat3(b.name, " needs ", n))
+      end
+    end
+    return out
+  end
+
+  // wy_why returns the explanation, or "" with pk_err set.
+  fn wy_why(r: ptr DrResult, file: str, name: str, target: str) -> str
+    let loaded = map_new()
+    for i = 0 to map_len(r.front.front) - 1
+      map_set(loaded, map_key(r.front.front, i), 1)
+    end
+    for i = 0 to map_len(r.back) - 1
+      map_set(loaded, (map_value(r.back, i) as ptr PfFile).name, 1)
+    end
+    if !map_has(loaded, name)
+      u_fail(str_concat4(name, " is not part of the build of ", file, " (packenger tree lists what is)"))
+      return ""
+    end
+    let edges = wy_edges(r, file, target)
+    // breadth-first from the program, edges in order: the first path found
+    // is the shortest, and always the same one
+    let via = map_new()
+    map_set(via, file, -1)
+    let queue = vec_new()
+    vec_push_str(queue, file)
+    let at = 0
+    while at < vec_len(queue) && !map_has(via, name)
+      let from = vec_get_str(queue, at)
+      at = at + 1
+      for i = 0 to vec_len(edges) - 1
+        let e = vec_get(edges, i) as ptr WyEdge
+        if e.from == from && !map_has(via, e.to) && map_has(loaded, e.to)
+          map_set(via, e.to, i)
+          vec_push_str(queue, e.to)
+        end
+      end
+    end
+    let b = sb_new()
+    sb_add(b, str_concat4(name, " is part of the build of ", file, ":\n"))
+    let path = vec_new()
+    let last = ""
+    let cur = name
+    while map_has(via, cur) && map_get(via, cur) >= 0
+      let e = vec_get(edges, map_get(via, cur)) as ptr WyEdge
+      if last == ""
+        last = e.from
+      end
+      vec_push_str(path, e.line)
+      cur = e.from
+    end
+    let i = vec_len(path) - 1
+    while i >= 0
+      sb_add(b, str_concat3("  ", vec_get_str(path, i), "\n"))
+      i = i - 1
+    end
+    let others = map_new()
+    for k = 0 to vec_len(edges) - 1
+      let e = vec_get(edges, k) as ptr WyEdge
+      if e.to == name && e.from != last
+        map_set(others, e.from, 1)
+      end
+    end
+    if map_len(others) > 0
+      sb_add(b, str_concat3("also asked for by ", str_join(wy_sorted(others), ", "), "\n"))
+    end
+    let rules = rs_rules(r.front.front)
+    for k = 0 to vec_len(rules) - 1
+      let ra = vec_get(rules, k) as ptr RsRule
+      if rs_in_scope(name, ra.r.scope)
+        sb_add(b, str_concat4("renamed by ", ra.f.name, ":", str_concat4(str_from_int(ra.r.line), ": ", pf_rename_string(ra.r), "\n")))
+      end
+    end
+    return sb_str(b)
+  end

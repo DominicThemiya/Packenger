@@ -1,0 +1,40 @@
+use std
+use stdx
+
+// Keywords are names where their own syntax doesn't apply.
+let to = 3
+let next = 0
+let end = 10
+let new = 2
+let in = 0
+for i = 1 to to
+  next += i
+end
+// a closer at the start of a line is a statement if it names something
+while next < end
+  next += 1
+next
+  in += 1
+end
+print next
+print in
+end = new + end
+print end
+fn case(x: int) -> int
+  return x * 2
+end
+print case(4)
+let k = 2
+match k
+case 1
+  print 100
+case 2
+  print case(to)
+end
+struct Range
+  from: int
+  to: int
+end
+let r = new Range
+r.to = to
+print r.to

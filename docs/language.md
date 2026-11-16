@@ -327,10 +327,31 @@ else
 end
 ```
 
-Its words (`in`, `match`, `case`, `assert`) are reserved only in programs
-that use it. There's an example of each feature in [`examples/`](../examples):
+There's an example of each feature in [`examples/`](../examples):
 `stats.pkg` (`+=` and friends), `letters.pkg` (`for x in`), `roman.pkg`
 (`match`) and `bsearch.pkg` (`assert`).
+
+## Keywords as names
+
+The words packages use in their syntax (`to`, `in`, `next`, `end`, `new`,
+`case`, `print`, ...) can also name variables, functions, parameters,
+fields, constants and structs. Where a word's own syntax applies, it wins:
+`print x` is always the print statement and `new Point` always allocates.
+Where it doesn't fit, the word is a name:
+
+```
+let to = 3
+let end = 10
+for i = 1 to to        // the second to is the variable
+  print i
+end
+end = end + 1          // a closer that names something, followed by more
+print end
+```
+
+A name has to be declared before it is used this way. Words that are a
+whole expression on their own (`true`, `false`, `null`, `argv`) can never
+be names.
 
 ## Libraries
 

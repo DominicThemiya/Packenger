@@ -1,0 +1,5 @@
+use std
+use stdx
+let s = "a"
+// the += pattern fits, apart from the type: that is the error
+s += 1

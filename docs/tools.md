@@ -10,6 +10,11 @@ packenger run tools/<tool>.pkg -- [arguments]
 | tool | does |
 |---|---|
 | [`treestat.pkg`](../tools/treestat.pkg) | measures a package tree: sizes, what each truck costs to use, dependencies, grammar, backend coverage |
+| [`pkfmt.pkg`](../tools/pkfmt.pkg) | formats programs and the code sections of package files |
+
+The compiler has two more commands for everyday work:
+[`packenger why`](cli.md) explains how a package got into a build, and
+[`packenger test`](cli.md) runs test programs.
 
 ## treestat
 
@@ -81,3 +86,40 @@ not of the tree's own sizes, trucks, grammar and backends.
 [pkc/fetch](registry/pkc/fetch.md) downloads (one `curl --parallel` per
 round) and [pkc/pkgfile](registry/pkc/pkgfile.md) parses, so it reads
 packages exactly as `pkc` does. It needs `curl`.
+
+## pkfmt
+
+`pkfmt` gives Packenger source one layout, the way `gofmt` does for Go.
+
+```sh
+packenger run tools/pkfmt.pkg -- file.pkg              # print it formatted
+packenger run tools/pkfmt.pkg -- -l examples tools     # list files that need formatting
+packenger run tools/pkfmt.pkg -- -w examples tools     # format them in place
+```
+
+A directory means every `.pkg` file under it. `-l` exits with status 1 if
+any file needs formatting, so it can run in CI; this repository's harness
+does.
+
+| | layout |
+|---|---|
+| indentation | two spaces per block |
+| spacing | one space between tokens; none inside `( )` and `[ ]`, before `,` `:` `)` `]`, around `.`, in calls `f(x)` and indexing `xs[i]`, or after a unary operator (`-x`, `!ok`, `&v`) |
+| comments | a trailing comment keeps its column, so aligned comments stay aligned |
+| lines | no trailing whitespace, no runs of blank lines, one newline at the end |
+
+Since the syntax comes from packages, so does the layout. `pkfmt` loads the
+packages a program uses (or a package `needs`), from the registry the
+compiler would use (`--registry`, `PACKENGER_REGISTRY`, a `pkg_tree.pkg`,
+or the universal tree), and reads the grammar from their syntax patterns:
+a statement whose pattern has a block opens one, a word after a block
+(`else`, `elif`, `next`, `case`, `end`) closes it, and reopens it if
+another block follows. A new block construct from any package is
+indented correctly without changing `pkfmt`.
+
+In a package file, only the `code` section is formatted. `doc`, `syntax`,
+`expand`, `emit`, `data` and the rest are left exactly as they are.
+
+Formatting never changes what a line means: if the new spacing would lex
+into different tokens (two symbols running together into a longer one, for
+instance), the line is only re-indented.

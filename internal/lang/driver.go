@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -29,7 +30,8 @@ type Compiler struct {
 	// is how a lock file is made.
 	Sums map[string]string
 
-	keywordRenames map[*pkgfile.Rename]int // patterns each keyword rule changed
+	keywordRenames map[*pkgfile.Rename]int // patterns each keyword or symbol rule changed
+	tokenRules     map[string][]tokenRule  // keyword and symbol renames, by package
 }
 
 type Result struct {
@@ -201,6 +203,7 @@ func (c *Compiler) Lex(ctx context.Context, file, src string) ([]Token, *Lang, m
 	if c.keywordRenames, err = resolvePatterns(front); err != nil {
 		return nil, nil, nil, nil, err
 	}
+	c.tokenRules = tokenRules(front)
 	var syntaxPkgs []*pkgfile.File
 	for _, f := range front {
 		if !f.IsTruck {
@@ -208,7 +211,7 @@ func (c *Compiler) Lex(ctx context.Context, file, src string) ([]Token, *Lang, m
 		}
 	}
 	sort.Slice(syntaxPkgs, func(i, j int) bool { return syntaxPkgs[i].Name < syntaxPkgs[j].Name })
-	L, err := NewLang(syntaxPkgs)
+	L, err := NewLang(syntaxPkgs, c.tokenRules)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -308,10 +311,9 @@ func (c *Compiler) Compile(ctx context.Context, file, src string) (*Result, erro
 	return &Result{Asm: asm, Uses: uses, Front: front, Back: back, Program: prog, Tokens: toks, File: file}, nil
 }
 
-// libraryUnits lexes the code sections of the loaded packages, in package
-// name order. Positions point into the package files.
 // libraryUnits lexes the code sections of the loaded packages, with the
-// renames of their resolve sections applied.
+// renames of resolve sections applied. Positions point into the package
+// files.
 func (c *Compiler) libraryUnits(front map[string]*pkgfile.File, L *Lang) ([]Unit, []ResolveInfo, error) {
 	code := map[string][]Token{}
 	for _, name := range sortedKeys(front) {
@@ -319,13 +321,17 @@ func (c *Compiler) libraryUnits(front map[string]*pkgfile.File, L *Lang) ([]Unit
 		if f.Code == nil {
 			continue
 		}
-		toks, err := Lex(strings.Join(f.Code, "\n"), f.Name+".pkg", L.Puncts, false)
+		trs := c.tokenRules[name]
+		toks, err := Lex(strings.Join(f.Code, "\n"), f.Name+".pkg", append(slices.Clone(L.Puncts), oldSymbols(trs)...), false)
 		if err != nil {
 			return nil, nil, err
 		}
 		for i := range toks {
 			toks[i].Pos.Line += f.CodeAt - 1
 			toks[i].Pos.Col += 2 // the code section is indented
+		}
+		if err := applyTokenRules(toks, trs, name); err != nil {
+			return nil, nil, err
 		}
 		code[name] = toks
 	}

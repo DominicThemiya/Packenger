@@ -53,7 +53,8 @@ type File struct {
 //
 //	rename prefix 'fs_' in filesystem to 'filesys_'
 //
-// Kind is prefix, name or keyword; Scope is a package or truck name.
+// Kind is prefix, name, keyword or symbol; Scope is a package or truck
+// name.
 type Rename struct {
 	Kind, Old, Scope, New string
 	Line                  int
@@ -65,7 +66,23 @@ func (r *Rename) String() string {
 }
 
 // RenameKinds are the kinds of rename a resolve section can use.
-var RenameKinds = map[string]bool{"prefix": true, "name": true, "keyword": true}
+var RenameKinds = map[string]bool{"prefix": true, "name": true, "keyword": true, "symbol": true}
+
+// isSymbol reports whether s can be an operator symbol: punctuation, but
+// not the compiler's own ( ) , or what would start a comment, a string or
+// a slot.
+func isSymbol(s string) bool {
+	if s == "" || strings.Contains(s, "//") {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c <= ' ' || c > '~' || c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || strings.IndexByte("(),'\"{}", c) >= 0 {
+			return false
+		}
+	}
+	return s != ":" && s != "[" && s != "]"
+}
 
 func isWord(s string) bool {
 	if s == "" {
@@ -115,7 +132,7 @@ func parseRename(line string) (*Rename, error) {
 		}
 		return "", false
 	}
-	usage := fmt.Errorf("expected: rename prefix|name|keyword '<old>' in <package or truck> to '<new>'")
+	usage := fmt.Errorf("expected: rename prefix|name|keyword|symbol '<old>' in <package or truck> to '<new>'")
 	if len(words) != 7 || words[0] != "rename" || words[3] != "in" || words[5] != "to" || !RenameKinds[words[1]] {
 		return nil, usage
 	}
@@ -125,7 +142,11 @@ func parseRename(line string) (*Rename, error) {
 		return nil, usage
 	}
 	r := &Rename{Kind: words[1], Old: old, Scope: words[4], New: nw}
-	if !isWord(old) || !isWord(nw) {
+	if r.Kind == "symbol" {
+		if !isSymbol(old) || !isSymbol(nw) {
+			return nil, fmt.Errorf("'%s' and '%s' must be symbols: punctuation other than ( ) , { } quotes and :, [ or ] alone", old, nw)
+		}
+	} else if !isWord(old) || !isWord(nw) {
 		return nil, fmt.Errorf("'%s' and '%s' must be names: letters, digits and _", old, nw)
 	}
 	if !isPackageName(r.Scope) {

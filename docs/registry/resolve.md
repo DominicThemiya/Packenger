@@ -6,8 +6,8 @@
 
 [source](../../registry/resolve.pkg) · truck
 
-Two packages can clash: both define `fs_list`, or one reserves a word
-(`in`) a program wants as a name. Instead of changing either package, put
+Two packages can clash: both define `fs_list`, or both define the
+operator `<>`, or a program wants a package's words spelled differently. Instead of changing either package, put
 the fix in a package of your own, host it like any other, and use it:
 
 ```
@@ -40,6 +40,7 @@ so start with `needs resolve`:
 | `resolve/prefix` | `rename prefix 'fs_' in filesystem to 'filesys_'` | every name the scope defines that starts with the prefix |
 | `resolve/name` | `rename name 'list_all' in filesystem/io to 'list_files'` | one name the scope defines |
 | `resolve/keyword` | `rename keyword 'in' in stdx to 'within'` | a word in the scope's syntax |
+| `resolve/symbol` | `rename symbol '<>' in sets to '<!>'` | an operator symbol in the scope's syntax |
 
 ## What a rename changes
 
@@ -49,12 +50,16 @@ so start with `needs resolve`:
 - **References** to them in the scope, and in every package that needs
   the scope, directly or through other packages. Those packages keep
   working, now calling the new names.
+- **Keywords and symbols** in the scope's syntax patterns, and in the
+  library code and expand templates of every package that needs the
+  scope, so packages built from a renamed word keep working.
 - **Not your program**: it uses the new names, and the old name still
   means the other package's definition.
 
-A package outside the scope that can see both the renamed definition and
-another one with the old name can't be rewritten safely: that's an error
-naming both. Within the scope, its own definition wins.
+A package outside the scope that can see both the renamed definition (or
+word, or symbol) and another package's with the old name can't be
+rewritten safely: that's an error naming both. Within the scope, its own
+definition wins.
 
 Rules are applied in package-name order, then in the order written, and
 `packenger run -vb` lists them with what each changed. A rule that
@@ -69,3 +74,4 @@ and locked like any others.
 | [resolve/prefix](resolve/prefix.md) | Rename rule: every name a package or truck defines that starts with a prefix. |
 | [resolve/name](resolve/name.md) | Rename rule: one name a package or truck defines. |
 | [resolve/keyword](resolve/keyword.md) | Rename rule: a word in the syntax of a package or truck. |
+| [resolve/symbol](resolve/symbol.md) | Rename rule: an operator symbol in the syntax of a package or truck. |

@@ -32,9 +32,9 @@ assert total == 3
 | `stdx/match` | `match x`, `case a, b`, `else`, `end` | an `if`/`elif` chain comparing `x` with `==` |
 | `stdx/assert` | `assert cond` | stop with status 2 and the position if `cond` is false |
 
-`stdx` is a separate truck, not part of `std`, so its words (`in`,
-`match`, `case`, `assert`) are only reserved in programs that use it,
-and programs and lock files that only use `std` are unaffected. Use single packages
+`stdx` is a separate truck, not part of `std`, so programs and lock files
+that only use `std` are unaffected. Its words (`in`, `match`, `case`,
+`assert`) can still be names where their syntax doesn't apply. Use single packages
 (`use stdx/forin`) to take just one.
 
 ## Packages

@@ -1,0 +1,5 @@
+doc A symbol rule for a symbol stdx doesn't use.
+needs resolve stdx
+resolve
+  rename symbol '<>' in stdx to '<!>'
+end

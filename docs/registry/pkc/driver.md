@@ -229,7 +229,7 @@ fn dr_lex(reg: str, file: str, src: str) -> ptr DrFront
   if front == null
     return null
   end
-  // resolve sections rename keywords before the grammar is built
+  // resolve sections rename keywords and symbols before the grammar is built
   if !rs_patterns(front)
     return null
   end
@@ -244,7 +244,7 @@ fn dr_lex(reg: str, file: str, src: str) -> ptr DrFront
   for i = 0 to vec_len(names) - 1
     vec_push(pkgs, map_get(front, vec_get_str(names, i)))
   end
-  let L = lg_new(pkgs)
+  let L = lg_new(pkgs, rs_token_rules(front))
   if L == null
     return null
   end
@@ -281,7 +281,8 @@ fn dr_library_units(front: ptr Map, L: ptr Lang) -> ptr Vec
     if f.code == null
       continue
     end
-    let toks = lx_lex(str_join(f.code, "\n"), str_concat(f.name, ".pkg"), L.puncts, false)
+    let trs = rs_tok_list(L.tok_rules, f.name)
+    let toks = lx_lex(str_join(f.code, "\n"), str_concat(f.name, ".pkg"), rs_lex_puncts(L.puncts, trs), false)
     if toks == null
       return null
     end
@@ -289,6 +290,9 @@ fn dr_library_units(front: ptr Map, L: ptr Lang) -> ptr Vec
       let t = lx_tok(toks, k)
       t.line = t.line + f.code_at - 1
       t.col = t.col + 2
+    end
+    if !rs_apply_tokens(toks, trs, f.name)
+      return null
     end
     map_set(code, f.name, toks as int)
   end
@@ -563,4 +567,4 @@ end
 
 ## Used by
 
-[pkc/main](main.md), [pkc/tree](tree.md)
+[pkc/main](main.md), [pkc/tree](tree.md), [pkc/why](why.md)

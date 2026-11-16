@@ -1,8 +1,11 @@
-doc Lets filesystem and rt/fs be used together, and frees the word in.
-needs resolve filesystem rt stdx
+doc Lets filesystem and rt/fs be used together, frees the word in, and respells while and +=.
+needs resolve filesystem rt std stdx
 resolve
   // filesystem's names get their own prefix
   rename prefix 'fs_' in filesystem to 'filesys_'
   rename name 'FS_LIMIT' in filesystem/files to 'FILESYS_LIMIT'
   rename keyword 'in' in stdx to 'within'
+  // for and for-in expand into while: their templates follow the rename
+  rename keyword 'while' in std/while to 'loop'
+  rename symbol '+=' in stdx/add_assign to '+:='
 end

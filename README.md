@@ -25,6 +25,7 @@ go build -o bin/packenger ./cmd/packenger
 ./bin/packenger run examples/fib.pkg        # 9227465
 ./bin/packenger build examples/fib.pkg -vb  # show every step
 ./bin/packenger lock examples/fib.pkg       # pin exact package versions
+./bin/packenger test tests/rt               # run the rt truck's tests
 ```
 
 `lock` writes `fib.lock`, which pins the registry to the current commit
@@ -99,7 +100,7 @@ are defined by `std` packages too. Packages can also be built from other package
 | [Publishing packages](docs/publishing.md) | the registry and keeping docs current |
 | [Command line](docs/cli.md) | commands, flags and the `-vb` report |
 | [How the compiler works](docs/architecture.md) | pipeline and code map |
-| [Tools](docs/tools.md) | `treestat`: how heavy a package tree is |
+| [Tools](docs/tools.md) | `treestat`: how heavy a package tree is; `pkfmt`: formatting |
 | [Self-hosting](docs/self-hosting.md) | `pkc`, the compiler written in Packenger, and its bootstrap |
 | [Package reference](docs/registry/README.md) | every truck and package, generated from the registry |
 

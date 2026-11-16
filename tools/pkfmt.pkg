@@ -1,0 +1,798 @@
+use std
+use stdx
+use rt
+use pkc/util
+use pkc/fetch
+use pkc/pkgfile
+
+// pkfmt: formats Packenger source. Programs, and the code sections of
+// package files, get the same layout everywhere:
+//
+//   - two spaces of indentation per block, worked out from the grammar the
+//     file loads, so it knows that `if` opens a block, `else` reopens it and
+//     `end` closes it, whichever packages define them;
+//   - one space between tokens, none inside ( ) and [ ], before , : ) ],
+//     around ., in calls f(x), indexing xs[i] and after a unary operator;
+//   - trailing comments stay in their column, so aligned comments stay
+//     aligned;
+//   - no trailing whitespace, no runs of blank lines, one newline at the end.
+//
+// Everything else in a package file (doc, syntax, expand, emit, data, ...)
+// is left exactly as it is. Formatting never changes a line's tokens: a line
+// that would lex differently is only re-indented.
+//
+//   packenger run tools/pkfmt.pkg -- file.pkg          print the formatted file
+//   packenger run tools/pkfmt.pkg -- -l examples tools list files that need formatting
+//   packenger run tools/pkfmt.pkg -- -w examples tools format files in place
+//
+// The grammar comes from the registry, like the compiler's: --registry,
+// else PACKENGER_REGISTRY, else the universal tree, and a program's
+// pkg_tree.pkg routes its packages. Needs curl for http(s) registries.
+
+const UNIVERSAL = "https://raw.githubusercontent.com/DominicThemiya/Packenger/main/registry"
+
+const FM_WORD = 1
+const FM_NUM = 2
+const FM_STR = 3
+const FM_CHAR = 4
+const FM_SYM = 5
+const FM_COMMENT = 6
+
+struct FmTok
+  kind: int
+  text: str
+  space: bool // whitespace before it in the source
+  col: int    // byte offset in the line
+end
+
+// what the layout needs to know about a grammar
+struct FmGrammar
+  symbols: ptr Vec    // longest first
+  keywords: ptr Map
+  openers: ptr Map    // statements with a block: if, while, fn, struct
+  closers: ptr Map    // words after a block: else, elif, next, case, end
+  reopen: ptr Map     // closers that start another block: else, elif
+  args: ptr Map       // closers followed by more: elif cond, case 1, 2
+  operand: ptr Map    // words followed by an expression: return, print, to
+  call: ptr Map       // words followed by '(' in their pattern: len, make
+  prefix: ptr Map     // unary operators
+end
+
+global fm_reg: str
+global fm_cache: ptr Map  // package URL -> ptr PfFile, or 0 if it failed
+global fm_errs: ptr Map   // package URL -> why it failed
+
+// ---------------------------------------------------------------- grammar
+
+fn fm_load(name: str) -> ptr PfFile
+  let key = fe_pkg_url(fm_reg, name)
+  if map_has(fm_cache, key)
+    if map_get(fm_cache, key) == 0
+      pk_err = map_get(fm_errs, key) as str
+    end
+    return map_get(fm_cache, key) as ptr PfFile
+  end
+  let origin = ""
+  let ok = false
+  let src = fe_fetch(fm_reg, name, &origin, &ok)
+  let f: ptr PfFile = null
+  if ok
+    f = pf_parse(name, origin, src)
+  end
+  if f == null
+    map_set(fm_errs, key, pk_err as int)
+  end
+  map_set(fm_cache, key, f as int)
+  return f
+end
+
+fn fm_is_block(e: ptr PfElem) -> bool
+  return e.slot != null && (e.slot.kind == "block" || e.slot.kind == "fields")
+end
+
+fn fm_walk(g: ptr FmGrammar, es: ptr Vec, closers: ptr Vec)
+  for i = 0 to vec_len(es) - 1
+    let e = pf_elem(es, i)
+    if e.optional != null
+      fm_walk(g, e.optional, closers)
+    end
+    if e.lit == "" || !pf_is_word(e.lit)
+      continue
+    end
+    if i + 1 < vec_len(es)
+      let nx = pf_elem(es, i + 1)
+      if nx.slot != null && !fm_is_block(nx)
+        map_set(g.operand, e.lit, 1)
+      end
+      if nx.lit == "("
+        map_set(g.call, e.lit, 1)
+      end
+    end
+    if vec_has_str(closers, e.lit)
+      for j = i + 1 to vec_len(es) - 1
+        if fm_is_block(pf_elem(es, j))
+          map_set(g.reopen, e.lit, 1)
+        end
+      end
+      if i + 1 < vec_len(es) && pf_elem(es, i + 1).slot != null && !fm_is_block(pf_elem(es, i + 1))
+        map_set(g.args, e.lit, 1)
+      end
+    end
+  end
+end
+
+fn fm_add_file(g: ptr FmGrammar, f: ptr PfFile, symbols: ptr Map)
+  for s = 0 to vec_len(f.syntax) - 1
+    let syn = vec_get(f.syntax, s) as ptr PfSyntax
+    for k = 0 to vec_len(syn.patterns) - 1
+      let p = vec_get(syn.patterns, k) as ptr PfPattern
+      let closers = pf_closers(p)
+      for c = 0 to vec_len(closers) - 1
+        map_set(g.closers, vec_get_str(closers, c), 1)
+      end
+      let lits = pf_literals(p)
+      for l = 0 to vec_len(lits) - 1
+        let lit = vec_get_str(lits, l)
+        if pf_is_word(lit)
+          map_set(g.keywords, lit, 1)
+        else
+          map_set(symbols, lit, 1)
+        end
+      end
+      let first = pf_elem(p.elems, 0)
+      if syn.kind == "prefix"
+        map_set(g.prefix, first.lit, 1)
+      end
+      let statement = syn.kind != "expr" && syn.kind != "infix" && syn.kind != "prefix" && syn.kind != "postfix"
+      if statement && first.lit != "" && pf_is_word(first.lit)
+        for e = 0 to vec_len(p.elems) - 1
+          if fm_is_block(pf_elem(p.elems, e))
+            map_set(g.openers, first.lit, 1)
+          end
+        end
+      end
+      fm_walk(g, p.elems, closers)
+    end
+  end
+end
+
+// fm_grammar loads roots (with truck members and needs) and describes the
+// grammar they define; own is the file's own package, if it is one.
+fn fm_grammar(roots: ptr Vec, own: ptr PfFile) -> ptr FmGrammar
+  let g = new FmGrammar
+  g.keywords = map_new()
+  g.openers = map_new()
+  g.closers = map_new()
+  g.reopen = map_new()
+  g.args = map_new()
+  g.operand = map_new()
+  g.call = map_new()
+  g.prefix = map_new()
+  let symbols = map_new()
+  let seen = map_new()
+  let queue = vec_new()
+  for i = 0 to vec_len(roots) - 1
+    vec_push_str(queue, vec_get_str(roots, i))
+  end
+  let at = 0
+  while at < vec_len(queue)
+    let name = vec_get_str(queue, at)
+    at += 1
+    if map_has(seen, name)
+      continue
+    end
+    map_set(seen, name, 1)
+    let f = fm_load(name)
+    if f == null
+      u_fail(str_concat4("can't load package ", name, ": ", pk_err))
+      return null
+    end
+    fm_add_file(g, f, symbols)
+    for k = 0 to vec_len(f.truck) - 1
+      vec_push_str(queue, str_concat3(f.name, "/", vec_get_str(f.truck, k)))
+    end
+    for k = 0 to vec_len(f.needs) - 1
+      vec_push_str(queue, vec_get_str(f.needs, k))
+    end
+  end
+  if own != null
+    fm_add_file(g, own, symbols)
+  end
+  // the compiler's own symbols, then the packages', longest first
+  let all = vec_new()
+  for i = 0 to map_len(symbols) - 1
+    vec_push_str(all, map_key(symbols, i))
+  end
+  vec_push_str(all, "(")
+  vec_push_str(all, ")")
+  vec_push_str(all, ",")
+  vec_push_str(all, ":")
+  vec_push_str(all, "[")
+  vec_push_str(all, "]")
+  sort_strs(all)
+  // longest first, so the longest symbol matches, like the compiler's lexer
+  g.symbols = vec_new()
+  for i = 0 to vec_len(all) - 1
+    let sym = vec_get_str(all, i)
+    let j = vec_len(g.symbols)
+    vec_push_str(g.symbols, sym)
+    while j > 0 && len(vec_get_str(g.symbols, j - 1)) < len(sym)
+      vec_set(g.symbols, j, vec_get(g.symbols, j - 1))
+      j -= 1
+    end
+    vec_set(g.symbols, j, sym as int)
+  end
+  return g
+end
+
+// ---------------------------------------------------------------- lexing
+
+fn fm_letter(c: u8) -> bool
+  return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_' || c >= 128 as u8
+end
+
+fn fm_digit(c: u8) -> bool
+  return c >= '0' && c <= '9'
+end
+
+fn fm_tok(kind: int, text: str, space: bool, col: int) -> ptr FmTok
+  let t = new FmTok
+  t.kind = kind
+  t.text = text
+  t.space = space
+  t.col = col
+  return t
+end
+
+fn fm_at(toks: ptr Vec, i: int) -> ptr FmTok
+  return vec_get(toks, i) as ptr FmTok
+end
+
+// fm_quoted is where the string or character literal starting at i ends.
+fn fm_quoted(line: str, i: int) -> int
+  let q = line[i]
+  let j = i + 1
+  while j < len(line) && line[j] != q
+    if line[j] == '\\'
+      j += 1
+    end
+    j += 1
+  end
+  if j < len(line)
+    j += 1
+  end
+  if j > len(line)
+    j = len(line)
+  end
+  return j
+end
+
+// fm_lex splits one line into tokens, the way the compiler would, keeping
+// literals as written.
+fn fm_lex(g: ptr FmGrammar, line: str) -> ptr Vec
+  let out = vec_new()
+  let i = 0
+  let space = false
+  while i < len(line)
+    let c = line[i]
+    if c == ' ' || c == '\t' || c == '\r'
+      space = true
+      i += 1
+      continue
+    end
+    let start = i
+    let kind = FM_SYM
+    if c == '/' && i + 1 < len(line) && line[i + 1] == '/'
+      kind = FM_COMMENT
+      i = len(line)
+    elif fm_letter(c)
+      kind = FM_WORD
+      while i < len(line) && (fm_letter(line[i]) || fm_digit(line[i]))
+        i += 1
+      end
+    elif fm_digit(c)
+      kind = FM_NUM
+      while i < len(line) && (fm_digit(line[i]) || line[i] == '_')
+        i += 1
+      end
+    elif c == '"'
+      kind = FM_STR
+      i = fm_quoted(line, i)
+    elif c == '\''
+      kind = FM_CHAR
+      i = fm_quoted(line, i)
+    else
+      let rest = str_slice(line, i, len(line))
+      i += 1
+      for k = 0 to vec_len(g.symbols) - 1
+        if str_starts(rest, vec_get_str(g.symbols, k))
+          i = start + len(vec_get_str(g.symbols, k))
+          break
+        end
+      end
+    end
+    vec_push(out, fm_tok(kind, str_slice(line, start, i), space, start) as int)
+    space = false
+  end
+  return out
+end
+
+// fm_same reports whether two token lists are the same tokens.
+fn fm_same(a: ptr Vec, b: ptr Vec) -> bool
+  if vec_len(a) != vec_len(b)
+    return false
+  end
+  for i = 0 to vec_len(a) - 1
+    if fm_at(a, i).kind != fm_at(b, i).kind || fm_at(a, i).text != fm_at(b, i).text
+      return false
+    end
+  end
+  return true
+end
+
+// ---------------------------------------------------------------- spacing
+
+fn fm_is(t: ptr FmTok, kind: int, text: str) -> bool
+  return t.kind == kind && t.text == text
+end
+
+// fm_wants_operand: after p, an operator like - or * is unary
+fn fm_wants_operand(g: ptr FmGrammar, p: ptr FmTok) -> bool
+  if p.kind == FM_SYM
+    return p.text != ")" && p.text != "]"
+  end
+  return p.kind == FM_WORD && map_has(g.operand, p.text)
+end
+
+// fm_merges: whether writing a and b together would lex as another symbol
+fn fm_merges(g: ptr FmGrammar, a: str, b: str) -> bool
+  let both = str_concat(a, b)
+  for k = 0 to vec_len(g.symbols) - 1
+    let sym = vec_get_str(g.symbols, k)
+    if str_starts(both, sym)
+      return len(sym) != len(a)
+    end
+  end
+  return false
+end
+
+// fm_space: whether toks[i] gets a space before it. unary[k] says whether
+// toks[k] is a unary operator.
+fn fm_space(g: ptr FmGrammar, toks: ptr Vec, i: int, unary: ptr Vec) -> bool
+  let p = fm_at(toks, i - 1)
+  let t = fm_at(toks, i)
+  let glue = false
+  if t.kind == FM_SYM && (t.text == "," || t.text == ")" || t.text == "]" || t.text == ":")
+    glue = true
+  elif fm_is(p, FM_SYM, "(") || fm_is(p, FM_SYM, "[")
+    glue = true
+  elif fm_is(p, FM_SYM, ".") || fm_is(t, FM_SYM, ".")
+    glue = true
+  elif vec_get(unary, i - 1) == 1
+    // after a keyword the operator may be either; keep it as written
+    if i >= 2 && fm_at(toks, i - 2).kind == FM_WORD
+      return t.space
+    end
+    glue = true
+  elif fm_is(t, FM_SYM, "(") || fm_is(t, FM_SYM, "[")
+    if fm_is(p, FM_SYM, ")") || fm_is(p, FM_SYM, "]") || p.kind == FM_STR && t.text == "["
+      glue = true
+    elif p.kind == FM_WORD
+      if map_has(g.keywords, p.text) && !(t.text == "(" && (map_has(g.call, p.text) || p.text == "fn"))
+        return t.space
+      end
+      glue = true
+    end
+  end
+  if glue && p.kind == FM_SYM && t.kind == FM_SYM && fm_merges(g, p.text, t.text)
+    return true
+  end
+  return !glue
+end
+
+// fm_render writes code tokens with normalized spacing.
+fn fm_render(g: ptr FmGrammar, toks: ptr Vec) -> str
+  let b = sb_new()
+  let unary = vec_new()
+  for i = 0 to vec_len(toks) - 1
+    let t = fm_at(toks, i)
+    if i > 0 && fm_space(g, toks, i, unary)
+      sb_byte(b, ' ')
+    end
+    sb_add(b, t.text)
+    let u = t.kind == FM_SYM && map_has(g.prefix, t.text) && (i == 0 || vec_get(unary, i - 1) == 1 || fm_wants_operand(g, fm_at(toks, i - 1)))
+    vec_push(unary, u as int)
+  end
+  return sb_str(b)
+end
+
+// ---------------------------------------------------------------- lines
+
+fn fm_rtrim(s: str) -> str
+  let n = len(s)
+  while n > 0 && (s[n - 1] == ' ' || s[n - 1] == '\t' || s[n - 1] == '\r')
+    n -= 1
+  end
+  return str_slice(s, 0, n)
+end
+
+fn fm_indent_of(s: str) -> int
+  let n = 0
+  while n < len(s) && (s[n] == ' ' || s[n] == '\t')
+    n += 1
+  end
+  return n
+end
+
+fn fm_width(s: str) -> int
+  let n = 0
+  for i = 0 to len(s) - 1
+    if ((s[i] as int) & 192) != 128
+      n += 1
+    end
+  end
+  return n
+end
+
+fn fm_spaces(n: int) -> str
+  let b = sb_new()
+  for i = 1 to n
+    sb_byte(b, ' ')
+  end
+  return sb_str(b)
+end
+
+// fm_line lays out one line at indent: its code with normalized spacing,
+// then its comment, in the same column as before if it was aligned.
+fn fm_line(g: ptr FmGrammar, line: str, toks: ptr Vec, indent: int) -> str
+  let code = vec_new()
+  let comment: ptr FmTok = null
+  for i = 0 to vec_len(toks) - 1
+    if fm_at(toks, i).kind == FM_COMMENT
+      comment = fm_at(toks, i)
+    else
+      vec_push(code, vec_get(toks, i))
+    end
+  end
+  let pad = fm_spaces(indent)
+  let text = fm_render(g, code)
+  if !fm_same(fm_lex(g, text), code)
+    // the spacing would change the tokens: keep the line as written
+    let stop = len(line)
+    if comment != null
+      stop = comment.col
+    end
+    text = fm_rtrim(str_slice(line, fm_indent_of(line), stop))
+  end
+  if comment == null
+    return str_concat(pad, text)
+  end
+  if vec_len(code) == 0
+    return str_concat(pad, comment.text)
+  end
+  let at = indent + fm_width(text) + 1
+  let before = str_slice(line, 0, comment.col)
+  if len(before) - len(fm_rtrim(before)) > 1
+    // an aligned comment keeps its column, moved with the indentation
+    let col = fm_width(before) - fm_indent_of(line) + indent
+    if col > at
+      at = col
+    end
+  end
+  return str_concat4(pad, text, fm_spaces(at - indent - fm_width(text)), comment.text)
+end
+
+// fm_body lays out lines of code (a program, or a package's code section
+// at base indentation 2), appending them to out.
+fn fm_body(g: ptr FmGrammar, lines: ptr Vec, from: int, to: int, base: int, out: ptr Vec)
+  let depth = 0
+  let parens = 0
+  for i = from to to - 1
+    let line = fm_rtrim(vec_get_str(lines, i))
+    if str_trim(line) == ""
+      if vec_len(out) > 0 && vec_get_str(out, vec_len(out) - 1) != ""
+        vec_push_str(out, "")
+      end
+      continue
+    end
+    let toks = fm_lex(g, line)
+    let code = 0
+    for k = 0 to vec_len(toks) - 1
+      if fm_at(toks, k).kind != FM_COMMENT
+        code += 1
+      end
+    end
+    let level = depth
+    let first = fm_at(toks, 0)
+    if parens > 0
+      level = depth + 2
+    elif first.kind == FM_WORD && map_has(g.closers, first.text) && (code == 1 || map_has(g.args, first.text))
+      if depth > 0
+        depth -= 1
+      end
+      level = depth
+      if map_has(g.reopen, first.text)
+        depth += 1
+      end
+    elif first.kind == FM_WORD && map_has(g.openers, first.text) && !(code > 1 && fm_is(fm_at(toks, 1), FM_SYM, "="))
+      depth += 1
+    end
+    for k = 0 to vec_len(toks) - 1
+      let t = fm_at(toks, k)
+      if fm_is(t, FM_SYM, "(") || fm_is(t, FM_SYM, "[")
+        parens += 1
+      elif (fm_is(t, FM_SYM, ")") || fm_is(t, FM_SYM, "]")) && parens > 0
+        parens -= 1
+      end
+    end
+    vec_push_str(out, fm_line(g, line, toks, base + level * 2))
+  end
+end
+
+fn fm_finish(out: ptr Vec) -> str
+  while vec_len(out) > 0 && vec_get_str(out, vec_len(out) - 1) == ""
+    vec_pop(out)
+  end
+  return str_concat(str_join(out, "\n"), "\n")
+end
+
+// ---------------------------------------------------------------- files
+
+fn fm_is_use(line: str) -> bool
+  let t = str_trim(line)
+  return t == "use" || str_starts(t, "use ") || str_starts(t, "use\t")
+end
+
+// fm_program formats a program: its use lines, then its code.
+fn fm_program(path: str, lines: ptr Vec) -> str
+  let roots = vec_new()
+  let tree = false
+  let body = vec_len(lines)
+  for i = 0 to vec_len(lines) - 1
+    let t = str_trim(vec_get_str(lines, i))
+    if t == "" || str_starts(t, "//")
+      continue
+    end
+    if !fm_is_use(t)
+      body = i
+      break
+    end
+    let words = str_fields(t)
+    if vec_len(words) >= 2
+      let name = vec_get_str(words, 1)
+      if name == "pkg_tree"
+        tree = true
+      else
+        vec_push_str(roots, name)
+      end
+    end
+  end
+  let reg = fm_reg
+  fe_routes(vec_new(), vec_new())
+  if tree
+    if !fe_read_tree(path)
+      return ""
+    end
+    fe_routes(fe_tree_prefixes, fe_tree_bases)
+    if fe_tree_default != ""
+      fm_reg = fe_tree_default
+    end
+  end
+  let g = fm_grammar(roots, null)
+  fm_reg = reg
+  if g == null
+    return ""
+  end
+  let out = vec_new()
+  for i = 0 to body - 1
+    let line = fm_rtrim(vec_get_str(lines, i))
+    if line == ""
+      if vec_len(out) > 0 && vec_get_str(out, vec_len(out) - 1) != ""
+        vec_push_str(out, "")
+      end
+    else
+      vec_push_str(out, str_slice(line, fm_indent_of(line), len(line)))
+    end
+  end
+  fm_body(g, lines, body, vec_len(lines), 0, out)
+  return fm_finish(out)
+end
+
+// fm_package formats the code section of a package file and leaves every
+// other section as it is.
+fn fm_package(path: str, src: str, lines: ptr Vec) -> str
+  let code = -1
+  for i = 0 to vec_len(lines) - 1
+    let l = vec_get_str(lines, i)
+    if l == "code" || str_starts(l, "code ")
+      code = i
+    end
+  end
+  if code < 0
+    return src
+  end
+  let stop = code + 1
+  while stop < vec_len(lines)
+    let l = vec_get_str(lines, stop)
+    if len(l) > 0 && l[0] != ' ' && l[0] != '\t'
+      break
+    end
+    stop += 1
+  end
+  let name = path
+  let at = str_find(name, "registry/", 0)
+  while at >= 0
+    name = str_slice(name, at + 9, len(name))
+    at = str_find(name, "registry/", 0)
+  end
+  if str_ends(name, ".pkg")
+    name = str_slice(name, 0, len(name) - 4)
+  end
+  let f = pf_parse(name, path, src)
+  if f == null
+    return ""
+  end
+  let g = fm_grammar(f.needs, f)
+  if g == null
+    return ""
+  end
+  let out = vec_new()
+  for i = 0 to code
+    vec_push_str(out, vec_get_str(lines, i))
+  end
+  // the section's blank lines at its end separate it from the next
+  let last = stop
+  while last > code + 1 && str_trim(vec_get_str(lines, last - 1)) == ""
+    last -= 1
+  end
+  fm_body(g, lines, code + 1, last, 2, out)
+  if last < stop && stop < vec_len(lines)
+    vec_push_str(out, "")
+  end
+  for i = stop to vec_len(lines) - 1
+    vec_push_str(out, vec_get_str(lines, i))
+  end
+  if stop == vec_len(lines)
+    return fm_finish(out)
+  end
+  // the rest of the file keeps its own trailing lines
+  let text = str_join(out, "\n")
+  if !str_ends(text, "\n")
+    text = str_concat(text, "\n")
+  end
+  return text
+end
+
+// fm_format returns path's source formatted, or "" with pk_err set.
+fn fm_format(path: str, src: str) -> str
+  let lines = str_split(src, '\n')
+  for i = 0 to vec_len(lines) - 1
+    let t = str_trim(vec_get_str(lines, i))
+    if t == "" || str_starts(t, "//")
+      continue
+    end
+    if fm_is_use(t)
+      return fm_program(path, lines)
+    end
+    break
+  end
+  return fm_package(path, src, lines)
+end
+
+// ---------------------------------------------------------------- command line
+
+fn fm_walk_dir(dir: str, out: ptr Vec) -> bool
+  let ok = false
+  let names = fs_list(dir, &ok)
+  if !ok
+    return u_fail(str_concat3("open ", dir, ": can't read the directory"))
+  end
+  for i = 0 to vec_len(names) - 1
+    let n = vec_get_str(names, i)
+    let p = str_concat3(dir, "/", n)
+    if str_starts(n, ".")
+      continue
+    elif fs_is_dir(p)
+      if !fm_walk_dir(p, out)
+        return false
+      end
+    elif str_ends(n, ".pkg")
+      vec_push_str(out, p)
+    end
+  end
+  return true
+end
+
+fn fm_usage() -> int
+  io_err("usage: packenger run tools/pkfmt.pkg -- [-l | -w] [--registry URL] file.pkg|dir ...\n")
+  io_err("  -l   list the files whose formatting differs (exit status 1 if any)\n")
+  io_err("  -w   write the formatted files back, and list them\n")
+  io_err("  with neither, print the formatted source\n")
+  return 2
+end
+
+fn fm_main() -> int
+  let args = argv
+  let list = false
+  let write = false
+  fm_reg = os_getenv("PACKENGER_REGISTRY")
+  if fm_reg == ""
+    fm_reg = UNIVERSAL
+  end
+  let paths = vec_new()
+  let i = 1
+  while i < len(args)
+    let a = args[i]
+    if a == "-l"
+      list = true
+    elif a == "-w"
+      write = true
+    elif a == "--registry" && i + 1 < len(args)
+      i += 1
+      fm_reg = args[i]
+    elif a == "-h" || a == "--help" || str_starts(a, "-")
+      return fm_usage()
+    else
+      vec_push_str(paths, a)
+    end
+    i += 1
+  end
+  if vec_len(paths) == 0 || list && write
+    return fm_usage()
+  end
+  fm_cache = map_new()
+  fm_errs = map_new()
+  let files = vec_new()
+  let status = 0
+  for k = 0 to vec_len(paths) - 1
+    let p = str_rtrim(vec_get_str(paths, k), '/')
+    if p == ""
+      p = "/"
+    end
+    if fs_is_dir(p)
+      if !fm_walk_dir(p, files)
+        io_err(str_concat3("pkfmt: ", pk_err, "\n"))
+        status = 1
+      end
+    else
+      vec_push_str(files, p)
+    end
+  end
+  for k = 0 to vec_len(files) - 1
+    let path = vec_get_str(files, k)
+    let ok = false
+    let src = io_read_file(path, &ok)
+    if !ok
+      io_err(str_concat3("pkfmt: open ", path, ": can't read the file\n"))
+      status = 1
+      continue
+    end
+    let out = fm_format(path, src)
+    if out == ""
+      io_err(str_concat4("pkfmt: ", path, ": ", str_concat(pk_err, "\n")))
+      status = 1
+      continue
+    end
+    if list
+      if out != src
+        io_out(str_concat(path, "\n"))
+        status = 1
+      end
+    elif write
+      if out != src
+        if !io_write_file(path, out)
+          io_err(str_concat3("pkfmt: can't write ", path, "\n"))
+          status = 1
+        else
+          io_out(str_concat(path, "\n"))
+        end
+      end
+    else
+      io_out(out)
+    end
+  end
+  io_flush()
+  return status
+end
+
+return fm_main()

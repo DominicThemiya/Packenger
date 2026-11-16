@@ -8,7 +8,7 @@ truck [pkc](../pkc.md) · [source](../../../registry/pkc/main.pkg)
 
 `pkc_main()` is the whole program; [bootstrap/pkc.pkg](../../../bootstrap/pkc.pkg)
 just calls it. Every command of the Go tool is supported: `build`, `run`,
-`asm`, `tree`, `dump` and `-vb`; see
+`asm`, `tree`, `why`, `lock`, `test`, `dump` and `-vb`; see
 [the self-hosting plan](../../self-hosting.md).
 
 ## Needs
@@ -26,6 +26,7 @@ just calls it. Every command of the Go tool is supported: `build`, `run`,
 - [pkc/codegen](codegen.md)
 - [pkc/report](report.md)
 - [pkc/tree](tree.md)
+- [pkc/why](why.md)
 
 ## Library code
 
@@ -41,6 +42,10 @@ fn pkc_usage() -> str
   sb_add(b, "  packenger run   <file.pkg> [-- args]  compile and run\n")
   sb_add(b, "  packenger asm   <file.pkg> [-o file]  print the generated NASM\n")
   sb_add(b, "  packenger tree  <file.pkg>            show which packages built the program\n")
+  sb_add(b, "  packenger why   <file.pkg> <package>  explain why a package is part of the\n")
+  sb_add(b, "                                        program's build\n")
+  sb_add(b, "  packenger test  [file.pkg|dir ...]    run test programs (default: tests/) and\n")
+  sb_add(b, "                                        report which pass: exit status 0\n")
   sb_add(b, "  packenger lock  <file.pkg>            pin the exact version of every package\n")
   sb_add(b, "                                        the program is built from, in\n")
   sb_add(b, "                                        <file>.lock (see docs/publishing.md)\n")
@@ -178,8 +183,16 @@ fn pkc_run(args: [str], a: ptr PkcArgs, src: ptr str) -> int
   if !pkc_parse_args(args, a)
     return -1
   end
+  if a.cmd == "test"
+    return pkc_test(a)
+  end
   let stage = ""
-  if a.cmd == "dump"
+  if a.cmd == "why"
+    if vec_len(a.pos) != 2
+      u_fail("usage: packenger why <file.pkg> <package>")
+      return -1
+    end
+  elif a.cmd == "dump"
     if vec_len(a.pos) != 2
       u_fail("usage: packenger dump tokens|ast|asm <file.pkg>, or packenger dump pkg <package>")
       return -1
@@ -194,6 +207,9 @@ fn pkc_run(args: [str], a: ptr PkcArgs, src: ptr str) -> int
     return -1
   end
   *src = vec_get_str(a.pos, vec_len(a.pos) - 1)
+  if a.cmd == "why"
+    *src = vec_get_str(a.pos, 0)
+  end
   let exe = a.out
   if a.cmd == "build" && exe == ""
     exe = ui_base(*src)
@@ -285,6 +301,14 @@ fn pkc_run(args: [str], a: ptr PkcArgs, src: ptr str) -> int
     rp_done("")
     io_out(tr_tree(r, ui_base(*src), a.target))
     return 0
+  elif a.cmd == "why"
+    rp_done("")
+    let text = wy_why(r, ui_base(*src), vec_get_str(a.pos, 1), a.target)
+    if text == ""
+      return -1
+    end
+    io_out(text)
+    return 0
   elif a.cmd == "lock"
     if !io_write_file(lock_path, lk_format(ui_base(*src), a.registry, prefixes, bases, lk_collect))
       u_fail(str_concat3("open ", lock_path, ": can't write the file"))
@@ -338,6 +362,127 @@ fn pkc_run(args: [str], a: ptr PkcArgs, src: ptr str) -> int
   end
   u_fail(str_concat3("unknown command ", str_quote(a.cmd), " (see packenger --help)"))
   return -1
+end
+
+// ---------------------------------------------------------------- test
+
+// pkc_test_walk adds the test programs under dir to out, in name order.
+fn pkc_test_walk(dir: str, out: ptr Vec) -> bool
+  let ok = false
+  let names = fs_list(dir, &ok)
+  if !ok
+    return u_fail(str_concat3("open ", dir, ": can't read the directory"))
+  end
+  for i = 0 to vec_len(names) - 1
+    let n = vec_get_str(names, i)
+    let p = str_concat3(dir, "/", n)
+    if str_starts(n, ".")
+      continue
+    elif fs_is_dir(p)
+      if !pkc_test_walk(p, out)
+        return false
+      end
+    elif str_ends(n, ".pkg") && n != "pkg_tree.pkg"
+      vec_push_str(out, p)
+    end
+  end
+  return true
+end
+
+// pkc_test_files lists the test programs in paths: a file is one test, a
+// directory every .pkg file under it apart from pkg_tree.pkg.
+fn pkc_test_files(paths: ptr Vec) -> ptr Vec
+  let out = vec_new()
+  for i = 0 to vec_len(paths) - 1
+    let p = vec_get_str(paths, i)
+    let t = str_rtrim(p, '/')
+    if t != ""
+      p = t
+    end
+    if !io_exists(p)
+      u_fail(str_concat3("open ", p, ": no such file or directory"))
+      return null
+    end
+    if !fs_is_dir(p)
+      vec_push_str(out, p)
+      continue
+    end
+    let before = vec_len(out)
+    if !pkc_test_walk(p, out)
+      return null
+    end
+    if vec_len(out) == before
+      u_fail(str_concat("no test programs (.pkg files) in ", p))
+      return null
+    end
+  end
+  return out
+end
+
+// pkc_test runs each test program with this compiler (packenger run) and
+// reports which pass: those that exit with status 0.
+fn pkc_test(a: ptr PkcArgs) -> int
+  let paths = a.pos
+  if vec_len(paths) == 0
+    paths = vec_new()
+    vec_push_str(paths, "tests")
+  end
+  let files = pkc_test_files(paths)
+  if files == null
+    return -1
+  end
+  let on = term_colors(1)
+  let width = 0
+  for i = 0 to vec_len(files) - 1
+    let w = rp_runes(vec_get_str(files, i))
+    if w > width
+      width = w
+    end
+  end
+  let failed = 0
+  for i = 0 to vec_len(files) - 1
+    let f = vec_get_str(files, i)
+    let args = vec_new()
+    vec_push_str(args, "run")
+    vec_push_str(args, "--target")
+    vec_push_str(args, a.target)
+    if a.registry_set
+      vec_push_str(args, "--registry")
+      vec_push_str(args, a.registry)
+    end
+    vec_push_str(args, f)
+    let t0 = time_now()
+    let out = ""
+    let status = os_run_output("/proc/self/exe", args, &out)
+    let took = time_now() - t0
+    if status < 0
+      u_fail("can't run /proc/self/exe")
+      return -1
+    end
+    let name = rp_pad(f, width)
+    if status == 0
+      io_out(str_concat4(ui_c(on, "ok  ", UI_GREEN), "  ", name, str_concat3("  ", ui_c(on, rp_dur(took), UI_DIM), "\n")))
+      continue
+    end
+    failed = failed + 1
+    io_out(str_concat4(ui_c(on, "FAIL", str_concat(UI_BOLD, UI_RED)), "  ", name, str_concat3("  exit ", str_from_int(status), "\n")))
+    let text = str_rtrim(str_replace(out, "\r", ""), '\n')
+    if text != ""
+      let lines = str_split(text, '\n')
+      for k = 0 to vec_len(lines) - 1
+        let l = vec_get_str(lines, k)
+        if l != ""
+          l = str_concat("      ", l)
+        end
+        io_out(str_concat(l, "\n"))
+      end
+    end
+  end
+  io_out(str_concat4("\n", str_from_int(vec_len(files) - failed), " passed, ", str_concat(str_from_int(failed), " failed\n")))
+  if failed > 0
+    return 1
+  end
+  return 0
 end
 
 // pkc_locked reports a lock file that was written.

@@ -35,7 +35,13 @@ type Lang struct {
 	Prims    map[string]int // primitive types declared by packages, with their sizes
 	closers  map[string]bool
 	keywords map[string]bool
-	Puncts   []string
+	// alone: keywords that are a whole expression by themselves (true,
+	// null), which can't be names
+	alone  map[string]bool
+	Puncts []string
+	// tokenRules: per package, the keyword and symbol renames of resolve
+	// sections that apply to its expand templates
+	tokenRules map[string][]tokenRule
 }
 
 var coreKinds = map[string]bool{"block": true, "int": true, "str": true, "var": true, "ident": true, "func": true, "newfunc": true, "args": true, "params": true, "program": true,
@@ -50,12 +56,16 @@ func isWord(s string) bool {
 	return s != ""
 }
 
-func NewLang(pkgs []*pkgfile.File) (*Lang, error) {
+// NewLang builds the grammar of the syntax packages pkgs. rules are the
+// keyword and symbol renames that apply to each package's expand template
+// (see resolve.go); nil if there are none.
+func NewLang(pkgs []*pkgfile.File, rules map[string][]tokenRule) (*Lang, error) {
 	L := &Lang{
 		Pkgs:    map[string]*pkgfile.File{},
 		stmtLit: map[string][]*Rule{}, exprLit: map[string][]*Rule{},
 		infix: map[string][]*Rule{}, prefix: map[string][]*Rule{}, postfix: map[string][]*Rule{},
 		Prims: map[string]int{}, closers: map[string]bool{}, keywords: map[string]bool{},
+		alone: map[string]bool{}, tokenRules: rules,
 	}
 	typeOwner := map[string]string{}
 	punct := map[string]bool{}
@@ -108,6 +118,9 @@ func NewLang(pkgs []*pkgfile.File) (*Lang, error) {
 					}
 					table[op] = append(table[op], r)
 				case "expr":
+					if first.Lit != "" && len(p.Elems) == 1 {
+						L.alone[first.Lit] = true
+					}
 					if first.Lit != "" {
 						L.exprLit[first.Lit] = append(L.exprLit[first.Lit], r)
 					} else {
@@ -174,8 +187,12 @@ func (L *Lang) lexTemplate(r *Rule) error {
 	if r.Pkg.Expand == nil || r.tmpl != nil {
 		return nil
 	}
-	toks, err := Lex(strings.Join(r.Pkg.Expand, "\n"), r.Pkg.Name+" (expand)", L.Puncts, true)
+	trs := L.tokenRules[r.Pkg.Name]
+	toks, err := Lex(strings.Join(r.Pkg.Expand, "\n"), r.Pkg.Name+" (expand)", append(slices.Clone(L.Puncts), oldSymbols(trs)...), true)
 	if err != nil {
+		return err
+	}
+	if err := applyTokenRules(toks, trs, r.Pkg.Name); err != nil {
 		return err
 	}
 	r.tmpl = toks[:len(toks)-1] // drop EOF
@@ -455,12 +472,16 @@ func (p *Parser) parseProgram(units []Unit) (*Program, error) {
 			if t.Kind == TEOF {
 				break
 			}
+			var n *Node
 			if p.isCloser(t) {
-				return nil, fmt.Errorf("%s: unexpected %s (nothing to close)", t.Pos, t)
-			}
-			n, err := p.statement(true)
-			if err != nil {
-				return nil, err
+				if n = p.closerStatement(true); n == nil {
+					return nil, fmt.Errorf("%s: unexpected %s (nothing to close)", t.Pos, t)
+				}
+			} else {
+				var err error
+				if n, err = p.statement(true); err != nil {
+					return nil, err
+				}
 			}
 			p.restoreFar(farState{})
 			if u.Lib && n.Frame == nil && (n.Rule == nil || n.Rule.Syn.Kind != "struct" && !n.Rule.Syn.Top) {
@@ -609,7 +630,7 @@ func frameName(f *Frame) string {
 }
 
 func (p *Parser) elems(es []pkgfile.Elem, n *Node, b *binder) error {
-	for _, e := range es {
+	for k, e := range es {
 		t := p.tok()
 		switch {
 		case e.Lit != "":
@@ -645,7 +666,10 @@ func (p *Parser) elems(es []pkgfile.Elem, n *Node, b *binder) error {
 				return err
 			}
 			c.toks, c.start, c.end = p.toks, start, p.i
-			if err := p.constrain(e.Slot, c, b, t, fmt.Sprintf("{%s} of %s", e.Slot.Name, n.Kind)); err != nil {
+			// when the literal after the slot is there too, the source has
+			// this pattern's shape, so a wrong type is the error to report
+			hard := k+1 < len(es) && es[k+1].Lit != "" && p.isLit(p.tok(), es[k+1].Lit)
+			if err := p.constrain(e.Slot, c, b, t, fmt.Sprintf("{%s} of %s", e.Slot.Name, n.Kind), hard); err != nil {
 				return err
 			}
 			n.setSlot(e.Slot.Name, c)
@@ -658,11 +682,18 @@ func (p *Parser) elems(es []pkgfile.Elem, n *Node, b *binder) error {
 }
 
 // constrain checks a parsed slot against its pattern's type constraint.
-func (p *Parser) constrain(s *pkgfile.Slot, c *Node, b *binder, t Token, what string) error {
+// With hard, a mismatch is a definite error (see failHard).
+func (p *Parser) constrain(s *pkgfile.Slot, c *Node, b *binder, t Token, what string, hard bool) error {
+	fail := func(format string, args ...any) error {
+		if hard {
+			return p.failHard(t.Pos, format, args...)
+		}
+		return p.fail(t, format, args...)
+	}
 	switch s.Kind {
 	case "expr", "place":
 		if c.Type == "" && s.Arg != "any" {
-			return p.fail(t, "%s needs a value, but this has none", what)
+			return fail("%s needs a value, but this has none", what)
 		}
 	case "var", "type":
 	default:
@@ -677,7 +708,7 @@ func (p *Parser) constrain(s *pkgfile.Slot, c *Node, b *binder, t Token, what st
 		if want == "?" || strings.Contains(s.Arg, "[") || strings.Contains(s.Arg, "ptr") || IsFn(s.Arg) {
 			want = describeConstraint(s.Arg, want)
 		}
-		return p.fail(t, "%s must be %s, but it is %s", what, want, describeType(c.Type))
+		return fail("%s must be %s, but it is %s", what, want, describeType(c.Type))
 	}
 	return nil
 }
@@ -745,16 +776,56 @@ func (p *Parser) fieldName() (Token, error) {
 	return t, nil
 }
 
+// ident reads a name. Keywords are names too, where the grammar expects a
+// name, except those that are a whole expression on their own (true).
 func (p *Parser) ident(what string) (Token, error) {
 	t := p.tok()
 	if t.Kind != TIdent {
 		return t, p.fail(t, "expected %s, found %s", what, t)
 	}
-	if p.L.keywords[t.Text] {
+	if p.L.alone[t.Text] {
 		return t, p.fail(t, "expected %s, found keyword %s", what, t)
 	}
 	p.i++
 	return t, nil
+}
+
+// known reports whether a word names something in scope: a variable, a
+// constant or a function.
+func (p *Parser) known(name string) bool {
+	if p.lookup(name) != nil {
+		return true
+	}
+	if _, ok := p.consts[name]; ok {
+		return true
+	}
+	if _, ok := p.sigs[name]; ok {
+		return true
+	}
+	_, ok := p.funcs[name]
+	return ok
+}
+
+// closerStatement handles a block closer at the start of a line, such as
+// end or next: if the word names something and more follows on the line
+// (end = 3, next(x)), it is tried as a statement. It returns nil if the
+// word closes the block.
+func (p *Parser) closerStatement(top bool) *Node {
+	t := p.tok()
+	if t.Kind != TIdent || !p.known(t.Text) {
+		return nil
+	}
+	if k := p.toks[p.i+1].Kind; k == TNewline || k == TEOF {
+		return nil
+	}
+	s, far := p.save(), p.saveFar()
+	n, err := p.statement(top)
+	if err != nil {
+		p.restore(s)
+		p.restoreFar(far)
+		return nil
+	}
+	return n
 }
 
 func (p *Parser) slot(s *pkgfile.Slot, parent *Node) (*Node, error) {
@@ -1112,8 +1183,16 @@ func (p *Parser) block() (*Node, error) {
 	for {
 		p.skipNL()
 		t := p.tok()
-		if t.Kind == TEOF || p.isCloser(t) {
+		if t.Kind == TEOF {
 			return n, nil
+		}
+		if p.isCloser(t) {
+			s := p.closerStatement(false)
+			if s == nil {
+				return n, nil
+			}
+			n.Items = append(n.Items, s)
+			continue
 		}
 		s, err := p.statement(false)
 		if err != nil {
@@ -1167,10 +1246,10 @@ func (p *Parser) expr(minPrec int) (*Node, error) {
 			cand := p.node(r.Kind, t.Pos)
 			cand.Rule, cand.start, cand.end = r, start, p.i
 			b := p.binder(cand)
-			err := p.constrain(ls, left, b, t, fmt.Sprintf("left side of '%s'", t.Text))
+			err := p.constrain(ls, left, b, t, fmt.Sprintf("left side of '%s'", t.Text), false)
 			if err == nil {
 				cand.setSlot(ls.Name, left)
-				err = p.constrain(rs, right, b, rt, fmt.Sprintf("right side of '%s'", t.Text))
+				err = p.constrain(rs, right, b, rt, fmt.Sprintf("right side of '%s'", t.Text), false)
 			}
 			if err == nil {
 				cand.setSlot(rs.Name, right)
@@ -1208,7 +1287,7 @@ func (p *Parser) postfix(rules []*Rule, left *Node, start int) (*Node, error) {
 		n.Rule, n.start = r, start
 		b := p.binder(n)
 		ls := r.Pat.Elems[0].Slot
-		err := p.constrain(ls, left, b, t, fmt.Sprintf("the left side of '%s'", t.Text))
+		err := p.constrain(ls, left, b, t, fmt.Sprintf("the left side of '%s'", t.Text), false)
 		if err == nil {
 			n.setSlot(ls.Name, left)
 			err = p.elems(r.Pat.Elems[1:], n, b)
@@ -1323,7 +1402,7 @@ func (p *Parser) prefix() (*Node, error) {
 				n := p.node(r.Kind, t.Pos)
 				n.Rule, n.start, n.end = r, start, p.i
 				b := p.binder(n)
-				err := p.constrain(sl, operand, b, ot, fmt.Sprintf("operand of '%s'", t.Text))
+				err := p.constrain(sl, operand, b, ot, fmt.Sprintf("operand of '%s'", t.Text), false)
 				if err == nil && sl.Kind == "place" && !isPlace(operand) {
 					err = p.fail(ot, "the operand of '%s' can't have its address taken", t.Text)
 				}
@@ -1375,7 +1454,9 @@ func (p *Parser) prefix() (*Node, error) {
 		n.Str, n.Type, n.start, n.end = t.Text, "str", start, p.i
 		return n, nil
 	case TIdent:
-		if p.L.keywords[t.Text] {
+		// a keyword is a name where its own syntax doesn't apply, if it
+		// names something declared before this point
+		if p.L.keywords[t.Text] && !p.known(t.Text) {
 			if ruleFar.err != nil && len(p.L.exprLit[t.Text]) > 0 {
 				p.restoreFar(ruleFar)
 				return nil, ruleFar.err

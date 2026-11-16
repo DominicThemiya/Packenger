@@ -2,6 +2,7 @@ package lang
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -13,10 +14,11 @@ import (
 // package reserving a word a program needs) can be used together without
 // editing either. See registry/resolve.pkg.
 //
-// Keyword renames change the scope's syntax patterns before the grammar is
-// built (resolvePatterns); name renames, and keyword renames in library
-// code, change the lexed tokens of the packages that can see the scope
-// (resolveCode).
+// Keyword and symbol renames change the scope's syntax patterns before the
+// grammar is built (resolvePatterns), and the tokens of the library code
+// and expand templates of the packages that can see the scope, as they are
+// lexed (tokenRules). Name renames change the lexed library code of the
+// packages that can see the scope (resolveCode).
 
 // ResolveInfo is one applied rule, for the -vb report.
 type ResolveInfo struct {
@@ -90,7 +92,7 @@ func resolvePatterns(front map[string]*pkgfile.File) (map[*pkgfile.Rename]int, e
 		if len(scope) == 0 {
 			return nil, fmt.Errorf("%s: no package in %s is loaded; add it to the needs line", ra.where(), r.Scope)
 		}
-		if r.Kind != "keyword" {
+		if r.Kind != "keyword" && r.Kind != "symbol" {
 			continue
 		}
 		for _, name := range scope {
@@ -103,10 +105,96 @@ func resolvePatterns(front map[string]*pkgfile.File) (map[*pkgfile.Rename]int, e
 			}
 		}
 		if counts[r] == 0 {
-			return nil, fmt.Errorf("%s: no syntax pattern in %s uses the keyword '%s'", ra.where(), r.Scope, r.Old)
+			return nil, fmt.Errorf("%s: no syntax pattern in %s uses the %s '%s'", ra.where(), r.Scope, r.Kind, r.Old)
 		}
 	}
 	return counts, nil
+}
+
+// A tokenRule is a keyword or symbol rename as it applies to one package's
+// code and expand template. clash names a package outside the scope that
+// the package can also see and whose syntax uses the old word or symbol:
+// then an old token there is ambiguous.
+type tokenRule struct {
+	r     *pkgfile.Rename
+	owner string // the package with the rule
+	clash string
+}
+
+// tokenRules lists, for each loaded package, the keyword and symbol renames
+// that apply to its code and template: those whose scope it can see.
+func tokenRules(front map[string]*pkgfile.File) map[string][]tokenRule {
+	rs := rules(front)
+	out := map[string][]tokenRule{}
+	for _, name := range sortedKeys(front) {
+		visible := sortedKeys(sees(front, name))
+		for _, ra := range rs {
+			r := ra.r
+			if r.Kind != "keyword" && r.Kind != "symbol" {
+				continue
+			}
+			if !slices.ContainsFunc(visible, func(v string) bool { return inScope(v, r.Scope) }) {
+				continue
+			}
+			tr := tokenRule{r: r, owner: ra.f.Name}
+			if !inScope(name, r.Scope) {
+				for _, v := range visible {
+					if f := front[v]; f != nil && !inScope(v, r.Scope) && usesLiteral(f, r.Old) {
+						tr.clash = v
+						break
+					}
+				}
+			}
+			out[name] = append(out[name], tr)
+		}
+	}
+	return out
+}
+
+// usesLiteral reports whether a package's syntax patterns use a word or
+// symbol.
+func usesLiteral(f *pkgfile.File, lit string) bool {
+	for _, s := range f.Syntax {
+		for _, p := range s.Patterns {
+			if slices.Contains(p.Literals(), lit) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// oldSymbols are the symbols that symbol renames take away: code that can
+// see their scope is lexed with them, then renamed.
+func oldSymbols(trs []tokenRule) []string {
+	var out []string
+	for _, tr := range trs {
+		if tr.r.Kind == "symbol" {
+			out = append(out, tr.r.Old)
+		}
+	}
+	return out
+}
+
+// applyTokenRules renames keywords and symbols in toks, the code or
+// template of package name.
+func applyTokenRules(toks []Token, trs []tokenRule, name string) error {
+	for _, tr := range trs {
+		kind := TIdent
+		if tr.r.Kind == "symbol" {
+			kind = TPunct
+		}
+		for i, t := range toks {
+			if t.Kind != kind || t.Text != tr.r.Old {
+				continue
+			}
+			if tr.clash != "" {
+				return fmt.Errorf("%s: '%s' in %s could mean %s's or the one %s renames; give one of them another name", t.Pos, t.Text, name, tr.clash, tr.owner)
+			}
+			toks[i].Text = tr.r.New
+		}
+	}
+	return nil
 }
 
 // definers are the keywords that start a definition: a pattern's first
@@ -193,14 +281,8 @@ func resolveCode(front map[string]*pkgfile.File, code map[string][]Token, patter
 	for _, ra := range rs {
 		r := ra.r
 		info := ResolveInfo{Where: fmt.Sprintf("%s:%d", ra.f.Name, r.Line), Rule: r.String()}
-		if r.Kind == "keyword" {
-			for _, name := range users(r.Scope) {
-				for i, t := range code[name] {
-					if t.Kind == TIdent && t.Text == r.Old {
-						code[name][i].Text = r.New
-					}
-				}
-			}
+		if r.Kind == "keyword" || r.Kind == "symbol" {
+			// already applied as the code was lexed (tokenRules)
 			info.Count, info.Unit = patterns[r], "pattern"
 			infos = append(infos, info)
 			continue

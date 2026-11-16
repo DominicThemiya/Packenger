@@ -1,0 +1,4 @@
+doc A symbol rule with a word in it.
+resolve
+  rename symbol 'ab' in x to '+'
+end

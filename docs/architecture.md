@@ -39,8 +39,8 @@ instruction comes from a package.
    parsed ahead of the program file.
 2. **The grammar** is assembled from every loaded syntax package:
    statements and expression forms indexed by their first literal, infix
-   and prefix operator tables with precedences, the set of reserved
-   keywords, the symbols the lexer accepts, and the block "closers" (the
+   and prefix operator tables with precedences, the set of
+   keywords (names too, where their syntax doesn't apply), the symbols the lexer accepts, and the block "closers" (the
    literals that end a block, such as `end` and `else`).
 3. **Parsing** matches patterns. Statements starting with a keyword are tried
    first, then slot-first patterns, longest first. Expressions use

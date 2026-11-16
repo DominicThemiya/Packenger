@@ -19,7 +19,7 @@ PKC=$PWD/pkc go test ./bootstrap/
 Its packages use short prefixes, since library names share one
 namespace: `u_` (util), `fe_` (fetch), `lk_` (lock files), `pf_` (package files), `lx_`
 (lexer), `lg_` (grammar), `ty_` (types), `ps_` (parser), `cg_` (codegen), `dr_` (driver), `ui_` (errors), `rs_` (resolve sections), `rp_` (the `-vb`
-report), `tr_` (tree) and `pkc_` (the command line).
+report), `tr_` (tree), `wy_` (why) and `pkc_` (the command line).
 
 ## Packages
 
@@ -39,4 +39,5 @@ report), `tr_` (tree) and `pkc_` (the command line).
 | [pkc/ui](pkc/ui.md) | pkc: errors and the -vb report on stderr (port of internal/ui). |
 | [pkc/report](pkc/report.md) | pkc: the -vb build report (port of internal/ui's Reporter). |
 | [pkc/tree](pkc/tree.md) | pkc: packenger tree — which packages built the program (port of Result.Tree). |
+| [pkc/why](pkc/why.md) | pkc: packenger why — why a package is part of a program's build (port of Result.Why). |
 | [pkc/main](pkc/main.md) | pkc: the command line — the same commands, flags and messages as the Go compiler. |

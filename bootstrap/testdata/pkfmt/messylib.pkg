@@ -1,0 +1,13 @@
+doc A package whose code needs formatting; its doc   
+  stays exactly as it is.   
+needs std
+code
+  fn twice( x:int )->int
+  return x*2
+      end
+
+
+  fn  thrice(x:int)->int
+    return x*3
+  end
+

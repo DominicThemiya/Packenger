@@ -70,7 +70,7 @@ use acme          // from localhost:6464
 ## Resolving conflicts
 
 Packages from different trees can clash: two trucks define `fs_list`, or
-one reserves a word (`in`) that a program needs as a name. Rather than
+both define the operator `<>`, or a word is wanted spelled differently. Rather than
 editing either, publish a small package with a `resolve` section and use
 it next to them:
 

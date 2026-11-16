@@ -24,6 +24,10 @@ Usage:
   packenger run   <file.pkg> [-- args]  compile and run
   packenger asm   <file.pkg> [-o file]  print the generated NASM
   packenger tree  <file.pkg>            show which packages built the program
+  packenger why   <file.pkg> <package>  explain why a package is part of the
+                                        program's build
+  packenger test  [file.pkg|dir ...]    run test programs (default: tests/) and
+                                        report which pass: exit status 0
   packenger lock  <file.pkg>            pin the exact version of every package
                                         the program is built from, in
                                         <file>.lock (see docs/publishing.md)
@@ -86,8 +90,17 @@ func run(args []string, srcOut *string) (int, error) {
 	if err := fs.Parse(flagsFirst(rest, map[string]bool{"v": true, "vb": true})); err != nil {
 		return 1, err
 	}
+	if cmd == "test" {
+		explicit := map[string]bool{}
+		fs.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
+		return runTests(fs.Args(), *target, *regURL, explicit["registry"])
+	}
 	stage := ""
-	if cmd == "dump" {
+	if cmd == "why" {
+		if fs.NArg() != 2 {
+			return 1, fmt.Errorf("usage: packenger why <file.pkg> <package>")
+		}
+	} else if cmd == "dump" {
 		if fs.NArg() != 2 {
 			return 1, fmt.Errorf("usage: packenger dump tokens|ast|asm <file.pkg>, or packenger dump pkg <package>")
 		}
@@ -99,6 +112,9 @@ func run(args []string, srcOut *string) (int, error) {
 		return 1, fmt.Errorf("%s expects one source file (see packenger --help)", cmd)
 	}
 	src := fs.Arg(fs.NArg() - 1)
+	if cmd == "why" {
+		src = fs.Arg(0)
+	}
 	*srcOut = src
 
 	exe := *out
@@ -194,6 +210,12 @@ func run(args []string, srcOut *string) (int, error) {
 	case "tree":
 		done("")
 		res.Tree(os.Stdout, *target)
+		return 0, nil
+	case "why":
+		done("")
+		if err := res.Why(os.Stdout, fs.Arg(1), *target); err != nil {
+			return 1, err
+		}
 		return 0, nil
 	case "lock":
 		text := registry.FormatLock(filepath.Base(src), *regURL, routes, sums)
