@@ -28,6 +28,9 @@ end stops the program with `rt/vec: index out of range`.
 | `vec_pop(v: ptr Vec) -> int` | remove and return the last item |
 | `vec_last(v: ptr Vec) -> int` | the last item |
 | `vec_clear(v: ptr Vec)` | remove every item (keeps the storage) |
+| `vec_push_str(v: ptr Vec, s: str)` | `vec_push(v, s as int)` |
+| `vec_get_str(v: ptr Vec, i: int) -> str` | `vec_get(v, i) as str` |
+| `vec_has_str(v: ptr Vec, s: str) -> bool` | does `v` hold a string equal to `s` |
 
 ## Needs
 
@@ -94,8 +97,25 @@ end
 fn vec_clear(v: ptr Vec)
   v.len = 0
 end
+
+fn vec_push_str(v: ptr Vec, s: str)
+  vec_push(v, s as int)
+end
+
+fn vec_get_str(v: ptr Vec, i: int) -> str
+  return vec_get(v, i) as str
+end
+
+fn vec_has_str(v: ptr Vec, s: str) -> bool
+  for i = 0 to vec_len(v) - 1
+    if vec_get(v, i) as str == s
+      return true
+    end
+  end
+  return false
+end
 ```
 
 ## Used by
 
-[rt/fs](fs.md), [rt/map](map.md), [rt/os](os.md), [rt/sort](sort.md)
+[rt/fs](fs.md), [rt/map](map.md), [rt/os](os.md), [rt/sort](sort.md), [rt/str](str.md)

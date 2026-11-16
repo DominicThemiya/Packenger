@@ -25,7 +25,7 @@ fn tr_count(n: ptr PNode, used: ptr Map, expanded: ptr Map)
   map_set(used, n.kind, map_get(used, n.kind) + 1)
   if n.expanded != null
     for i = 0 to vec_len(n.expanded) - 1
-      map_set(expanded, u_get(n.expanded, i), 1)
+      map_set(expanded, vec_get_str(n.expanded, i), 1)
     end
   end
   for i = 0 to ps_nslots(n) - 1
@@ -43,17 +43,17 @@ fn tr_back(b: ptr StrBuf, r: ptr DrResult, target: str, prefix: str, kind: str, 
   end
   let incs = cg_includes(f)
   for i = 0 to vec_len(incs) - 1
-    let inc = u_get(incs, i)
+    let inc = vec_get_str(incs, i)
     let branch = "├── "
     let more = "│   "
     if i == vec_len(incs) - 1
       branch = "└── "
       more = "    "
     end
-    sb_add(b, u_cat4(prefix, branch, "@", u_cat4(target, "/", inc, "\n")))
+    sb_add(b, str_concat4(prefix, branch, "@", str_concat4(target, "/", inc, "\n")))
     if !map_has(seen, inc)
       map_set(seen, inc, 1)
-      tr_back(b, r, target, u_cat(prefix, more), inc, seen)
+      tr_back(b, r, target, str_concat(prefix, more), inc, seen)
     end
   end
 end
@@ -66,50 +66,50 @@ fn tr_tree(r: ptr DrResult, file: str, target: str) -> str
     tr_count(ps_nd(r.prog.funcs, i), used, expanded)
   end
   let b = sb_new()
-  sb_add(b, u_cat(file, "\n"))
+  sb_add(b, str_concat(file, "\n"))
   let labels = vec_new()
   let kinds = vec_new()
   let notes = vec_new()
   let names = vec_new()
   for i = 0 to map_len(r.front.front) - 1
-    u_push(names, map_key(r.front.front, i))
+    vec_push_str(names, map_key(r.front.front, i))
   end
   sort_strs(names)
   for i = 0 to vec_len(names) - 1
-    let n = u_get(names, i)
+    let n = vec_get_str(names, i)
     let f = map_get(r.front.front, n) as ptr PfFile
     if f.is_truck
       continue
     end
     let k = pf_kind(n)
     if map_has(expanded, n)
-      u_push(labels, n)
-      u_push(kinds, "")
-      u_push(notes, "expands into other packages")
+      vec_push_str(labels, n)
+      vec_push_str(kinds, "")
+      vec_push_str(notes, "expands into other packages")
     elif map_get(used, k) > 0
-      u_push(labels, n)
-      u_push(kinds, k)
-      u_push(notes, "")
+      vec_push_str(labels, n)
+      vec_push_str(kinds, k)
+      vec_push_str(notes, "")
     end
   end
   if map_get(used, "int") > 0
-    u_push(labels, "(integer)")
-    u_push(kinds, "int")
-    u_push(notes, "")
+    vec_push_str(labels, "(integer)")
+    vec_push_str(kinds, "int")
+    vec_push_str(notes, "")
   end
   if map_get(used, "str") > 0
-    u_push(labels, "(string)")
-    u_push(kinds, "str")
-    u_push(notes, "")
+    vec_push_str(labels, "(string)")
+    vec_push_str(kinds, "str")
+    vec_push_str(notes, "")
   end
   if map_get(used, "var") > 0
-    u_push(labels, "(variable)")
-    u_push(kinds, "var")
-    u_push(notes, "")
+    vec_push_str(labels, "(variable)")
+    vec_push_str(kinds, "var")
+    vec_push_str(notes, "")
   end
-  u_push(labels, "(program)")
-  u_push(kinds, "program")
-  u_push(notes, "")
+  vec_push_str(labels, "(program)")
+  vec_push_str(kinds, "program")
+  vec_push_str(notes, "")
   for i = 0 to vec_len(labels) - 1
     let branch = "├── "
     let more = "│   "
@@ -117,12 +117,12 @@ fn tr_tree(r: ptr DrResult, file: str, target: str) -> str
       branch = "└── "
       more = "    "
     end
-    let label = rp_pad(u_get(labels, i), 16)
-    if u_get(notes, i) != ""
-      sb_add(b, u_cat4(branch, label, " ", u_cat(u_get(notes, i), "\n")))
+    let label = rp_pad(vec_get_str(labels, i), 16)
+    if vec_get_str(notes, i) != ""
+      sb_add(b, str_concat4(branch, label, " ", str_concat(vec_get_str(notes, i), "\n")))
     else
-      sb_add(b, u_cat4(branch, label, " → ", u_cat4(target, "/", u_get(kinds, i), "\n")))
-      tr_back(b, r, target, more, u_get(kinds, i), map_new())
+      sb_add(b, str_concat4(branch, label, " → ", str_concat4(target, "/", vec_get_str(kinds, i), "\n")))
+      tr_back(b, r, target, more, vec_get_str(kinds, i), map_new())
     end
   end
   return sb_str(b)

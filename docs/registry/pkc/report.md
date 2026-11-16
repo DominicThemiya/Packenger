@@ -74,32 +74,32 @@ fn rp_tenths(num: int, den: int) -> str
   if r * 2 > den || r * 2 == den && q % 2 == 1
     q = q + 1
   end
-  return u_cat3(str_from_int(q / 10), ".", str_from_int(q % 10))
+  return str_concat3(str_from_int(q / 10), ".", str_from_int(q % 10))
 end
 
 fn rp_bytes(n: int) -> str
   if n < 1024
-    return u_cat(str_from_int(n), " B")
+    return str_concat(str_from_int(n), " B")
   elif n < 1048576
-    return u_cat(rp_tenths(n, 1024), " KB")
+    return str_concat(rp_tenths(n, 1024), " KB")
   end
-  return u_cat(rp_tenths(n, 1048576), " MB")
+  return str_concat(rp_tenths(n, 1048576), " MB")
 end
 
 fn rp_dur(ns: int) -> str
   if ns < 1000000
-    return u_cat(str_from_int(ns / 1000), " µs")
+    return str_concat(str_from_int(ns / 1000), " µs")
   elif ns < 10000000000
-    return u_cat(str_from_int(ns / 1000000), " ms")
+    return str_concat(str_from_int(ns / 1000000), " ms")
   end
-  return u_cat(rp_tenths(ns, 1000000000), " s")
+  return str_concat(rp_tenths(ns, 1000000000), " s")
 end
 
 fn rp_plural(n: int, one: str, many: str) -> str
   if n == 1
-    return u_cat("1 ", one)
+    return str_concat("1 ", one)
   end
-  return u_cat3(str_from_int(n), " ", many)
+  return str_concat3(str_from_int(n), " ", many)
 end
 
 fn rp_bar(d: int, slowest: int, width: int) -> str
@@ -135,7 +135,7 @@ fn rp_c(s: str, codes: str) -> str
 end
 
 fn rp_line(s: str)
-  io_err(u_cat(s, "\n"))
+  io_err(str_concat(s, "\n"))
 end
 
 // ---------------------------------------------------------------- events
@@ -160,22 +160,22 @@ fn rp_phase(name: str)
     what = "the target's toolchain builds the executable"
   end
   rp_line("")
-  rp_line(u_cat4("  ", rp_c(str_from_int(rp_step), u_cat(UI_BOLD, UI_BLUE)), " ", u_cat3(rp_c(rp_pad(title, 10), UI_BOLD), "  ", rp_c(what, UI_DIM))))
+  rp_line(str_concat4("  ", rp_c(str_from_int(rp_step), str_concat(UI_BOLD, UI_BLUE)), " ", str_concat3(rp_c(rp_pad(title, 10), UI_BOLD), "  ", rp_c(what, UI_DIM))))
 end
 
 fn rp_header(cmd: str, src: str, out: str, registry: str, target: str)
   rp_on = true
   rp_color = term_colors(2)
   rp_start = time_now()
-  let reg = u_after(u_after(registry, "https://"), "http://")
-  let title = u_cat4(rp_c("packenger", u_cat(UI_BOLD, UI_MAGENTA)), " ", rp_c(cmd, UI_BOLD), u_cat(" ", src))
+  let reg = str_trim_prefix(str_trim_prefix(registry, "https://"), "http://")
+  let title = str_concat4(rp_c("packenger", str_concat(UI_BOLD, UI_MAGENTA)), " ", rp_c(cmd, UI_BOLD), str_concat(" ", src))
   if out != ""
-    title = u_cat3(title, rp_c(" → ", UI_DIM), out)
+    title = str_concat3(title, rp_c(" → ", UI_DIM), out)
   end
   rp_line("")
-  rp_line(u_cat("  ", title))
-  rp_line(u_cat4("  ", rp_c(rp_pad("registry", 9), UI_DIM), " ", reg))
-  rp_line(u_cat4("  ", rp_c(rp_pad("target", 9), UI_DIM), " ", target))
+  rp_line(str_concat("  ", title))
+  rp_line(str_concat4("  ", rp_c(rp_pad("registry", 9), UI_DIM), " ", reg))
+  rp_line(str_concat4("  ", rp_c(rp_pad("target", 9), UI_DIM), " ", target))
 end
 
 // rp_route notes that the packages under prefix come from their own registry.
@@ -183,8 +183,8 @@ fn rp_route(prefix: str, registry: str)
   if !rp_on
     return
   end
-  let reg = u_after(u_after(registry, "https://"), "http://")
-  rp_line(u_cat4("  ", rp_c(rp_pad("route", 9), UI_DIM), " ", u_cat4(prefix, " ", rp_c("→", UI_DIM), u_cat(" ", reg))))
+  let reg = str_trim_prefix(str_trim_prefix(registry, "https://"), "http://")
+  rp_line(str_concat4("  ", rp_c(rp_pad("route", 9), UI_DIM), " ", str_concat4(prefix, " ", rp_c("→", UI_DIM), str_concat(" ", reg))))
 end
 
 // rp_lock notes that the build is checked against a lock file.
@@ -192,14 +192,14 @@ fn rp_lock(path: str, packages: int)
   if !rp_on
     return
   end
-  rp_line(u_cat4("  ", rp_c(rp_pad("lock", 9), UI_DIM), u_cat3(" ", path, " "), rp_c(u_cat3("· ", rp_plural(packages, "package", "packages"), " pinned"), UI_DIM)))
+  rp_line(str_concat4("  ", rp_c(rp_pad("lock", 9), UI_DIM), str_concat3(" ", path, " "), rp_c(str_concat3("· ", rp_plural(packages, "package", "packages"), " pinned"), UI_DIM)))
 end
 
 fn rp_uses(uses: ptr Vec)
   if !rp_on
     return
   end
-  rp_line(u_cat4("  ", rp_c(rp_pad("uses", 9), UI_DIM), " ", rp_c(u_join(uses, ", "), UI_CYAN)))
+  rp_line(str_concat4("  ", rp_c(rp_pad("uses", 9), UI_DIM), " ", rp_c(str_join(uses, ", "), UI_CYAN)))
 end
 
 // one downloaded package, for rp_round
@@ -222,11 +222,11 @@ fn rp_round(phase: str, round: int, fetches: ptr Vec)
       slowest = f.took
     end
   end
-  let title = u_cat3("round ", str_from_int(round), " · 1 download")
+  let title = str_concat3("round ", str_from_int(round), " · 1 download")
   if vec_len(fetches) != 1
-    title = u_cat4("round ", str_from_int(round), " · ", u_cat(str_from_int(vec_len(fetches)), " downloads in parallel"))
+    title = str_concat4("round ", str_from_int(round), " · ", str_concat(str_from_int(vec_len(fetches)), " downloads in parallel"))
   end
-  rp_line(u_cat("     ", rp_c(title, UI_DIM)))
+  rp_line(str_concat("     ", rp_c(title, UI_DIM)))
   for i = 0 to vec_len(fetches) - 1
     let f = vec_get(fetches, i) as ptr RpFetch
     let b = sb_new()
@@ -251,8 +251,8 @@ fn rp_phase_done(phase: str, packages: int, bytes: int, took: int)
     return
   end
   rp_phase(phase)
-  let msg = u_cat4(rp_plural(packages, "package", "packages"), " · ", rp_bytes(bytes), u_cat(" · ", rp_dur(took)))
-  rp_line(u_cat4("     ", rp_c("✓", UI_GREEN), " ", rp_c(msg, UI_GREEN)))
+  let msg = str_concat4(rp_plural(packages, "package", "packages"), " · ", rp_bytes(bytes), str_concat(" · ", rp_dur(took)))
+  rp_line(str_concat4("     ", rp_c("✓", UI_GREEN), " ", rp_c(msg, UI_GREEN)))
 end
 
 fn rp_grammar(packages: int, forms: int, infix: int, prefix: int, keywords: ptr Vec, symbols: ptr Vec)
@@ -260,9 +260,9 @@ fn rp_grammar(packages: int, forms: int, infix: int, prefix: int, keywords: ptr 
     return
   end
   rp_phase("grammar")
-  rp_line(u_cat4("     ", rp_plural(packages, "syntax package", "syntax packages"), " → ", u_cat4(rp_plural(forms, "form", "forms"), " · ", rp_plural(infix, "infix operator", "infix operators"), u_cat(" · ", rp_plural(prefix, "prefix operator", "prefix operators")))))
-  rp_line(u_cat4("     ", rp_c(rp_pad("keywords", 9), UI_DIM), " ", rp_c(u_join(keywords, " "), UI_MAGENTA)))
-  rp_line(u_cat4("     ", rp_c(rp_pad("symbols", 9), UI_DIM), " ", rp_c(u_join(symbols, " "), UI_YELLOW)))
+  rp_line(str_concat4("     ", rp_plural(packages, "syntax package", "syntax packages"), " → ", str_concat4(rp_plural(forms, "form", "forms"), " · ", rp_plural(infix, "infix operator", "infix operators"), str_concat(" · ", rp_plural(prefix, "prefix operator", "prefix operators")))))
+  rp_line(str_concat4("     ", rp_c(rp_pad("keywords", 9), UI_DIM), " ", rp_c(str_join(keywords, " "), UI_MAGENTA)))
+  rp_line(str_concat4("     ", rp_c(rp_pad("symbols", 9), UI_DIM), " ", rp_c(str_join(symbols, " "), UI_YELLOW)))
 end
 
 // rp_resolved reports one applied rule of a resolve section
@@ -271,7 +271,7 @@ fn rp_resolved(rule: str, count: int, unit: str, at: str)
     return
   end
   rp_phase("parse")
-  rp_line(u_cat4("     ", rp_c(rp_pad("resolve", 12), UI_CYAN), " ", u_cat3(rule, " ", rp_c(u_cat4("· ", rp_plural(count, unit, u_cat(unit, "s")), " · ", at), UI_DIM))))
+  rp_line(str_concat4("     ", rp_c(rp_pad("resolve", 12), UI_CYAN), " ", str_concat3(rule, " ", rp_c(str_concat4("· ", rp_plural(count, unit, str_concat(unit, "s")), " · ", at), UI_DIM))))
 end
 
 fn rp_parsed_file(file: str, tokens: int, nodes: int, statements: int, took: int)
@@ -279,14 +279,14 @@ fn rp_parsed_file(file: str, tokens: int, nodes: int, statements: int, took: int
     return
   end
   rp_phase("parse")
-  rp_line(u_cat4("     ", rp_c(rp_pad(file, 12), UI_CYAN), " ", u_cat4(rp_plural(tokens, "token", "tokens"), " · ", rp_plural(nodes, "node", "nodes"), u_cat4(" · ", rp_plural(statements, "top-level statement", "top-level statements"), " · ", rp_dur(took)))))
+  rp_line(str_concat4("     ", rp_c(rp_pad(file, 12), UI_CYAN), " ", str_concat4(rp_plural(tokens, "token", "tokens"), " · ", rp_plural(nodes, "node", "nodes"), str_concat4(" · ", rp_plural(statements, "top-level statement", "top-level statements"), " · ", rp_dur(took)))))
 end
 
 fn rp_parsed_fn(name: str, params: int, locals: int, frame: int)
   if !rp_on
     return
   end
-  rp_line(u_cat4("     ", rp_c(rp_pad(u_cat("fn ", name), 12), UI_CYAN), " ", u_cat4(rp_plural(params, "param", "params"), " · ", rp_plural(locals, "local", "locals"), u_cat4(" · ", rp_bytes(frame), " frame", ""))))
+  rp_line(str_concat4("     ", rp_c(rp_pad(str_concat("fn ", name), 12), UI_CYAN), " ", str_concat4(rp_plural(params, "param", "params"), " · ", rp_plural(locals, "local", "locals"), str_concat4(" · ", rp_bytes(frame), " frame", ""))))
 end
 
 // rp_emitted reports the NASM size and each emit variant used; chosen
@@ -296,16 +296,16 @@ fn rp_emitted(lines: int, took: int, chosen: ptr Map)
     return
   end
   rp_phase("emit")
-  rp_line(u_cat4("     ", rp_plural(lines, "line", "lines"), " of NASM · ", rp_dur(took)))
+  rp_line(str_concat4("     ", rp_plural(lines, "line", "lines"), " of NASM · ", rp_dur(took)))
   // sort by package, then section + when
   let keys = vec_new()
   for i = 0 to map_len(chosen) - 1
-    u_push(keys, map_key(chosen, i))
+    vec_push_str(keys, map_key(chosen, i))
   end
   for i = 1 to vec_len(keys) - 1
-    let x = u_get(keys, i)
+    let x = vec_get_str(keys, i)
     let j = i - 1
-    while j >= 0 && rp_variant_less(x, u_get(keys, j))
+    while j >= 0 && rp_variant_less(x, vec_get_str(keys, j))
       vec_set(keys, j + 1, vec_get(keys, j))
       j = j - 1
     end
@@ -313,37 +313,37 @@ fn rp_emitted(lines: int, took: int, chosen: ptr Map)
   end
   let width = 0
   for i = 0 to vec_len(keys) - 1
-    let parts = u_split(u_get(keys, i), 0 as u8)
-    if rp_runes(u_get(parts, 0)) > width
-      width = rp_runes(u_get(parts, 0))
+    let parts = str_split(vec_get_str(keys, i), 0 as u8)
+    if rp_runes(vec_get_str(parts, 0)) > width
+      width = rp_runes(vec_get_str(parts, 0))
     end
   end
   for i = 0 to vec_len(keys) - 1
-    let parts = u_split(u_get(keys, i), 0 as u8)
-    let section = u_get(parts, 1)
-    let when = u_get(parts, 2)
+    let parts = str_split(vec_get_str(keys, i), 0 as u8)
+    let section = vec_get_str(parts, 1)
+    let when = vec_get_str(parts, 2)
     let desc = section
     if when != ""
-      desc = u_trim(u_cat3(section, " when ", when))
+      desc = str_trim(str_concat3(section, " when ", when))
     end
     if desc == ""
       desc = rp_c("default", UI_DIM)
     else
       desc = rp_c(desc, UI_YELLOW)
     end
-    let count = u_cat("×", str_from_int(map_get(chosen, u_get(keys, i))))
-    rp_line(u_cat4("     ", rp_c(rp_pad(u_get(parts, 0), width + 2), UI_CYAN), " ", u_cat3(rp_lpad(count, 4), " ", desc)))
+    let count = str_concat("×", str_from_int(map_get(chosen, vec_get_str(keys, i))))
+    rp_line(str_concat4("     ", rp_c(rp_pad(vec_get_str(parts, 0), width + 2), UI_CYAN), " ", str_concat3(rp_lpad(count, 4), " ", desc)))
   end
 end
 
 fn rp_variant_less(a: str, b: str) -> bool
-  let pa = u_split(a, 0 as u8)
-  let pb = u_split(b, 0 as u8)
-  let c = str_cmp(u_get(pa, 0), u_get(pb, 0))
+  let pa = str_split(a, 0 as u8)
+  let pb = str_split(b, 0 as u8)
+  let c = str_cmp(vec_get_str(pa, 0), vec_get_str(pb, 0))
   if c != 0
     return c < 0
   end
-  return str_cmp(u_cat(u_get(pa, 1), u_get(pa, 2)), u_cat(u_get(pb, 1), u_get(pb, 2))) < 0
+  return str_cmp(str_concat(vec_get_str(pa, 1), vec_get_str(pa, 2)), str_concat(vec_get_str(pb, 1), vec_get_str(pb, 2))) < 0
 end
 
 fn rp_tool(name: str, took: int)
@@ -351,7 +351,7 @@ fn rp_tool(name: str, took: int)
     return
   end
   rp_phase("assemble")
-  rp_line(u_cat4("     ", rp_c("⚙", UI_BLUE), " ", u_cat3(rp_pad(name, 6), " ", rp_dur(took))))
+  rp_line(str_concat4("     ", rp_c("⚙", UI_BLUE), " ", str_concat3(rp_pad(name, 6), " ", rp_dur(took))))
 end
 
 fn rp_built(path: str, size: int)
@@ -359,7 +359,7 @@ fn rp_built(path: str, size: int)
     return
   end
   rp_phase("assemble")
-  rp_line(u_cat4("     ", rp_c("✓", UI_GREEN), " ", u_cat3(rp_c(path, UI_BOLD), " ", rp_c(u_cat(rp_bytes(size), " executable"), UI_DIM))))
+  rp_line(str_concat4("     ", rp_c("✓", UI_GREEN), " ", str_concat3(rp_c(path, UI_BOLD), " ", rp_c(str_concat(rp_bytes(size), " executable"), UI_DIM))))
 end
 
 fn rp_done(note: str)
@@ -367,17 +367,17 @@ fn rp_done(note: str)
     return
   end
   rp_line("")
-  let msg = u_cat3(rp_c("✓ done", u_cat(UI_BOLD, UI_GREEN)), " ", rp_c(u_cat("in ", rp_dur(time_now() - rp_start)), UI_GREEN))
+  let msg = str_concat3(rp_c("✓ done", str_concat(UI_BOLD, UI_GREEN)), " ", rp_c(str_concat("in ", rp_dur(time_now() - rp_start)), UI_GREEN))
   if note != ""
-    msg = u_cat(msg, rp_c(u_cat(" · ", note), UI_DIM))
+    msg = str_concat(msg, rp_c(str_concat(" · ", note), UI_DIM))
   end
-  rp_line(u_cat("  ", msg))
+  rp_line(str_concat("  ", msg))
   if note == "running"
     let rule = sb_new()
     for i = 1 to 60
       sb_add(rule, "─")
     end
-    rp_line(u_cat("  ", rp_c(sb_str(rule), UI_DIM)))
+    rp_line(str_concat("  ", rp_c(sb_str(rule), UI_DIM)))
   end
 end
 ```

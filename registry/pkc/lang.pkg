@@ -93,18 +93,18 @@ code
       let kind = pf_kind(f.name)
       if vec_len(f.syntax) > 0
         if lg_core_kind(kind)
-          return lg_fail(u_cat4(f.origin, ": package name ", u_quote(kind), " is reserved by the compiler"))
+          return lg_fail(str_concat4(f.origin, ": package name ", str_quote(kind), " is reserved by the compiler"))
         end
         if map_has(L.pkgs, kind)
           let other = map_get(L.pkgs, kind) as ptr PfFile
-          return lg_fail(u_cat4("two loaded packages both define ", u_quote(kind), ": ", u_cat3(other.name, " and ", f.name)))
+          return lg_fail(str_concat4("two loaded packages both define ", str_quote(kind), ": ", str_concat3(other.name, " and ", f.name)))
         end
         map_set(L.pkgs, kind, f as int)
       end
       for ti = 0 to vec_len(f.types) - 1
         let t = vec_get(f.types, ti) as ptr PfType
         if map_has(type_owner, t.name)
-          return lg_fail(u_cat4("type ", t.name, " is declared by both ", u_cat3(map_get(type_owner, t.name) as str, " and ", f.name)))
+          return lg_fail(str_concat4("type ", t.name, " is declared by both ", str_concat3(map_get(type_owner, t.name) as str, " and ", f.name)))
         end
         map_set(type_owner, t.name, f.name as int)
         map_set(L.prims, t.name, t.size)
@@ -120,7 +120,7 @@ code
           r.pat = p
           let lits = pf_literals(p)
           for li = 0 to vec_len(lits) - 1
-            let lit = u_get(lits, li)
+            let lit = vec_get_str(lits, li)
             if lg_is_word(lit)
               map_set(L.keywords, lit, 1)
             else
@@ -129,7 +129,7 @@ code
           end
           let cl = pf_closers(p)
           for ci = 0 to vec_len(cl) - 1
-            map_set(L.closers, u_get(cl, ci), 1)
+            map_set(L.closers, vec_get_str(cl, ci), 1)
           end
           let first = pf_elem(p.elems, 0)
           if s.kind == "infix" || s.kind == "prefix" || s.kind == "postfix"
@@ -148,7 +148,7 @@ code
             if o != null && vec_len(o) > 0
               let o0 = lg_rule(o, 0)
               if o0.pkg != f || o0.syn.prec != s.prec
-                return lg_fail(u_cat4(s.kind, " operator ", u_quote(op), u_cat4(" is defined by both ", o0.pkg.name, " and ", f.name)))
+                return lg_fail(str_concat4(s.kind, " operator ", str_quote(op), str_concat4(" is defined by both ", o0.pkg.name, " and ", f.name)))
               end
             end
             lg_add_rule(table, op, r)
@@ -179,7 +179,7 @@ code
       vec_set(L.stmt_slot, j + 1, x as int)
     end
     for i = 0 to map_len(punct) - 1
-      u_push(L.puncts, map_key(punct, i))
+      vec_push_str(L.puncts, map_key(punct, i))
     end
     sort_strs(L.puncts)
     if !lg_lex_all(L, L.stmt_slot) || !lg_lex_all(L, L.expr_slot)
@@ -206,7 +206,7 @@ code
     for i = 0 to vec_len(rules) - 1
       let r = lg_rule(rules, i)
       if r.pkg.expand != null && r.tmpl == null
-        let toks = lx_lex(u_join(r.pkg.expand, "\n"), u_cat(r.pkg.name, " (expand)"), L.puncts, true)
+        let toks = lx_lex(str_join(r.pkg.expand, "\n"), str_concat(r.pkg.name, " (expand)"), L.puncts, true)
         if toks == null
           return false
         end

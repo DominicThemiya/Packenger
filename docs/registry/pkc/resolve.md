@@ -46,17 +46,17 @@ global rs_counts: ptr Map
 global rs_infos: ptr Vec
 
 fn rs_key(ra: ptr RsRule) -> str
-  return u_cat3(ra.f.name, ":", str_from_int(ra.r.line))
+  return str_concat3(ra.f.name, ":", str_from_int(ra.r.line))
 end
 
 fn rs_where(ra: ptr RsRule) -> str
-  return u_cat3(ra.f.origin, ":", str_from_int(ra.r.line))
+  return str_concat3(ra.f.origin, ":", str_from_int(ra.r.line))
 end
 
 fn rs_sorted_keys(m: ptr Map) -> ptr Vec
   let out = vec_new()
   for i = 0 to map_len(m) - 1
-    u_push(out, map_key(m, i))
+    vec_push_str(out, map_key(m, i))
   end
   sort_strs(out)
   return out
@@ -68,7 +68,7 @@ fn rs_rules(front: ptr Map) -> ptr Vec
   let out = vec_new()
   let names = rs_sorted_keys(front)
   for i = 0 to vec_len(names) - 1
-    let f = map_get(front, u_get(names, i)) as ptr PfFile
+    let f = map_get(front, vec_get_str(names, i)) as ptr PfFile
     if f.resolve != null
       for k = 0 to vec_len(f.resolve) - 1
         let ra = new RsRule
@@ -82,15 +82,15 @@ fn rs_rules(front: ptr Map) -> ptr Vec
 end
 
 fn rs_in_scope(name: str, scope: str) -> bool
-  return name == scope || str_starts(name, u_cat(scope, "/"))
+  return name == scope || str_starts(name, str_concat(scope, "/"))
 end
 
 fn rs_scope_of(front: ptr Map, scope: str) -> ptr Vec
   let out = vec_new()
   let names = rs_sorted_keys(front)
   for i = 0 to vec_len(names) - 1
-    if rs_in_scope(u_get(names, i), scope)
-      u_push(out, u_get(names, i))
+    if rs_in_scope(vec_get_str(names, i), scope)
+      vec_push_str(out, vec_get_str(names, i))
     end
   end
   return out
@@ -121,19 +121,19 @@ fn rs_patterns(front: ptr Map) -> bool
   for i = 0 to vec_len(rules) - 1
     let ra = vec_get(rules, i) as ptr RsRule
     let r = ra.r
-    if !map_has(front, u_cat("resolve/", r.kind))
-      return u_fail(u_cat4(rs_where(ra), ": rename ", r.kind, u_cat4(" needs the package resolve/", r.kind, "; add 'needs resolve'", "")))
+    if !map_has(front, str_concat("resolve/", r.kind))
+      return u_fail(str_concat4(rs_where(ra), ": rename ", r.kind, str_concat4(" needs the package resolve/", r.kind, "; add 'needs resolve'", "")))
     end
     let scope = rs_scope_of(front, r.scope)
     if vec_len(scope) == 0
-      return u_fail(u_cat4(rs_where(ra), ": no package in ", r.scope, " is loaded; add it to the needs line"))
+      return u_fail(str_concat4(rs_where(ra), ": no package in ", r.scope, " is loaded; add it to the needs line"))
     end
     if r.kind != "keyword"
       continue
     end
     let count = 0
     for k = 0 to vec_len(scope) - 1
-      let f = map_get(front, u_get(scope, k)) as ptr PfFile
+      let f = map_get(front, vec_get_str(scope, k)) as ptr PfFile
       for s = 0 to vec_len(f.syntax) - 1
         let syn = vec_get(f.syntax, s) as ptr PfSyntax
         for p = 0 to vec_len(syn.patterns) - 1
@@ -144,7 +144,7 @@ fn rs_patterns(front: ptr Map) -> bool
       end
     end
     if count == 0
-      return u_fail(u_cat4(rs_where(ra), ": no syntax pattern in ", r.scope, u_cat3(" uses the keyword '", r.old, "'")))
+      return u_fail(str_concat4(rs_where(ra), ": no syntax pattern in ", r.scope, str_concat3(" uses the keyword '", r.old, "'")))
     end
     map_set(rs_counts, rs_key(ra), count)
   end
@@ -183,26 +183,26 @@ fn rs_sees(front: ptr Map, name: str) -> ptr Map
   let seen = map_new()
   map_set(seen, name, 1)
   let queue = vec_new()
-  u_push(queue, name)
+  vec_push_str(queue, name)
   let at = 0
   while at < vec_len(queue)
-    let f = map_get(front, u_get(queue, at)) as ptr PfFile
+    let f = map_get(front, vec_get_str(queue, at)) as ptr PfFile
     at = at + 1
     if f == null
       continue
     end
     let next_ = vec_new()
     for i = 0 to vec_len(f.truck) - 1
-      u_push(next_, u_cat3(f.name, "/", u_get(f.truck, i)))
+      vec_push_str(next_, str_concat3(f.name, "/", vec_get_str(f.truck, i)))
     end
     for i = 0 to vec_len(f.needs) - 1
-      u_push(next_, u_get(f.needs, i))
+      vec_push_str(next_, vec_get_str(f.needs, i))
     end
     for i = 0 to vec_len(next_) - 1
-      let n = u_get(next_, i)
+      let n = vec_get_str(next_, i)
       if !map_has(seen, n)
         map_set(seen, n, 1)
-        u_push(queue, n)
+        vec_push_str(queue, n)
       end
     end
   end
@@ -232,7 +232,7 @@ fn rs_code(front: ptr Map, code: ptr Map) -> bool
   let defs = map_new()
   let visible = map_new()
   for i = 0 to vec_len(names) - 1
-    let name = u_get(names, i)
+    let name = vec_get_str(names, i)
     let toks = map_get(code, name) as ptr Vec
     let d = map_new()
     for k = 0 to vec_len(toks) - 2
@@ -254,13 +254,13 @@ fn rs_code(front: ptr Map, code: ptr Map) -> bool
     // the packages with code that can see the scope
     let users = vec_new()
     for k = 0 to vec_len(names) - 1
-      if rs_sees_scope(map_get(visible, u_get(names, k)) as ptr Map, r.scope)
-        u_push(users, u_get(names, k))
+      if rs_sees_scope(map_get(visible, vec_get_str(names, k)) as ptr Map, r.scope)
+        vec_push_str(users, vec_get_str(names, k))
       end
     end
     if r.kind == "keyword"
       for k = 0 to vec_len(users) - 1
-        let toks = map_get(code, u_get(users, k)) as ptr Vec
+        let toks = map_get(code, vec_get_str(users, k)) as ptr Vec
         for m = 0 to vec_len(toks) - 1
           let t = lx_tok(toks, m)
           if t.kind == TK_IDENT && t.text == r.old
@@ -276,7 +276,7 @@ fn rs_code(front: ptr Map, code: ptr Map) -> bool
     // the names the scope defines that the rule matches: old -> new
     let ren = map_new()
     for k = 0 to vec_len(names) - 1
-      let name = u_get(names, k)
+      let name = vec_get_str(names, k)
       if !rs_in_scope(name, r.scope)
         continue
       end
@@ -286,15 +286,15 @@ fn rs_code(front: ptr Map, code: ptr Map) -> bool
         if r.kind == "name" && old == r.old
           map_set(ren, old, r.new_ as int)
         elif r.kind == "prefix" && str_starts(old, r.old)
-          map_set(ren, old, u_cat(r.new_, str_slice(old, len(r.old), len(old))) as int)
+          map_set(ren, old, str_concat(r.new_, str_slice(old, len(r.old), len(old))) as int)
         end
       end
     end
     if map_len(ren) == 0
-      return u_fail(u_cat4(rs_where(ra), ": nothing defined in ", r.scope, u_cat4(" matches ", r.kind, u_cat3(" '", r.old, "'"), "")))
+      return u_fail(str_concat4(rs_where(ra), ": nothing defined in ", r.scope, str_concat4(" matches ", r.kind, str_concat3(" '", r.old, "'"), "")))
     end
     for k = 0 to vec_len(users) - 1
-      let name = u_get(users, k)
+      let name = vec_get_str(users, k)
       let toks = map_get(code, name) as ptr Vec
       let seen = map_get(visible, name) as ptr Map
       for m = 0 to vec_len(toks) - 1
@@ -310,19 +310,19 @@ fn rs_code(front: ptr Map, code: ptr Map) -> bool
             let other = map_key(seen, v)
             let od = map_get(defs, other) as ptr Map
             if !rs_in_scope(other, r.scope) && od != null && map_has(od, t.text)
-              u_push(others, other)
+              vec_push_str(others, other)
             end
           end
         end
         if vec_len(others) > 0
           sort_strs(others)
-          return u_fail(u_cat4(lx_pos(t), ": ", t.text, u_cat4(" in ", name, " could mean ", u_cat4(u_get(others, 0), "'s or the one ", ra.f.name, " renames; give one of them another name"))))
+          return u_fail(str_concat4(lx_pos(t), ": ", t.text, str_concat4(" in ", name, " could mean ", str_concat4(vec_get_str(others, 0), "'s or the one ", ra.f.name, " renames; give one of them another name"))))
         end
         t.text = map_get(ren, t.text) as str
       end
     end
     for k = 0 to vec_len(names) - 1
-      let name = u_get(names, k)
+      let name = vec_get_str(names, k)
       if rs_in_scope(name, r.scope)
         let d = map_get(defs, name) as ptr Map
         let fresh = map_new()

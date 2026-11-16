@@ -2,7 +2,7 @@
 
 # rt/str
 
-> Strings: slicing, searching, joining, numbers, and a string builder.
+> Strings: slicing, searching, splitting, joining, quoting, numbers, and a string builder.
 
 truck [rt](../rt.md) · [source](../../../registry/rt/str.pkg)
 
@@ -38,15 +38,33 @@ print sb_str(b)                        // x = 7
 | `str_parse_int(s: str, ok: ptr bool) -> int` | parse an optionally negative decimal; `*ok` is false if `s` isn't one or doesn't fit in an `int` |
 | `str_pad(s: str, width: int) -> str` | add spaces on the right up to `width` bytes |
 | `str_lpad(s: str, width: int) -> str` | add spaces on the left up to `width` bytes |
+| `str_concat3(a, b, c: str) -> str`, `str_concat4(a, b, c, d: str) -> str` | three or four strings, one after another |
+| `str_has(s: str, sub: str) -> bool` | does `s` contain `sub` |
+| `str_is_space(c: u8) -> bool` | space, tab, newline, carriage return, vertical tab or form feed |
+| `str_trim(s: str) -> str` | without whitespace at either end |
+| `str_rtrim(s: str, c: u8) -> str` | without any `c` bytes at the end (`str_rtrim(url, '/')`) |
+| `str_trim_prefix(s: str, prefix: str) -> str` | `s` without `prefix` if it starts with it, else `s` |
+| `str_replace(s: str, old: str, new: str) -> str` | every `old` replaced by `new` (`s` itself if `old` is empty) |
+| `str_split(s: str, c: u8) -> ptr Vec` | the pieces between `c` bytes, empty ones included: `"a,,b"` gives `a`, ``, `b` |
+| `str_fields(s: str) -> ptr Vec` | the pieces between runs of whitespace, none empty |
+| `str_join(v: ptr Vec, sep: str) -> str` | the strings in `v` with `sep` between them |
+| `str_join_from(v: ptr Vec, from: int, sep: str) -> str` | the same, from item `from` on |
+| `str_quote(s: str) -> str` | in double quotes, with `"`, `\\`, `\n`, `\t`, `\r` and other control bytes escaped (`\x01`); other bytes kept as they are |
+
+The `Vec`s that `str_split` and `str_fields` return, and that `str_join`
+takes, hold `str`s: read them with `vec_get_str` from
+[rt/vec](vec.md).
 
 The builder (`StrBuf`) collects pieces and makes one string at the end:
 `sb_new()`, `sb_add(b, s)`, `sb_bytes(b, p, n)`, `sb_byte(b, c)`, `sb_int(b, n)`,
-`sb_len(b)`, `sb_str(b) -> str` (a copy) and `sb_clear(b)`.
+`sb_hex(b, n)` (one byte as two lowercase hex digits), `sb_len(b)`,
+`sb_str(b) -> str` (a copy) and `sb_clear(b)`.
 
 ## Needs
 
 - [std](../std.md)
 - [rt/mem](mem.md)
+- [rt/vec](vec.md)
 
 ## Library code
 
@@ -288,6 +306,149 @@ end
 
 fn sb_clear(b: ptr StrBuf)
   b.len = 0
+end
+
+fn sb_hex(b: ptr StrBuf, n: int)
+  let digits = "0123456789abcdef"
+  sb_byte(b, digits[(n >> 4) & 15])
+  sb_byte(b, digits[n & 15])
+end
+
+fn str_concat3(a: str, b: str, c: str) -> str
+  return str_concat(str_concat(a, b), c)
+end
+
+fn str_concat4(a: str, b: str, c: str, d: str) -> str
+  return str_concat(str_concat(a, b), str_concat(c, d))
+end
+
+fn str_has(s: str, sub: str) -> bool
+  return str_find(s, sub, 0) >= 0
+end
+
+fn str_is_space(c: u8) -> bool
+  return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == 11 as u8 || c == 12 as u8
+end
+
+fn str_trim(s: str) -> str
+  let a = 0
+  let b = len(s)
+  while a < b && str_is_space(s[a])
+    a = a + 1
+  end
+  while b > a && str_is_space(s[b - 1])
+    b = b - 1
+  end
+  if a == 0 && b == len(s)
+    return s
+  end
+  return str_slice(s, a, b)
+end
+
+fn str_rtrim(s: str, c: u8) -> str
+  let b = len(s)
+  while b > 0 && s[b - 1] == c
+    b = b - 1
+  end
+  return str_slice(s, 0, b)
+end
+
+fn str_trim_prefix(s: str, prefix: str) -> str
+  if str_starts(s, prefix)
+    return str_slice(s, len(prefix), len(s))
+  end
+  return s
+end
+
+fn str_replace(s: str, old: str, rep: str) -> str
+  if len(old) == 0
+    return s
+  end
+  let b = sb_new()
+  let i = 0
+  while true
+    let j = str_find(s, old, i)
+    if j < 0
+      break
+    end
+    sb_add(b, str_slice(s, i, j))
+    sb_add(b, rep)
+    i = j + len(old)
+  end
+  sb_add(b, str_slice(s, i, len(s)))
+  return sb_str(b)
+end
+
+fn str_split(s: str, c: u8) -> ptr Vec
+  let out = vec_new()
+  let start = 0
+  for i = 0 to len(s) - 1
+    if s[i] == c
+      vec_push(out, str_slice(s, start, i) as int)
+      start = i + 1
+    end
+  end
+  vec_push(out, str_slice(s, start, len(s)) as int)
+  return out
+end
+
+fn str_fields(s: str) -> ptr Vec
+  let out = vec_new()
+  let i = 0
+  while i < len(s)
+    while i < len(s) && str_is_space(s[i])
+      i = i + 1
+    end
+    let start = i
+    while i < len(s) && !str_is_space(s[i])
+      i = i + 1
+    end
+    if i > start
+      vec_push(out, str_slice(s, start, i) as int)
+    end
+  end
+  return out
+end
+
+fn str_join_from(v: ptr Vec, from: int, sep: str) -> str
+  let b = sb_new()
+  for i = from to vec_len(v) - 1
+    if i > from
+      sb_add(b, sep)
+    end
+    sb_add(b, vec_get(v, i) as str)
+  end
+  return sb_str(b)
+end
+
+fn str_join(v: ptr Vec, sep: str) -> str
+  return str_join_from(v, 0, sep)
+end
+
+fn str_quote(s: str) -> str
+  let b = sb_new()
+  sb_byte(b, '"')
+  for i = 0 to len(s) - 1
+    let c = s[i]
+    if c == '"'
+      sb_add(b, "\\\"")
+    elif c == '\\'
+      sb_add(b, "\\\\")
+    elif c == '\n'
+      sb_add(b, "\\n")
+    elif c == '\t'
+      sb_add(b, "\\t")
+    elif c == '\r'
+      sb_add(b, "\\r")
+    elif c < ' ' || c == 127 as u8
+      sb_add(b, "\\x")
+      sb_hex(b, c as int)
+    else
+      sb_byte(b, c)
+    end
+  end
+  sb_byte(b, '"')
+  return sb_str(b)
 end
 ```
 

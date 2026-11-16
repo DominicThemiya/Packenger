@@ -45,9 +45,9 @@ end
 // ty_fn_type renders the type of a function with these parameter types
 // (strs) and result type ("" for none).
 fn ty_fn_type(params: ptr Vec, ret: str) -> str
-  let s = u_cat3("fn(", u_join(params, ", "), ")")
+  let s = str_concat3("fn(", str_join(params, ", "), ")")
   if ret != ""
-    s = u_cat3(s, " -> ", ret)
+    s = str_concat3(s, " -> ", ret)
   end
   return s
 end
@@ -66,7 +66,7 @@ fn ty_fn_parts(t: str, params: ptr Vec, ret: ptr str) -> bool
     return false
   end
   for i = 0 to vec_len(ft.params) - 1
-    u_push(params, ty_string(vec_get(ft.params, i) as ptr Ty))
+    vec_push_str(params, ty_string(vec_get(ft.params, i) as ptr Ty))
   end
   *ret = ""
   if ft.ret != null
@@ -168,7 +168,7 @@ fn ty_parse_prefix(s0: str, rest: ptr str) -> ptr Ty
       return null
     end
     *rest = str_slice(s, stop + 1, len(s))
-    return ty_new("slot", u_trim(str_slice(s, 1, stop)), null)
+    return ty_new("slot", str_trim(str_slice(s, 1, stop)), null)
   end
   if str_starts(s, "fn(")
     return ty_parse_fn(str_slice(s, 3, len(s)), rest)
@@ -178,7 +178,7 @@ fn ty_parse_prefix(s0: str, rest: ptr str) -> ptr Ty
     stop = stop + 1
   end
   if stop == 0
-    u_fail(u_cat3("unexpected ", u_quote(s), " in type"))
+    u_fail(str_concat3("unexpected ", str_quote(s), " in type"))
     return null
   end
   let word = str_slice(s, 0, stop)
@@ -202,12 +202,12 @@ end
 
 fn ty_parse(s: str) -> ptr Ty
   let rest = ""
-  let t = ty_parse_prefix(u_trim(s), &rest)
+  let t = ty_parse_prefix(str_trim(s), &rest)
   if t == null
     return null
   end
-  if u_trim(rest) != ""
-    u_fail(u_cat4("unexpected ", u_quote(rest), " in type ", u_quote(s)))
+  if str_trim(rest) != ""
+    u_fail(str_concat4("unexpected ", str_quote(rest), " in type ", str_quote(s)))
     return null
   end
   return t
@@ -215,21 +215,21 @@ end
 
 fn ty_string(t: ptr Ty) -> str
   if t.kind == "ptr"
-    return u_cat("ptr ", ty_string(t.elem))
+    return str_concat("ptr ", ty_string(t.elem))
   elif t.kind == "slice"
-    return u_cat3("[", ty_string(t.elem), "]")
+    return str_concat3("[", ty_string(t.elem), "]")
   elif t.kind == "wild"
     return "?"
   elif t.kind == "slot"
-    return u_cat3("{", t.name, "}")
+    return str_concat3("{", t.name, "}")
   elif t.kind == "fn"
     let ps = vec_new()
     for i = 0 to vec_len(t.params) - 1
-      u_push(ps, ty_string(vec_get(t.params, i) as ptr Ty))
+      vec_push_str(ps, ty_string(vec_get(t.params, i) as ptr Ty))
     end
     if t.anyp
       ps = vec_new()
-      u_push(ps, "...")
+      vec_push_str(ps, "...")
     end
     let ret = ""
     if t.ret != null
@@ -392,7 +392,7 @@ fn ty_subst_walk(b: ptr TyBinder, t: ptr Ty) -> ptr Ty
     let ok = false
     let s = ty_slot_type(b, t.name, &ok)
     if !ok
-      u_fail(u_cat3("result type names slot {", t.name, "}, which is missing"))
+      u_fail(str_concat3("result type names slot {", t.name, "}, which is missing"))
       return null
     end
     if s == ""
@@ -485,10 +485,10 @@ fn ty_size(ts: ptr Types, t: str) -> int
     return map_get(ts.prims, t)
   end
   if ty_struct(ts, t) != null
-    u_fail(u_cat4("struct ", t, " can only be used through a pointer (ptr ", u_cat(t, ")")))
+    u_fail(str_concat4("struct ", t, " can only be used through a pointer (ptr ", str_concat(t, ")")))
     return -1
   end
-  u_fail(u_cat("unknown type ", t))
+  u_fail(str_concat("unknown type ", t))
   return -1
 end
 
@@ -511,7 +511,7 @@ fn ty_layout(ts: ptr Types, s: ptr TyStruct) -> bool
     let f = vec_get(s.fields, i) as ptr TyField
     let size = ty_size(ts, f.ty)
     if size < 0
-      return u_fail(u_cat4("field ", f.name, " of ", u_cat3(s.name, ": ", pk_err)))
+      return u_fail(str_concat4("field ", f.name, " of ", str_concat3(s.name, ": ", pk_err)))
     end
     off = (off + size - 1) / size * size
     f.offset = off

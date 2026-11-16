@@ -49,7 +49,7 @@ Each package's tests are in [tests/rt](../../tests/rt).
 |---|---|
 | [rt/mem](rt/mem.md) | Raw memory: an allocator on mmap, plus copy, fill, compare and pointer arithmetic. |
 | [rt/vec](rt/vec.md) | Growable arrays of 64-bit words (ints, or pointers and strings with as). |
-| [rt/str](rt/str.md) | Strings: slicing, searching, joining, numbers, and a string builder. |
+| [rt/str](rt/str.md) | Strings: slicing, searching, splitting, joining, quoting, numbers, and a string builder. |
 | [rt/map](rt/map.md) | Hash map from strings to 64-bit words, iterated in insertion order. |
 | [rt/io](rt/io.md) | Files and output: whole-file reads and writes, buffered stdout, stderr. |
 | [rt/os](rt/os.md) | The process: environment variables, finding and running programs, exiting. |

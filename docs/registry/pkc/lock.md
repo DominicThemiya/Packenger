@@ -41,9 +41,9 @@ global lk_collect: ptr Map
 
 fn lk_path_of(src: str) -> str
   if str_ends(src, ".pkg")
-    return u_cat(str_slice(src, 0, len(src) - 4), ".lock")
+    return str_concat(str_slice(src, 0, len(src) - 4), ".lock")
   end
-  return u_cat(src, ".lock")
+  return str_concat(src, ".lock")
 end
 
 fn lk_is_sum(s: str) -> bool
@@ -69,23 +69,23 @@ fn lk_read(path: str, src: str) -> bool
   let ok = false
   let text = io_read_file(path, &ok)
   if !ok
-    return u_fail(u_cat3("read ", path, ": can't read the file"))
+    return u_fail(str_concat3("read ", path, ": can't read the file"))
   end
   let sums = map_new()
   let reg = ""
   let prefixes = vec_new()
   let bases = vec_new()
-  let lines = u_split(text, '\n')
+  let lines = str_split(text, '\n')
   for i = 0 to vec_len(lines) - 1
-    let t = u_trim(u_get(lines, i))
+    let t = str_trim(vec_get_str(lines, i))
     if t == "" || str_starts(t, "//")
       continue
     end
-    let f = u_fields(t)
+    let f = str_fields(t)
     let good = false
     if vec_len(f) == 2
-      let a = u_get(f, 0)
-      let b = u_get(f, 1)
+      let a = vec_get_str(f, 0)
+      let b = vec_get_str(f, 1)
       if a == "registry" && reg == ""
         reg = b
         good = true
@@ -93,17 +93,17 @@ fn lk_read(path: str, src: str) -> bool
         map_set(sums, a, b as int)
         good = true
       end
-    elif vec_len(f) == 3 && u_get(f, 0) == "route" && fe_valid_name(u_get(f, 1)) && !u_in(prefixes, u_get(f, 1))
-      u_push(prefixes, u_get(f, 1))
-      u_push(bases, u_get(f, 2))
+    elif vec_len(f) == 3 && vec_get_str(f, 0) == "route" && fe_valid_name(vec_get_str(f, 1)) && !vec_has_str(prefixes, vec_get_str(f, 1))
+      vec_push_str(prefixes, vec_get_str(f, 1))
+      vec_push_str(bases, vec_get_str(f, 2))
       good = true
     end
     if !good
-      return u_fail(u_cat4(path, ":", str_from_int(i + 1), ": expected 'registry <url>', 'route <prefix> <url>' or '<package> <sha256>'"))
+      return u_fail(str_concat4(path, ":", str_from_int(i + 1), ": expected 'registry <url>', 'route <prefix> <url>' or '<package> <sha256>'"))
     end
   end
   if reg == ""
-    return u_fail(u_cat(path, ": no 'registry' line"))
+    return u_fail(str_concat(path, ": no 'registry' line"))
   end
   lk_sums = sums
   lk_file = path
@@ -117,14 +117,14 @@ end
 // lk_check verifies package name, whose file has hash sum, against the lock.
 fn lk_check(name: str, sum: str) -> bool
   if !map_has(lk_sums, name)
-    return u_fail(u_cat4("package ", u_quote(name), " is not in ", u_cat4(lk_file, "; run 'packenger lock ", lk_source, "' to add it")))
+    return u_fail(str_concat4("package ", str_quote(name), " is not in ", str_concat4(lk_file, "; run 'packenger lock ", lk_source, "' to add it")))
   end
   let want = map_get(lk_sums, name) as str
   if sum != want
     let b = sb_new()
-    sb_add(b, u_cat4("package ", u_quote(name), " does not match ", lk_file))
-    sb_add(b, u_cat4(": it has sha256 ", str_slice(sum, 0, 12), ", but ", str_slice(want, 0, 12)))
-    sb_add(b, u_cat3(" was locked; run 'packenger lock ", lk_source, "' to accept the new version"))
+    sb_add(b, str_concat4("package ", str_quote(name), " does not match ", lk_file))
+    sb_add(b, str_concat4(": it has sha256 ", str_slice(sum, 0, 12), ", but ", str_slice(want, 0, 12)))
+    sb_add(b, str_concat3(" was locked; run 'packenger lock ", lk_source, "' to accept the new version"))
     return u_fail(sb_str(b))
   end
   return true
@@ -132,21 +132,21 @@ end
 
 fn lk_format(src: str, registry: str, prefixes: ptr Vec, bases: ptr Vec, sums: ptr Map) -> str
   let b = sb_new()
-  sb_add(b, u_cat4("// Packenger lock file for ", src, ", written by 'packenger lock ", u_cat(src, "'.\n")))
+  sb_add(b, str_concat4("// Packenger lock file for ", src, ", written by 'packenger lock ", str_concat(src, "'.\n")))
   sb_add(b, "// Builds fetch exactly these package versions. Don't edit it: run\n")
   sb_add(b, "// 'packenger lock' again to update it.\n")
-  sb_add(b, u_cat3("registry ", registry, "\n"))
+  sb_add(b, str_concat3("registry ", registry, "\n"))
   for i = 0 to vec_len(prefixes) - 1
-    sb_add(b, u_cat4("route ", u_get(prefixes, i), " ", u_cat(u_get(bases, i), "\n")))
+    sb_add(b, str_concat4("route ", vec_get_str(prefixes, i), " ", str_concat(vec_get_str(bases, i), "\n")))
   end
   let names = vec_new()
   for i = 0 to map_len(sums) - 1
-    u_push(names, map_key(sums, i))
+    vec_push_str(names, map_key(sums, i))
   end
   sort_strs(names)
   for i = 0 to vec_len(names) - 1
-    let n = u_get(names, i)
-    sb_add(b, u_cat4(n, " ", map_get(sums, n) as str, "\n"))
+    let n = vec_get_str(names, i)
+    sb_add(b, str_concat4(n, " ", map_get(sums, n) as str, "\n"))
   end
   return sb_str(b)
 end
@@ -195,31 +195,31 @@ fn lk_pin(base: str, out: ptr str) -> bool
   if lk_is_commit(ref)
     return true
   end
-  let what = u_cat4(owner, "/", repo, u_cat(" ", ref))
+  let what = str_concat4(owner, "/", repo, str_concat(" ", ref))
   let args = vec_new()
-  u_push(args, "--silent")
-  u_push(args, "--fail")
-  u_push(args, "--location")
-  u_push(args, "--user-agent")
-  u_push(args, "packenger")
-  u_push(args, "--max-time")
-  u_push(args, "30")
-  u_push(args, "--header")
-  u_push(args, "Accept: application/vnd.github.sha")
-  u_push(args, u_cat4("https://api.github.com/repos/", owner, "/", u_cat4(repo, "/commits/", ref, "")))
+  vec_push_str(args, "--silent")
+  vec_push_str(args, "--fail")
+  vec_push_str(args, "--location")
+  vec_push_str(args, "--user-agent")
+  vec_push_str(args, "packenger")
+  vec_push_str(args, "--max-time")
+  vec_push_str(args, "30")
+  vec_push_str(args, "--header")
+  vec_push_str(args, "Accept: application/vnd.github.sha")
+  vec_push_str(args, str_concat4("https://api.github.com/repos/", owner, "/", str_concat4(repo, "/commits/", ref, "")))
   let text = ""
   let status = os_run_output("curl", args, &text)
-  let sha = u_trim(text)
+  let sha = str_trim(text)
   if status == 0 && lk_is_commit(sha)
-    *out = u_cat4(prefix, owner, "/", u_cat4(repo, "/", sha, tail))
+    *out = str_concat4(prefix, owner, "/", str_concat4(repo, "/", sha, tail))
     return true
   end
   if status == -1
-    return u_fail(u_cat3("can't find the commit of ", what, ": curl is not installed"))
+    return u_fail(str_concat3("can't find the commit of ", what, ": curl is not installed"))
   elif status == 22 || status == 0
-    return u_fail(u_cat3("can't find the commit of ", what, " on GitHub"))
+    return u_fail(str_concat3("can't find the commit of ", what, " on GitHub"))
   end
-  return u_fail(u_cat3("can't find the commit of ", what, ": can't reach api.github.com"))
+  return u_fail(str_concat3("can't find the commit of ", what, ": can't reach api.github.com"))
 end
 ```
 

@@ -50,7 +50,7 @@ fn lx_tok(v: ptr Vec, i: int) -> ptr Tok
 end
 
 fn lx_pos(t: ptr Tok) -> str
-  return u_cat4(t.file, ":", str_from_int(t.line), u_cat(":", str_from_int(t.col)))
+  return str_concat4(t.file, ":", str_from_int(t.line), str_concat(":", str_from_int(t.col)))
 end
 
 // lx_describe renders a token for error messages, like Token.String.
@@ -60,13 +60,13 @@ fn lx_describe(t: ptr Tok) -> str
   elif t.kind == TK_NL
     return "end of line"
   elif t.kind == TK_STR
-    return u_quote(t.text)
+    return str_quote(t.text)
   elif t.kind == TK_CHAR
     return lx_quote_rune(t.ival)
   elif t.kind == TK_HOLE
-    return u_cat3("{", t.text, "}")
+    return str_concat3("{", t.text, "}")
   end
-  return u_cat3("'", t.text, "'")
+  return str_concat3("'", t.text, "'")
 end
 
 fn lx_quote_rune(r: int) -> str
@@ -85,11 +85,11 @@ fn lx_quote_rune(r: int) -> str
   elif r < 32 || r == 127
     let b = sb_new()
     sb_add(b, "'\\x")
-    u_hex(b, r)
+    sb_hex(b, r)
     sb_byte(b, '\'')
     return sb_str(b)
   end
-  return u_cat3("'", lx_encode_one(r), "'")
+  return str_concat3("'", lx_encode_one(r), "'")
 end
 
 // ---------------------------------------------------------------- UTF-8
@@ -333,7 +333,7 @@ fn lx_new(kind: int, text: str, file: str, line: int, col: int) -> ptr Tok
 end
 
 fn lx_err(file: str, line: int, col: int, msg: str) -> ptr Vec
-  pk_err = u_cat4(file, ":", str_from_int(line), u_cat4(":", str_from_int(col), ": ", msg))
+  pk_err = str_concat4(file, ":", str_from_int(line), str_concat4(":", str_from_int(col), ": ", msg))
   return null
 end
 
@@ -362,29 +362,29 @@ fn lx_lex(src: str, file: str, puncts: ptr Vec, holes: bool) -> ptr Vec
   // ( ) , and the type syntax : [ ] are core; the rest come from packages.
   // Longer operators are tried first.
   let all = vec_new()
-  u_push(all, "(")
-  u_push(all, ")")
-  u_push(all, ",")
-  u_push(all, ":")
-  u_push(all, "[")
-  u_push(all, "]")
+  vec_push_str(all, "(")
+  vec_push_str(all, ")")
+  vec_push_str(all, ",")
+  vec_push_str(all, ":")
+  vec_push_str(all, "[")
+  vec_push_str(all, "]")
   for i = 0 to vec_len(puncts) - 1
-    u_push(all, u_get(puncts, i))
+    vec_push_str(all, vec_get_str(puncts, i))
   end
   let ops = vec_new()
   let opr = vec_new()
   let longest = 0
   for i = 0 to vec_len(all) - 1
-    if len(u_get(all, i)) > longest
-      longest = len(u_get(all, i))
+    if len(vec_get_str(all, i)) > longest
+      longest = len(vec_get_str(all, i))
     end
   end
   let size = longest
   while size > 0
     for i = 0 to vec_len(all) - 1
-      let o = u_get(all, i)
+      let o = vec_get_str(all, i)
       if len(o) == size
-        u_push(ops, o)
+        vec_push_str(ops, o)
         vec_push(opr, lx_decode(o) as int)
       end
     end
@@ -422,7 +422,7 @@ fn lx_lex(src: str, file: str, puncts: ptr Vec, holes: bool) -> ptr Vec
       if j >= n
         return lx_err(file, pl, pc, "unterminated {hole}")
       end
-      lx_emit(toks, lx_new(TK_HOLE, u_trim(lx_encode(rs, i + 1, j)), file, pl, pc), depth)
+      lx_emit(toks, lx_new(TK_HOLE, str_trim(lx_encode(rs, i + 1, j)), file, pl, pc), depth)
       adv = j + 1 - i
     elif lx_letter(r) || r == 95
       let j = i
@@ -436,11 +436,11 @@ fn lx_lex(src: str, file: str, puncts: ptr Vec, holes: bool) -> ptr Vec
       while j < n && (lx_digit(vec_get(rs, j)) || vec_get(rs, j) == 95)
         j = j + 1
       end
-      let text = u_replace(lx_encode(rs, i, j), "_", "")
+      let text = str_replace(lx_encode(rs, i, j), "_", "")
       let ok = false
       let v = str_parse_int(text, &ok)
       if !ok
-        return lx_err(file, pl, pc, u_cat3("number ", text, " does not fit in 64 bits"))
+        return lx_err(file, pl, pc, str_concat3("number ", text, " does not fit in 64 bits"))
       end
       let t = lx_new(TK_INT, text, file, pl, pc)
       t.ival = v
@@ -495,9 +495,9 @@ fn lx_lex(src: str, file: str, puncts: ptr Vec, holes: bool) -> ptr Vec
         end
       end
       if op < 0
-        return lx_err(file, pl, pc, u_cat3("unknown symbol ", lx_quote_rune(r), " (no loaded package defines it)"))
+        return lx_err(file, pl, pc, str_concat3("unknown symbol ", lx_quote_rune(r), " (no loaded package defines it)"))
       end
-      let text = u_get(ops, op)
+      let text = vec_get_str(ops, op)
       if text == "("
         depth = depth + 1
       elif text == ")" && depth > 0

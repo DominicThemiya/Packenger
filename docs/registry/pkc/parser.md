@@ -106,7 +106,7 @@ fn ps_frame_size(f: ptr PFrame) -> int
 end
 
 fn ps_pos(n: ptr PNode) -> str
-  return u_cat4(n.file, ":", str_from_int(n.line), u_cat(":", str_from_int(n.col)))
+  return str_concat4(n.file, ":", str_from_int(n.line), str_concat(":", str_from_int(n.col)))
 end
 
 fn ps_nd(v: ptr Vec, i: int) -> ptr PNode
@@ -119,7 +119,7 @@ fn ps_slot(n: ptr PNode, name: str) -> ptr PNode
     return null
   end
   for i = 0 to vec_len(n.snames) - 1
-    if u_get(n.snames, i) == name
+    if vec_get_str(n.snames, i) == name
       return ps_nd(n.svals, i)
     end
   end
@@ -132,12 +132,12 @@ fn ps_set_slot(n: ptr PNode, name: str, c: ptr PNode)
     n.svals = vec_new()
   end
   for i = 0 to vec_len(n.snames) - 1
-    if u_get(n.snames, i) == name
+    if vec_get_str(n.snames, i) == name
       vec_set(n.svals, i, c as int)
       return
     end
   end
-  u_push(n.snames, name)
+  vec_push_str(n.snames, name)
   vec_push(n.svals, c as int)
 end
 
@@ -313,7 +313,7 @@ fn ps_later(line: int, col: int, line2: int, col2: int) -> bool
 end
 
 fn ps_errat(file: str, line: int, col: int, msg: str) -> str
-  return u_cat4(file, ":", str_from_int(line), u_cat4(":", str_from_int(col), ": ", msg))
+  return str_concat4(file, ":", str_from_int(line), str_concat4(":", str_from_int(col), ": ", msg))
 end
 
 // ps_fail records a syntax error at t: the error that got furthest is the
@@ -485,7 +485,7 @@ fn ps_parse(L: ptr Lang, units: ptr Vec) -> ptr PProg
       let c = ps_nd(f.svals, k)
       if c.kind == "params"
         for m = 0 to ps_nitems(c) - 1
-          u_push(sig.params, ps_nd(c.items, m).ty)
+          vec_push_str(sig.params, ps_nd(c.items, m).ty)
         end
       end
     end
@@ -527,7 +527,7 @@ fn ps_program(p: ptr Parser, units: ptr Vec) -> ptr PProg
         break
       end
       if ps_is_closer(p, t)
-        pk_err = ps_errat(t.file, t.line, t.col, u_cat3("unexpected ", lx_describe(t), " (nothing to close)"))
+        pk_err = ps_errat(t.file, t.line, t.col, str_concat3("unexpected ", lx_describe(t), " (nothing to close)"))
         return null
       end
       let n = ps_statement(p, true)
@@ -536,7 +536,7 @@ fn ps_program(p: ptr Parser, units: ptr Vec) -> ptr PProg
       end
       ps_clear_far(p)
       if u.lib && n.frame == null && (n.rule == null || n.rule.syn.kind != "struct" && !n.rule.syn.top)
-        pk_err = u_cat4(ps_pos(n), ": library code (", u.name, ") may only contain functions, structs and top-level declarations such as global and const")
+        pk_err = str_concat4(ps_pos(n), ": library code (", u.name, ") may only contain functions, structs and top-level declarations such as global and const")
         return null
       end
       vec_push(prog.top, n as int)
@@ -570,7 +570,7 @@ fn ps_statement(p: ptr Parser, top: bool) -> ptr PNode
     vec_push(cands, vec_get(p.lang.stmt_slot, i))
   end
   if vec_len(cands) == 0
-    return ps_fail(p, t, u_cat(lx_describe(t), " does not start any statement the loaded packages define"))
+    return ps_fail(p, t, str_concat(lx_describe(t), " does not start any statement the loaded packages define"))
   end
   let first = ""
   let have_first = false
@@ -586,7 +586,7 @@ fn ps_statement(p: ptr Parser, top: bool) -> ptr PNode
         ps_restore_far(p, far)
         return n
       end
-      ps_fail(p, e, u_cat("expected end of line, found ", lx_describe(e)))
+      ps_fail(p, e, str_concat("expected end of line, found ", lx_describe(e)))
       err = pk_err
     end
     ps_restore(p, s)
@@ -602,10 +602,10 @@ end
 fn ps_match(p: ptr Parser, r: ptr LgRule, top: bool) -> ptr PNode
   let t = ps_tok(p)
   if (r.syn.kind == "function" || r.syn.kind == "struct" || r.syn.top) && !top
-    return ps_fail(p, t, u_cat4(lx_describe(t), " (", r.pkg.name, ") may only be used at the top level"))
+    return ps_fail(p, t, str_concat4(lx_describe(t), " (", r.pkg.name, ") may only be used at the top level"))
   end
   if r.syn.inloop && vec_len(p.loops) == 0
-    return ps_fail_hard(p, t.file, t.line, t.col, u_cat(lx_describe(t), " can only be used inside a loop"))
+    return ps_fail_hard(p, t.file, t.line, t.col, str_concat(lx_describe(t), " can only be used inside a loop"))
   end
   let s = ps_save(p)
   let n = ps_node(p, r.kind, t)
@@ -665,7 +665,7 @@ fn ps_finish(p: ptr Parser, n: ptr PNode, b: ptr TyBinder, t: ptr Tok) -> bool
   if res != ""
     let out = ""
     if !ty_subst(b, res, &out)
-      pk_err = u_cat3(n.rule.pkg.origin, ": ", pk_err)
+      pk_err = str_concat3(n.rule.pkg.origin, ": ", pk_err)
       return false
     end
     n.ty = out
@@ -676,13 +676,13 @@ fn ps_finish(p: ptr Parser, n: ptr PNode, b: ptr TyBinder, t: ptr Tok) -> bool
     let f = p.frame
     let v = ps_slot(n, "value")
     if v != null && f.ret == "" && !f.top
-      ps_fail_hard(p, v.file, v.line, v.col, u_cat(f.name, " returns nothing, so return takes no value"))
+      ps_fail_hard(p, v.file, v.line, v.col, str_concat(f.name, " returns nothing, so return takes no value"))
       return false
     elif v != null && !ty_compatible(f.ret, v.ty)
-      ps_fail_hard(p, v.file, v.line, v.col, u_cat4(ps_frame_name(f), " must return ", f.ret, u_cat(", but this is ", ps_describe_type(v.ty))))
+      ps_fail_hard(p, v.file, v.line, v.col, str_concat4(ps_frame_name(f), " must return ", f.ret, str_concat(", but this is ", ps_describe_type(v.ty))))
       return false
     elif v == null && f.ret != "" && !f.top
-      ps_fail_hard(p, t.file, t.line, t.col, u_cat4(f.name, " must return ", f.ret, ", so return needs a value"))
+      ps_fail_hard(p, t.file, t.line, t.col, str_concat4(f.name, " must return ", f.ret, ", so return needs a value"))
       return false
     end
   end
@@ -704,7 +704,7 @@ fn ps_elems(p: ptr Parser, es: ptr Vec, n: ptr PNode, b: ptr TyBinder) -> bool
     let t = ps_tok(p)
     if e.lit != ""
       if !ps_is_lit(t, e.lit)
-        ps_fail(p, t, u_cat4("expected '", e.lit, "', found ", lx_describe(t)))
+        ps_fail(p, t, str_concat4("expected '", e.lit, "', found ", lx_describe(t)))
         return false
       end
       p.i = p.i + 1
@@ -737,7 +737,7 @@ fn ps_elems(p: ptr Parser, es: ptr Vec, n: ptr PNode, b: ptr TyBinder) -> bool
       c.toks = p.toks
       c.start = start
       c.stop = p.i
-      if !ps_constrain(p, e.slot, c, b, t, u_cat4("{", e.slot.name, "} of ", n.kind))
+      if !ps_constrain(p, e.slot, c, b, t, str_concat4("{", e.slot.name, "} of ", n.kind))
         return false
       end
       ps_set_slot(n, e.slot.name, c)
@@ -753,17 +753,17 @@ fn ps_describe_constraint(subst: str) -> str
   if str_starts(subst, "fn(...)")
     return "a function"
   end
-  if !u_has(subst, "?")
+  if !str_has(subst, "?")
     return subst
   end
-  return u_cat("of the form ", u_replace(subst, "?", "…"))
+  return str_concat("of the form ", str_replace(subst, "?", "…"))
 end
 
 // ps_constrain checks a parsed slot against its pattern's constraint.
 fn ps_constrain(p: ptr Parser, s: ptr PfSlot, c: ptr PNode, b: ptr TyBinder, t: ptr Tok, what: str) -> bool
   if s.kind == "expr" || s.kind == "place"
     if c.ty == "" && s.arg != "any"
-      ps_fail(p, t, u_cat(what, " needs a value, but this has none"))
+      ps_fail(p, t, str_concat(what, " needs a value, but this has none"))
       return false
     end
   elif s.kind != "var" && s.kind != "type"
@@ -772,16 +772,16 @@ fn ps_constrain(p: ptr Parser, s: ptr PfSlot, c: ptr PNode, b: ptr TyBinder, t: 
   let bad = false
   let ok = ty_matches(b, s.arg, c.ty, &bad)
   if bad
-    pk_err = u_cat4(lx_pos(t), ": bad type constraint ", u_quote(s.arg), u_cat(": ", pk_err))
+    pk_err = str_concat4(lx_pos(t), ": bad type constraint ", str_quote(s.arg), str_concat(": ", pk_err))
     return false
   end
   if !ok
     let want = ""
     ty_subst(b, s.arg, &want)
-    if want == "?" || u_has(s.arg, "[") || u_has(s.arg, "ptr") || ty_is_fn(s.arg)
+    if want == "?" || str_has(s.arg, "[") || str_has(s.arg, "ptr") || ty_is_fn(s.arg)
       want = ps_describe_constraint(want)
     end
-    ps_fail(p, t, u_cat4(what, " must be ", want, u_cat(", but it is ", ps_describe_type(c.ty))))
+    ps_fail(p, t, str_concat4(what, " must be ", want, str_concat(", but it is ", ps_describe_type(c.ty))))
     return false
   end
   return true
@@ -797,13 +797,13 @@ fn ps_type_newvars(p: ptr Parser, n: ptr PNode, slot: str, c: ptr PNode) -> bool
     if v.kind != "var" || v.vr == null || v.sval == ""
       continue
     end
-    let of = u_fields(v.sval)
+    let of = str_fields(v.sval)
     let rank = -1
     let elem = false
     for k = 0 to vec_len(of) - 1
-      if u_get(of, k) == slot || u_get(of, k) == u_cat(slot, "[]")
+      if vec_get_str(of, k) == slot || vec_get_str(of, k) == str_concat(slot, "[]")
         rank = k
-        elem = u_get(of, k) != slot
+        elem = vec_get_str(of, k) != slot
       end
     end
     if rank < 0 || v.ofrank > 0 && v.ofrank - 1 < rank
@@ -817,7 +817,7 @@ fn ps_type_newvars(p: ptr Parser, n: ptr PNode, slot: str, c: ptr PNode) -> bool
       end
     end
     if ty_struct(p.types, ty) != null
-      ps_fail_hard(p, c.file, c.line, c.col, u_cat4(v.vr.name, " can't hold a struct value; use ptr ", ty, ""))
+      ps_fail_hard(p, c.file, c.line, c.col, str_concat4(v.vr.name, " can't hold a struct value; use ptr ", ty, ""))
       return false
     end
     v.ofrank = rank + 1
@@ -830,7 +830,7 @@ end
 fn ps_field_name(p: ptr Parser) -> ptr Tok
   let t = ps_tok(p)
   if t.kind != TK_IDENT
-    ps_fail(p, t, u_cat("expected a field name, found ", lx_describe(t)))
+    ps_fail(p, t, str_concat("expected a field name, found ", lx_describe(t)))
     return null
   end
   p.i = p.i + 1
@@ -840,11 +840,11 @@ end
 fn ps_ident(p: ptr Parser, what: str) -> ptr Tok
   let t = ps_tok(p)
   if t.kind != TK_IDENT
-    ps_fail(p, t, u_cat4("expected ", what, ", found ", lx_describe(t)))
+    ps_fail(p, t, str_concat4("expected ", what, ", found ", lx_describe(t)))
     return null
   end
   if ps_keyword(p, t.text)
-    ps_fail(p, t, u_cat4("expected ", what, ", found keyword ", lx_describe(t)))
+    ps_fail(p, t, str_concat4("expected ", what, ", found keyword ", lx_describe(t)))
     return null
   end
   p.i = p.i + 1
@@ -888,7 +888,7 @@ fn ps_slot_parse(p: ptr Parser, s: ptr PfSlot, parent: ptr PNode) -> ptr PNode
       return null
     end
     if map_has(p.lang.prims, id.text) || map_get(p.declared, id.text) != 0
-      return ps_fail(p, id, u_cat3("type ", id.text, " is already declared"))
+      return ps_fail(p, id, str_concat3("type ", id.text, " is already declared"))
     end
     map_set(p.declared, id.text, 1)
     ps_log(p, UNDO_MAPKEY, p.declared as int, id.text as int, 0)
@@ -912,7 +912,7 @@ fn ps_slot_parse(p: ptr Parser, s: ptr PfSlot, parent: ptr PNode) -> ptr PNode
       end
       let stop = false
       for i = 0 to vec_len(s.follow) - 1
-        if ps_is_lit(ps_tok(p), u_get(s.follow, i))
+        if ps_is_lit(ps_tok(p), vec_get_str(s.follow, i))
           stop = true
         end
       end
@@ -924,11 +924,11 @@ fn ps_slot_parse(p: ptr Parser, s: ptr PfSlot, parent: ptr PNode) -> ptr PNode
         return null
       end
       if map_has(seen, id.text)
-        return ps_fail(p, id, u_cat3("field ", id.text, " is declared twice"))
+        return ps_fail(p, id, str_concat3("field ", id.text, " is declared twice"))
       end
       map_set(seen, id.text, 1)
       if !ps_is_lit(ps_tok(p), ":")
-        return ps_fail(p, ps_tok(p), u_cat("expected ':' and a type after field ", id.text))
+        return ps_fail(p, ps_tok(p), str_concat("expected ':' and a type after field ", id.text))
       end
       p.i = p.i + 1
       let ty = ""
@@ -941,7 +941,7 @@ fn ps_slot_parse(p: ptr Parser, s: ptr PfSlot, parent: ptr PNode) -> ptr PNode
       ps_add_item(n, fd)
       let nk = ps_tok(p).kind
       if nk != TK_NL && nk != TK_EOF
-        return ps_fail(p, ps_tok(p), u_cat("expected end of line after field ", id.text))
+        return ps_fail(p, ps_tok(p), str_concat("expected end of line after field ", id.text))
       end
     end
     return n
@@ -954,7 +954,7 @@ fn ps_slot_parse(p: ptr Parser, s: ptr PfSlot, parent: ptr PNode) -> ptr PNode
     n.ident = id.text
     let obj = ps_slot(parent, s.arg)
     if obj == null
-      pk_err = u_cat4(lx_pos(t), ": field slot names {", s.arg, "}, which comes later or is missing")
+      pk_err = str_concat4(lx_pos(t), ": field slot names {", s.arg, "}, which comes later or is missing")
       return null
     end
     if obj.ty == "?" || p.lenient && obj.ty == "ptr ?"
@@ -967,7 +967,7 @@ fn ps_slot_parse(p: ptr Parser, s: ptr PfSlot, parent: ptr PNode) -> ptr PNode
       return n
     end
     if !str_starts(obj.ty, "ptr ") || st == null
-      return ps_fail(p, id, u_cat4(ps_field_owner(obj), " has no fields: it is ", ps_describe_type(obj.ty), ", not a pointer to a struct"))
+      return ps_fail(p, id, str_concat4(ps_field_owner(obj), " has no fields: it is ", ps_describe_type(obj.ty), ", not a pointer to a struct"))
     end
     let f = ty_field(st, id.text)
     if f == null
@@ -975,7 +975,7 @@ fn ps_slot_parse(p: ptr Parser, s: ptr PfSlot, parent: ptr PNode) -> ptr PNode
         n.ty = "?"
         return n
       end
-      return ps_fail(p, id, u_cat4("struct ", st.name, " has no field ", id.text))
+      return ps_fail(p, id, str_concat4("struct ", st.name, " has no field ", id.text))
     end
     n.field = f
     n.ty = f.ty
@@ -1038,7 +1038,7 @@ fn ps_slot_parse(p: ptr Parser, s: ptr PfSlot, parent: ptr PNode) -> ptr PNode
     end
     let v = ps_lookup(p, id.text)
     if v == null
-      return ps_fail(p, id, u_cat("unknown variable ", lx_describe(id)))
+      return ps_fail(p, id, str_concat("unknown variable ", lx_describe(id)))
     end
     let n = ps_node(p, "var", t)
     n.vr = v
@@ -1065,7 +1065,7 @@ fn ps_slot_parse(p: ptr Parser, s: ptr PfSlot, parent: ptr PNode) -> ptr PNode
     elif p.lenient
       n.ty = "?"
     else
-      return ps_fail(p, id, u_cat("unknown function ", id.text))
+      return ps_fail(p, id, str_concat("unknown function ", id.text))
     end
     return n
   elif k == "newfunc"
@@ -1074,7 +1074,7 @@ fn ps_slot_parse(p: ptr Parser, s: ptr PfSlot, parent: ptr PNode) -> ptr PNode
       return null
     end
     if map_get(p.funcs, id.text) != 0
-      return ps_fail(p, id, u_cat3("function ", lx_describe(id), " is already defined"))
+      return ps_fail(p, id, str_concat3("function ", lx_describe(id), " is already defined"))
     end
     map_set(p.funcs, id.text, parent as int)
     ps_log(p, UNDO_MAPKEY, p.funcs as int, id.text as int, 0)
@@ -1112,7 +1112,7 @@ fn ps_slot_parse(p: ptr Parser, s: ptr PfSlot, parent: ptr PNode) -> ptr PNode
         return null
       end
       if !ps_is_lit(ps_tok(p), ":")
-        return ps_fail(p, ps_tok(p), u_cat4("parameter ", id.text, " needs a type, e.g. ", u_cat(id.text, ": int")))
+        return ps_fail(p, ps_tok(p), str_concat4("parameter ", id.text, " needs a type, e.g. ", str_concat(id.text, ": int")))
       end
       p.i = p.i + 1
       let ty = ""
@@ -1134,7 +1134,7 @@ fn ps_slot_parse(p: ptr Parser, s: ptr PfSlot, parent: ptr PNode) -> ptr PNode
     end
     return n
   end
-  pk_err = u_cat("internal: unknown slot kind ", k)
+  pk_err = str_concat("internal: unknown slot kind ", k)
   return null
 end
 
@@ -1143,12 +1143,12 @@ fn ps_declare(p: ptr Parser, id: ptr Tok, param: bool, ty: str) -> ptr PVar
   let sc = vec_get(f.scopes, vec_len(f.scopes) - 1) as ptr Vec
   for i = 0 to vec_len(sc) - 1
     if (vec_get(sc, i) as ptr PVar).name == id.text
-      ps_fail(p, id, u_cat(lx_describe(id), " is already declared here"))
+      ps_fail(p, id, str_concat(lx_describe(id), " is already declared here"))
       return null
     end
   end
   if ty_struct(p.types, ty) != null
-    ps_fail(p, id, u_cat4(id.text, " can't hold a struct value; use ptr ", ty, ""))
+    ps_fail(p, id, str_concat4(id.text, " can't hold a struct value; use ptr ", ty, ""))
     return null
   end
   let v = new PVar
@@ -1188,9 +1188,9 @@ fn ps_lookup(p: ptr Parser, name: str) -> ptr PVar
 end
 
 fn ps_declare_top(p: ptr Parser, id: ptr Tok) -> bool
-  let key = u_cat("name ", id.text)
+  let key = str_concat("name ", id.text)
   if map_get(p.declared, key) != 0
-    ps_fail(p, id, u_cat(id.text, " is already declared"))
+    ps_fail(p, id, str_concat(id.text, " is already declared"))
     return false
   end
   map_set(p.declared, key, 1)
@@ -1220,12 +1220,12 @@ end
 fn ps_declare_const(p: ptr Parser, n: ptr PNode, name: ptr PNode) -> bool
   let v = ps_slot(n, "value")
   if v == null
-    pk_err = u_cat(n.rule.pkg.origin, ": a pattern with a newconst slot needs a slot named value")
+    pk_err = str_concat(n.rule.pkg.origin, ": a pattern with a newconst slot needs a slot named value")
     return false
   end
   let bad = ps_find_bad(v)
   if bad != null
-    ps_fail_hard(p, bad.file, bad.line, bad.col, u_cat3("the value of constant ", name.ident, " must not use variables or calls"))
+    ps_fail_hard(p, bad.file, bad.line, bad.col, str_concat3("the value of constant ", name.ident, " must not use variables or calls"))
     return false
   end
   let old = map_get(p.consts, name.ident)
@@ -1258,7 +1258,7 @@ fn ps_clone(n: ptr PNode) -> ptr PNode
   c.snames = null
   c.svals = null
   for i = 0 to ps_nslots(n) - 1
-    ps_set_slot(c, u_get(n.snames, i), ps_clone(ps_nd(n.svals, i)))
+    ps_set_slot(c, vec_get_str(n.snames, i), ps_clone(ps_nd(n.svals, i)))
   end
   c.items = null
   for i = 0 to ps_nitems(n) - 1
@@ -1337,10 +1337,10 @@ fn ps_expr(p: ptr Parser, min_prec: int) -> ptr PNode
       cand.start = start
       cand.stop = p.i
       let b = ty_binder(cand as int)
-      let ok = ps_constrain(p, ls, left, b, t, u_cat3("left side of '", t.text, "'"))
+      let ok = ps_constrain(p, ls, left, b, t, str_concat3("left side of '", t.text, "'"))
       if ok
         ps_set_slot(cand, ls.name, left)
-        ok = ps_constrain(p, rs, right, b, rt, u_cat3("right side of '", t.text, "'"))
+        ok = ps_constrain(p, rs, right, b, rt, str_concat3("right side of '", t.text, "'"))
       end
       if ok
         ps_set_slot(cand, rs.name, right)
@@ -1384,7 +1384,7 @@ fn ps_postfix(p: ptr Parser, rules: ptr Vec, left: ptr PNode, start: int) -> ptr
     n.start = start
     let b = ty_binder(n as int)
     let ls = pf_elem(r.pat.elems, 0).slot
-    let ok = ps_constrain(p, ls, left, b, t, u_cat3("the left side of '", t.text, "'"))
+    let ok = ps_constrain(p, ls, left, b, t, str_concat3("the left side of '", t.text, "'"))
     if ok
       ps_set_slot(n, ls.name, left)
       let rest = vec_new()
@@ -1440,7 +1440,7 @@ fn ps_type_expr(p: ptr Parser, out: ptr str) -> bool
       return false
     end
     p.i = p.i + 1
-    *out = u_cat3("[", elem, "]")
+    *out = str_concat3("[", elem, "]")
     return true
   elif t.kind == TK_IDENT && t.text == "ptr"
     p.i = p.i + 1
@@ -1448,7 +1448,7 @@ fn ps_type_expr(p: ptr Parser, out: ptr str) -> bool
     if !ps_type_expr(p, &elem)
       return false
     end
-    *out = u_cat("ptr ", elem)
+    *out = str_concat("ptr ", elem)
     return true
   elif t.kind == TK_IDENT && t.text == "fn" && ps_is_lit(lx_tok(p.toks, p.i + 1), "(")
     // a function type: fn(int, str) -> bool
@@ -1457,7 +1457,7 @@ fn ps_type_expr(p: ptr Parser, out: ptr str) -> bool
     while !ps_is_lit(ps_tok(p), ")")
       if vec_len(params) > 0
         if !ps_is_lit(ps_tok(p), ",")
-          ps_fail(p, ps_tok(p), u_cat("expected ',' or ')' in the function type, found ", lx_describe(ps_tok(p))))
+          ps_fail(p, ps_tok(p), str_concat("expected ',' or ')' in the function type, found ", lx_describe(ps_tok(p))))
           return false
         end
         p.i = p.i + 1
@@ -1466,7 +1466,7 @@ fn ps_type_expr(p: ptr Parser, out: ptr str) -> bool
       if !ps_type_expr(p, &pt)
         return false
       end
-      u_push(params, pt)
+      vec_push_str(params, pt)
     end
     p.i = p.i + 1
     let ret = ""
@@ -1484,10 +1484,10 @@ fn ps_type_expr(p: ptr Parser, out: ptr str) -> bool
       *out = t.text
       return true
     end
-    ps_fail(p, t, u_cat("unknown type ", t.text))
+    ps_fail(p, t, str_concat("unknown type ", t.text))
     return false
   end
-  ps_fail(p, t, u_cat("expected a type, found ", lx_describe(t)))
+  ps_fail(p, t, str_concat("expected a type, found ", lx_describe(t)))
   return false
 end
 
@@ -1513,9 +1513,9 @@ fn ps_prefix(p: ptr Parser) -> ptr PNode
         n.start = start
         n.stop = p.i
         let b = ty_binder(n as int)
-        let ok = ps_constrain(p, sl, operand, b, ot, u_cat3("operand of '", t.text, "'"))
+        let ok = ps_constrain(p, sl, operand, b, ot, str_concat3("operand of '", t.text, "'"))
         if ok && sl.kind == "place" && !ps_is_place(operand)
-          ps_fail(p, ot, u_cat3("the operand of '", t.text, "' can't have its address taken"))
+          ps_fail(p, ot, str_concat3("the operand of '", t.text, "' can't have its address taken"))
           ok = false
         end
         if ok
@@ -1589,7 +1589,7 @@ fn ps_prefix(p: ptr Parser) -> ptr PNode
         pk_err = rule_far.err
         return null
       end
-      return ps_fail(p, t, u_cat("expected an expression, found keyword ", lx_describe(t)))
+      return ps_fail(p, t, str_concat("expected an expression, found keyword ", lx_describe(t)))
     end
     let v = ps_lookup(p, t.text)
     if v == null
@@ -1620,7 +1620,7 @@ fn ps_prefix(p: ptr Parser) -> ptr PNode
         v.ty = "?"
         v.global = true
       else
-        return ps_fail(p, t, u_cat("unknown variable ", lx_describe(t)))
+        return ps_fail(p, t, str_concat("unknown variable ", lx_describe(t)))
       end
     end
     p.i = p.i + 1
@@ -1637,12 +1637,12 @@ fn ps_prefix(p: ptr Parser) -> ptr PNode
       return null
     end
     if !ps_is_lit(ps_tok(p), ")")
-      return ps_fail(p, ps_tok(p), u_cat("expected ')', found ", lx_describe(ps_tok(p))))
+      return ps_fail(p, ps_tok(p), str_concat("expected ')', found ", lx_describe(ps_tok(p))))
     end
     p.i = p.i + 1
     return e
   end
-  return ps_fail(p, t, u_cat("expected an expression, found ", lx_describe(t)))
+  return ps_fail(p, t, str_concat("expected an expression, found ", lx_describe(t)))
 end
 
 // ---------------------------------------------------------------- expansion
@@ -1684,23 +1684,23 @@ fn ps_fill(p: ptr Parser, r: ptr LgRule, n: ptr PNode, tmpl: ptr Vec, lo: int, h
     end
     if str_starts(t.text, "$")
       let name = str_slice(t.text, 1, len(t.text))
-      let text = u_cat4("__", name, "_", u_cat4(str_from_int(n.line), "_", str_from_int(n.col), u_cat("_", str_from_int(p.depth))))
+      let text = str_concat4("__", name, "_", str_concat4(str_from_int(n.line), "_", str_from_int(n.col), str_concat("_", str_from_int(p.depth))))
       vec_push(toks, ps_tok_copy(TK_IDENT, text, t) as int)
       i = i + 1
       continue
     end
-    let f = u_fields(t.text)
-    if vec_len(f) > 0 && u_get(f, 0) == "each"
+    let f = str_fields(t.text)
+    if vec_len(f) > 0 && vec_get_str(f, 0) == "each"
       // {each name in list} ... {end}, or {each list} with the name "it"
       let var_ = "it"
       let list = ""
       if vec_len(f) == 2
-        list = u_get(f, 1)
-      elif vec_len(f) == 4 && u_get(f, 2) == "in"
-        var_ = u_get(f, 1)
-        list = u_get(f, 3)
+        list = vec_get_str(f, 1)
+      elif vec_len(f) == 4 && vec_get_str(f, 2) == "in"
+        var_ = vec_get_str(f, 1)
+        list = vec_get_str(f, 3)
       else
-        return u_fail(u_cat(lx_pos(t), ": expected {each <name> in <list>}"))
+        return u_fail(str_concat(lx_pos(t), ": expected {each <name> in <list>}"))
       end
       let depth = 1
       let j = i + 1
@@ -1719,7 +1719,7 @@ fn ps_fill(p: ptr Parser, r: ptr LgRule, n: ptr PNode, tmpl: ptr Vec, lo: int, h
         j = j + 1
       end
       if j == hi
-        return u_fail(u_cat(lx_pos(t), ": {each} without {end}"))
+        return u_fail(str_concat(lx_pos(t), ": {each} without {end}"))
       end
       let found = false
       let c = ps_lookup_hole(r, n, list, names, items, t, &found)
@@ -1728,7 +1728,7 @@ fn ps_fill(p: ptr Parser, r: ptr LgRule, n: ptr PNode, tmpl: ptr Vec, lo: int, h
       end
       if c != null
         if c.kind != "groups" && c.kind != "args"
-          return u_fail(u_cat4(lx_pos(t), ": {each} needs a repeated group or an args slot, but {", list, u_cat("} is ", c.kind)))
+          return u_fail(str_concat4(lx_pos(t), ": {each} needs a repeated group or an args slot, but {", list, str_concat("} is ", c.kind)))
         end
         for k = 0 to vec_len(c.items) - 1
           let inner_names = vec_new()
@@ -1737,7 +1737,7 @@ fn ps_fill(p: ptr Parser, r: ptr LgRule, n: ptr PNode, tmpl: ptr Vec, lo: int, h
             vec_push(inner_names, vec_get(names, m))
             vec_push(inner_items, vec_get(items, m))
           end
-          u_push(inner_names, var_)
+          vec_push_str(inner_names, var_)
           vec_push(inner_items, vec_get(c.items, k))
           if !ps_fill(p, r, n, tmpl, i + 1, j, inner_names, inner_items, toks)
             return false
@@ -1748,7 +1748,7 @@ fn ps_fill(p: ptr Parser, r: ptr LgRule, n: ptr PNode, tmpl: ptr Vec, lo: int, h
       continue
     end
     if t.text == "end"
-      return u_fail(u_cat(lx_pos(t), ": {end} without {each}"))
+      return u_fail(str_concat(lx_pos(t), ": {end} without {each}"))
     end
     let found = false
     let c = ps_lookup_hole(r, n, t.text, names, items, t, &found)
@@ -1788,7 +1788,7 @@ fn ps_lookup_hole(r: ptr LgRule, n: ptr PNode, text: str, names: ptr Vec, items:
   end
   let k = vec_len(names) - 1
   while k >= 0
-    if u_get(names, k) == head
+    if vec_get_str(names, k) == head
       let item = vec_get(items, k) as ptr PNode
       if dot < 0
         return item
@@ -1801,7 +1801,7 @@ fn ps_lookup_hole(r: ptr LgRule, n: ptr PNode, text: str, names: ptr Vec, items:
         return null
       end
       *found = false
-      u_fail(u_cat4(lx_pos(t), ": expand template uses unknown slot {", text, "}"))
+      u_fail(str_concat4(lx_pos(t), ": expand template uses unknown slot {", text, "}"))
       return null
     end
     k = k - 1
@@ -1814,7 +1814,7 @@ fn ps_lookup_hole(r: ptr LgRule, n: ptr PNode, text: str, names: ptr Vec, items:
     return null
   end
   *found = false
-  u_fail(u_cat4(lx_pos(t), ": expand template uses unknown slot {", text, "}"))
+  u_fail(str_concat4(lx_pos(t), ": expand template uses unknown slot {", text, "}"))
   return null
 end
 
@@ -1822,7 +1822,7 @@ end
 // parses the result again.
 fn ps_expand(p: ptr Parser, r: ptr LgRule, n: ptr PNode, s: ptr PSnap) -> ptr PNode
   if p.depth > 64
-    pk_err = u_cat4(ps_pos(n), ": expansion of ", r.pkg.name, " nests too deeply (does it expand into itself?)")
+    pk_err = str_concat4(ps_pos(n), ": expansion of ", r.pkg.name, " nests too deeply (does it expand into itself?)")
     return null
   end
   let stop = p.i
@@ -1851,7 +1851,7 @@ fn ps_expand(p: ptr Parser, r: ptr LgRule, n: ptr PNode, s: ptr PSnap) -> ptr PN
       end
       let st = ps_statement(p, false)
       if st == null
-        pk_err = u_cat4("in expansion of ", r.pkg.name, " at ", u_cat3(ps_pos(n), ": ", ps_best(p, pk_err)))
+        pk_err = str_concat4("in expansion of ", r.pkg.name, " at ", str_concat3(ps_pos(n), ": ", ps_best(p, pk_err)))
         p.toks = outer
         p.i = stop
         p.depth = p.depth - 1
@@ -1862,7 +1862,7 @@ fn ps_expand(p: ptr Parser, r: ptr LgRule, n: ptr PNode, s: ptr PSnap) -> ptr PN
   else
     let e = ps_expr(p, 0)
     if e == null
-      pk_err = u_cat4("in expansion of ", r.pkg.name, " at ", u_cat3(ps_pos(n), ": ", pk_err))
+      pk_err = str_concat4("in expansion of ", r.pkg.name, " at ", str_concat3(ps_pos(n), ": ", pk_err))
       p.toks = outer
       p.i = stop
       p.depth = p.depth - 1
@@ -1870,7 +1870,7 @@ fn ps_expand(p: ptr Parser, r: ptr LgRule, n: ptr PNode, s: ptr PSnap) -> ptr PN
     end
     ps_skip_nl(p)
     if ps_tok(p).kind != TK_EOF
-      pk_err = u_cat4("in expansion of ", r.pkg.name, " at ", u_cat(ps_pos(n), ": template is not a single expression"))
+      pk_err = str_concat4("in expansion of ", r.pkg.name, " at ", str_concat(ps_pos(n), ": template is not a single expression"))
       p.toks = outer
       p.i = stop
       p.depth = p.depth - 1
@@ -1879,10 +1879,10 @@ fn ps_expand(p: ptr Parser, r: ptr LgRule, n: ptr PNode, s: ptr PSnap) -> ptr PN
     out = e
   end
   let ex = vec_new()
-  u_push(ex, r.pkg.name)
+  vec_push_str(ex, r.pkg.name)
   if out.expanded != null
     for i = 0 to vec_len(out.expanded) - 1
-      u_push(ex, u_get(out.expanded, i))
+      vec_push_str(ex, vec_get_str(out.expanded, i))
     end
   end
   out.expanded = ex
@@ -1909,7 +1909,7 @@ fn ps_declare_struct(p: ptr Parser, n: ptr PNode, t: ptr Tok) -> bool
     end
   end
   if name == "" || fields == null
-    pk_err = u_cat(n.rule.pkg.origin, ": a struct pattern needs a newtype slot and a fields slot")
+    pk_err = str_concat(n.rule.pkg.origin, ": a struct pattern needs a newtype slot and a fields slot")
     return false
   end
   let st = ty_struct(p.types, name)
@@ -1924,7 +1924,7 @@ fn ps_declare_struct(p: ptr Parser, n: ptr PNode, t: ptr Tok) -> bool
     vec_push(st.fields, f as int)
   end
   if !ty_layout(p.types, st)
-    if p.lenient && u_has(pk_err, "unknown type")
+    if p.lenient && str_has(pk_err, "unknown type")
       // a field's type is declared later: lay it out in the second pass
       st.fields = vec_new()
       return true
@@ -1949,13 +1949,13 @@ fn ps_check_node(p: ptr Parser, n: ptr PNode) -> bool
           continue
         end
         if ps_nitems(a) != vec_len(params)
-          pk_err = u_cat4(ps_pos(c), ": this ", c.ty, u_cat4(" takes ", str_from_int(vec_len(params)), " argument(s), got ", str_from_int(ps_nitems(a))))
+          pk_err = str_concat4(ps_pos(c), ": this ", c.ty, str_concat4(" takes ", str_from_int(vec_len(params)), " argument(s), got ", str_from_int(ps_nitems(a))))
           return false
         end
         for m = 0 to ps_nitems(a) - 1
           let arg = ps_nd(a.items, m)
-          if !ty_compatible(u_get(params, m), arg.ty)
-            pk_err = u_cat4(ps_pos(arg), ": argument ", str_from_int(m + 1), u_cat4(" of this ", c.ty, " must be ", u_cat3(u_get(params, m), ", but it is ", ps_describe_type(arg.ty))))
+          if !ty_compatible(vec_get_str(params, m), arg.ty)
+            pk_err = str_concat4(ps_pos(arg), ": argument ", str_from_int(m + 1), str_concat4(" of this ", c.ty, " must be ", str_concat3(vec_get_str(params, m), ", but it is ", ps_describe_type(arg.ty))))
             return false
           end
         end
@@ -1971,13 +1971,13 @@ fn ps_check_node(p: ptr Parser, n: ptr PNode) -> bool
         continue
       end
       if ps_nitems(a) != vec_len(sig.params)
-        pk_err = u_cat4(ps_pos(c), ": ", c.ident, u_cat4(" takes ", str_from_int(vec_len(sig.params)), " argument(s), got ", str_from_int(ps_nitems(a))))
+        pk_err = str_concat4(ps_pos(c), ": ", c.ident, str_concat4(" takes ", str_from_int(vec_len(sig.params)), " argument(s), got ", str_from_int(ps_nitems(a))))
         return false
       end
       for m = 0 to ps_nitems(a) - 1
         let arg = ps_nd(a.items, m)
-        if !ty_compatible(u_get(sig.params, m), arg.ty)
-          pk_err = u_cat4(ps_pos(arg), ": argument ", str_from_int(m + 1), u_cat4(" of ", c.ident, " must be ", u_cat3(u_get(sig.params, m), ", but it is ", ps_describe_type(arg.ty))))
+        if !ty_compatible(vec_get_str(sig.params, m), arg.ty)
+          pk_err = str_concat4(ps_pos(arg), ": argument ", str_from_int(m + 1), str_concat4(" of ", c.ident, " must be ", str_concat3(vec_get_str(sig.params, m), ", but it is ", ps_describe_type(arg.ty))))
           return false
         end
       end
@@ -2032,31 +2032,31 @@ fn ps_node_line(n: ptr PNode) -> str
     elif n.vr.global
       where = "global"
     end
-    sb_add(b, u_cat4(" ", n.vr.name, " ", where))
+    sb_add(b, str_concat4(" ", n.vr.name, " ", where))
     sb_byte(b, ' ')
     sb_int(b, n.vr.index)
   elif k == "ident" || k == "func" || k == "funcref" || k == "newfunc" || k == "newtype" || k == "fielddecl" || k == "newconst"
-    sb_add(b, u_cat(" ", n.ident))
+    sb_add(b, str_concat(" ", n.ident))
   elif k == "field"
-    sb_add(b, u_cat(" ", n.ident))
+    sb_add(b, str_concat(" ", n.ident))
     if n.field != null
       sb_add(b, " offset ")
       sb_int(b, n.field.offset)
     end
   end
   if n.expanded != null && vec_len(n.expanded) > 0
-    sb_add(b, u_cat(" expanded=", u_join(n.expanded, ",")))
+    sb_add(b, str_concat(" expanded=", str_join(n.expanded, ",")))
   end
   if n.frame != null
     let f = n.frame
-    sb_add(b, u_cat(" frame name=", f.name))
+    sb_add(b, str_concat(" frame name=", f.name))
     sb_add(b, " params=")
     sb_int(b, f.params)
     sb_add(b, " locals=")
     sb_int(b, f.slots)
     sb_add(b, " size=")
     sb_int(b, ps_frame_size(f))
-    sb_add(b, u_cat(" ret=", pf_dquote(f.ret)))
+    sb_add(b, str_concat(" ret=", pf_dquote(f.ret)))
   end
   return sb_str(b)
 end
@@ -2069,7 +2069,7 @@ fn ps_dump_walk(b: ptr StrBuf, n: ptr PNode, depth: int, label: str)
   sb_add(b, ps_node_line(n))
   sb_byte(b, '\n')
   for i = 0 to ps_nslots(n) - 1
-    ps_dump_walk(b, ps_nd(n.svals, i), depth + 1, u_cat(u_get(n.snames, i), ": "))
+    ps_dump_walk(b, ps_nd(n.svals, i), depth + 1, str_concat(vec_get_str(n.snames, i), ": "))
   end
   for i = 0 to ps_nitems(n) - 1
     ps_dump_walk(b, ps_nd(n.items, i), depth + 1, "- ")

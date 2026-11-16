@@ -98,7 +98,7 @@ code
   end
 
   fn pf_rename_string(r: ptr PfRename) -> str
-    return u_cat4(u_cat3("rename ", r.kind, " '"), r.old, u_cat3("' in ", r.scope, " to '"), u_cat(r.new_, "'"))
+    return str_concat4(str_concat3("rename ", r.kind, " '"), r.old, str_concat3("' in ", r.scope, " to '"), str_concat(r.new_, "'"))
   end
 
   fn pf_is_word(s: str) -> bool
@@ -115,9 +115,9 @@ code
   end
 
   fn pf_is_package_name(s: str) -> bool
-    let segs = u_split(s, '/')
+    let segs = str_split(s, '/')
     for i = 0 to vec_len(segs) - 1
-      if !pf_is_word(u_replace(u_get(segs, i), "-", "_"))
+      if !pf_is_word(str_replace(vec_get_str(segs, i), "-", "_"))
         return false
       end
     end
@@ -135,54 +135,54 @@ code
   // pf_parse_rename reads one rule: rename <kind> '<old>' in <scope> to '<new>'.
   fn pf_parse_rename(line: str) -> ptr PfRename
     let words = vec_new()
-    let rest = u_trim(line)
+    let rest = str_trim(line)
     while rest != ""
       if rest[0] == '\''
         let stop = str_find_byte(rest, '\'', 1)
         if stop < 0
-          u_fail(u_cat("missing closing ' in ", u_quote(line)))
+          u_fail(str_concat("missing closing ' in ", str_quote(line)))
           return null
         end
-        u_push(words, str_slice(rest, 0, stop + 1))
-        rest = u_trim(str_slice(rest, stop + 1, len(rest)))
+        vec_push_str(words, str_slice(rest, 0, stop + 1))
+        rest = str_trim(str_slice(rest, stop + 1, len(rest)))
         continue
       end
       let stop = 0
       while stop < len(rest) && rest[stop] != ' ' && rest[stop] != '\t'
         stop = stop + 1
       end
-      u_push(words, str_slice(rest, 0, stop))
-      rest = u_trim(str_slice(rest, stop, len(rest)))
+      vec_push_str(words, str_slice(rest, 0, stop))
+      rest = str_trim(str_slice(rest, stop, len(rest)))
     end
     let usage = "expected: rename prefix|name|keyword '<old>' in <package or truck> to '<new>'"
     if vec_len(words) != 7
       u_fail(usage)
       return null
     end
-    let kind = u_get(words, 1)
-    if u_get(words, 0) != "rename" || u_get(words, 3) != "in" || u_get(words, 5) != "to" || !(kind == "prefix" || kind == "name" || kind == "keyword")
+    let kind = vec_get_str(words, 1)
+    if vec_get_str(words, 0) != "rename" || vec_get_str(words, 3) != "in" || vec_get_str(words, 5) != "to" || !(kind == "prefix" || kind == "name" || kind == "keyword")
       u_fail(usage)
       return null
     end
     let ok1 = false
     let ok2 = false
-    let old = pf_unquote(u_get(words, 2), &ok1)
-    let nw = pf_unquote(u_get(words, 6), &ok2)
+    let old = pf_unquote(vec_get_str(words, 2), &ok1)
+    let nw = pf_unquote(vec_get_str(words, 6), &ok2)
     if !ok1 || !ok2
       u_fail(usage)
       return null
     end
     if !pf_is_word(old) || !pf_is_word(nw)
-      u_fail(u_cat4("'", old, "' and '", u_cat(nw, "' must be names: letters, digits and _")))
+      u_fail(str_concat4("'", old, "' and '", str_concat(nw, "' must be names: letters, digits and _")))
       return null
     end
-    let scope = u_get(words, 4)
+    let scope = vec_get_str(words, 4)
     if !pf_is_package_name(scope)
-      u_fail(u_cat(u_quote(scope), " is not a package or truck name"))
+      u_fail(str_concat(str_quote(scope), " is not a package or truck name"))
       return null
     end
     if old == nw
-      u_fail(u_cat3("renaming '", old, "' to itself"))
+      u_fail(str_concat3("renaming '", old, "' to itself"))
       return null
     end
     let r = new PfRename
@@ -206,7 +206,7 @@ code
   end
 
   fn pf_errf(origin: str, line: int, msg: str) -> ptr PfFile
-    pk_err = u_cat4(origin, ":", str_from_int(line), u_cat(": ", msg))
+    pk_err = str_concat4(origin, ":", str_from_int(line), str_concat(": ", msg))
     return null
   end
 
@@ -222,7 +222,7 @@ code
   end
 
   fn pf_trim_blank_tail(v: ptr Vec)
-    while vec_len(v) > 0 && u_get(v, vec_len(v) - 1) == ""
+    while vec_len(v) > 0 && vec_get_str(v, vec_len(v) - 1) == ""
       vec_pop(v)
     end
   end
@@ -240,7 +240,7 @@ code
     f.emits = vec_new()
     f.data = vec_new()
     f.support = vec_new()
-    let lines = u_split(u_replace(src, "\r\n", "\n"), '\n')
+    let lines = str_split(str_replace(src, "\r\n", "\n"), '\n')
     let cur: ptr Vec = null
     let cur_syn: ptr PfSyntax = null
     let in_doc = false
@@ -249,22 +249,22 @@ code
     let resolve_at = 0
     for idx = 0 to vec_len(lines) - 1
       let ln = idx + 1
-      let raw = u_get(lines, idx)
-      let trimmed = u_trim(raw)
+      let raw = vec_get_str(lines, idx)
+      let trimmed = str_trim(raw)
       let indented = raw == "" || raw[0] == ' ' || raw[0] == '\t'
       if in_code && indented
         if trimmed == ""
-          u_push(f.code, "")
+          vec_push_str(f.code, "")
         else
-          u_push(f.code, pf_dedent(raw))
+          vec_push_str(f.code, pf_dedent(raw))
         end
         continue
       end
       if in_doc && indented
         if trimmed == ""
-          u_push(f.doc_body, "")
+          vec_push_str(f.doc_body, "")
         else
-          u_push(f.doc_body, pf_dedent(raw))
+          vec_push_str(f.doc_body, pf_dedent(raw))
         end
         continue
       end
@@ -272,11 +272,11 @@ code
         continue
       end
       if !indented
-        let fields = u_fields(trimmed)
-        let kw = u_get(fields, 0)
+        let fields = str_fields(trimmed)
+        let kw = vec_get_str(fields, 0)
         if resolve_at > 0
           if trimmed != "end"
-            return pf_errf(origin, ln, u_cat3("expected 'end' to close the resolve section of line ", str_from_int(resolve_at), ""))
+            return pf_errf(origin, ln, str_concat3("expected 'end' to close the resolve section of line ", str_from_int(resolve_at), ""))
           end
           resolve_at = 0
           continue
@@ -285,29 +285,29 @@ code
           return pf_errf(origin, ln, "'end' without a resolve section to close")
         end
         if !pf_is_section(kw)
-          return pf_errf(origin, ln, u_cat3("unknown section ", u_quote(kw), " (expected one of doc, needs, type, truck, syntax, expand, code, emit, data, support, resolve)"))
+          return pf_errf(origin, ln, str_concat3("unknown section ", str_quote(kw), " (expected one of doc, needs, type, truck, syntax, expand, code, emit, data, support, resolve)"))
         end
         cur = null
         cur_syn = null
         in_doc = kw == "doc"
         in_code = kw == "code"
         if kw == "doc"
-          f.doc = u_trim(u_after(trimmed, "doc"))
+          f.doc = str_trim(str_trim_prefix(trimmed, "doc"))
         elif kw == "needs"
           for i = 1 to vec_len(fields) - 1
-            u_push(f.needs, u_get(fields, i))
+            vec_push_str(f.needs, vec_get_str(fields, i))
           end
         elif kw == "type"
           if vec_len(fields) != 3
             return pf_errf(origin, ln, "use: type <name> <size in bytes>")
           end
           let ok = false
-          let size = u_atoi(u_get(fields, 2), &ok)
+          let size = u_atoi(vec_get_str(fields, 2), &ok)
           if !ok || (size != 1 && size != 8)
             return pf_errf(origin, ln, "type size must be 1 or 8 bytes")
           end
           let t = new PfType
-          t.name = u_get(fields, 1)
+          t.name = vec_get_str(fields, 1)
           t.size = size
           vec_push(f.types, t as int)
         elif kw == "truck"
@@ -372,7 +372,7 @@ code
         end
         vec_push(cur_syn.patterns, p as int)
       elif cur != null
-        u_push(cur, trimmed)
+        vec_push_str(cur, trimmed)
       else
         return pf_errf(origin, ln, "indented line outside of a section")
       end
@@ -394,15 +394,15 @@ code
   end
 
   fn pf_syntax_header(fields: ptr Vec) -> ptr PfSyntax
-    if vec_len(fields) < 2 || !pf_is_syntax_kind(u_get(fields, 1))
+    if vec_len(fields) < 2 || !pf_is_syntax_kind(vec_get_str(fields, 1))
       u_fail("syntax needs a kind: statement, function, struct, expr, infix, prefix or postfix")
       return null
     end
     let s = new PfSyntax
-    s.kind = u_get(fields, 1)
+    s.kind = vec_get_str(fields, 1)
     s.patterns = vec_new()
     for i = 2 to vec_len(fields) - 1
-      let a = u_get(fields, i)
+      let a = vec_get_str(fields, i)
       if a == "left"
       elif a == "right"
         s.right = true
@@ -420,14 +420,14 @@ code
         let ok = false
         let n = u_atoi(a, &ok)
         if !ok
-          u_fail(u_cat3("unexpected ", u_quote(a), " in syntax header"))
+          u_fail(str_concat3("unexpected ", str_quote(a), " in syntax header"))
           return null
         end
         s.prec = n
       end
     end
     if (s.kind == "infix" || s.kind == "prefix" || s.kind == "postfix") && s.prec == 0
-      u_fail(u_cat(s.kind, " syntax needs a precedence (a positive number)"))
+      u_fail(str_concat(s.kind, " syntax needs a precedence (a positive number)"))
       return null
     end
     return s
@@ -438,15 +438,15 @@ code
     e.section = ""
     e.lines = vec_new()
     let i = 1
-    if vec_len(fields) > 1 && u_get(fields, 1) != "when"
-      e.section = u_get(fields, 1)
+    if vec_len(fields) > 1 && vec_get_str(fields, 1) != "when"
+      e.section = vec_get_str(fields, 1)
       i = 2
     end
     let n = vec_len(fields) - i
     if n == 0
       return e
     end
-    if u_get(fields, i) != "when"
+    if vec_get_str(fields, i) != "when"
       u_fail("expected 'when' in emit header")
       return null
     end
@@ -454,17 +454,17 @@ code
     n = n - 1
     let c = new PfCond
     c.arg = ""
-    if n == 3 && (u_get(fields, i + 1) == "is" || u_get(fields, i + 1) == "has" || u_get(fields, i + 1) == "size" || u_get(fields, i + 1) == "count")
-      c.slot = u_get(fields, i)
-      c.op = u_get(fields, i + 1)
-      c.arg = u_get(fields, i + 2)
-    elif n == 2 && (u_get(fields, i + 1) == "simple" || u_get(fields, i + 1) == "empty" || u_get(fields, i + 1) == "missing")
-      c.slot = u_get(fields, i)
-      c.op = u_get(fields, i + 1)
+    if n == 3 && (vec_get_str(fields, i + 1) == "is" || vec_get_str(fields, i + 1) == "has" || vec_get_str(fields, i + 1) == "size" || vec_get_str(fields, i + 1) == "count")
+      c.slot = vec_get_str(fields, i)
+      c.op = vec_get_str(fields, i + 1)
+      c.arg = vec_get_str(fields, i + 2)
+    elif n == 2 && (vec_get_str(fields, i + 1) == "simple" || vec_get_str(fields, i + 1) == "empty" || vec_get_str(fields, i + 1) == "missing")
+      c.slot = vec_get_str(fields, i)
+      c.op = vec_get_str(fields, i + 1)
     elif n == 2
-      c.slot = u_get(fields, i)
+      c.slot = vec_get_str(fields, i)
       c.op = "type"
-      c.arg = u_get(fields, i + 1)
+      c.arg = vec_get_str(fields, i + 1)
     else
       u_fail("bad condition; use: when <slot> <type> | <slot> is <kind> | <slot> has <section> | <slot> size <n> | <slot> count <n> | <slot> simple | <slot> empty | <slot> missing")
       return null
@@ -483,7 +483,7 @@ code
       if c == ' ' || c == '\t'
         i = i + 1
       elif c == '[' || c == ']'
-        u_push(out, str_slice(s, i, i + 1))
+        vec_push_str(out, str_slice(s, i, i + 1))
         i = i + 1
       elif c == '{'
         let depth = 0
@@ -503,21 +503,21 @@ code
           u_fail("unterminated slot in pattern")
           return null
         end
-        u_push(out, str_slice(s, i, j + 1))
+        vec_push_str(out, str_slice(s, i, j + 1))
         i = j + 1
       elif c == '\\' && i + 1 < len(s)
         let j = i + 1
         while j < len(s) && s[j] != ' ' && s[j] != '\t'
           j = j + 1
         end
-        u_push(out, u_cat("\x00", str_slice(s, i + 1, j)))
+        vec_push_str(out, str_concat("\x00", str_slice(s, i + 1, j)))
         i = j
       else
         let j = i
         while j < len(s) && s[j] != ' ' && s[j] != '\t' && s[j] != '[' && s[j] != ']' && s[j] != '{'
           j = j + 1
         end
-        u_push(out, str_slice(s, i, j))
+        vec_push_str(out, str_slice(s, i, j))
         i = j
       end
     end
@@ -533,23 +533,23 @@ code
     p.result = ""
     let i = vec_len(toks) - 2
     while i >= 0
-      if u_get(toks, i) != "->"
+      if vec_get_str(toks, i) != "->"
         i = i - 1
         continue
       end
       let is_type = true
       for j = i + 1 to vec_len(toks) - 1
-        let t = u_get(toks, j)
-        if u_has(t, ":") || str_starts(t, "\x00")
+        let t = vec_get_str(toks, j)
+        if str_has(t, ":") || str_starts(t, "\x00")
           is_type = false
         end
       end
       if is_type
-        let res = u_join_from(toks, i + 1, " ")
-        p.result = u_replace(u_replace(res, "[ ", "["), " ]", "]")
+        let res = str_join_from(toks, i + 1, " ")
+        p.result = str_replace(str_replace(res, "[ ", "["), " ]", "]")
         let cut = vec_new()
         for j = 0 to i - 1
-          u_push(cut, u_get(toks, j))
+          vec_push_str(cut, vec_get_str(toks, j))
         end
         toks = cut
       end
@@ -577,7 +577,7 @@ code
   fn pf_parse_elems(toks: ptr Vec, pos: ptr int, in_group: bool) -> ptr Vec
     let elems = vec_new()
     while *pos < vec_len(toks)
-      let t = u_get(toks, *pos)
+      let t = vec_get_str(toks, *pos)
       *pos = *pos + 1
       if t == "["
         let group = pf_parse_elems(toks, pos, true)
@@ -591,7 +591,7 @@ code
         let e = new PfElem
         e.lit = ""
         e.optional = group
-        if *pos < vec_len(toks) && u_get(toks, *pos) == "*"
+        if *pos < vec_len(toks) && vec_get_str(toks, *pos) == "*"
           e.repeat = true
           *pos = *pos + 1
         end
@@ -613,7 +613,7 @@ code
         vec_push(elems, e as int)
       else
         let e = new PfElem
-        e.lit = u_after(t, "\x00")
+        e.lit = str_trim_prefix(t, "\x00")
         vec_push(elems, e as int)
       end
     end
@@ -631,27 +631,27 @@ code
     end
     let colon = str_find_byte(body, ':', 0)
     if colon < 0
-      u_fail(u_cat3("slot ", t, " needs a kind, e.g. {name: expr}"))
+      u_fail(str_concat3("slot ", t, " needs a kind, e.g. {name: expr}"))
       return null
     end
-    let fields = u_fields(str_slice(body, colon + 1, len(body)))
-    if vec_len(fields) == 0 || !pf_is_slot_kind(u_get(fields, 0))
-      u_fail(u_cat3("slot ", t, ": unknown kind (expr, block, newvar, var, ident, func, newfunc, args, params)"))
+    let fields = str_fields(str_slice(body, colon + 1, len(body)))
+    if vec_len(fields) == 0 || !pf_is_slot_kind(vec_get_str(fields, 0))
+      u_fail(str_concat3("slot ", t, ": unknown kind (expr, block, newvar, var, ident, func, newfunc, args, params)"))
       return null
     end
     let s = new PfSlot
-    s.name = u_trim(str_slice(body, 0, colon))
-    s.kind = u_get(fields, 0)
-    s.arg = u_join_from(fields, 1, " ")
+    s.name = str_trim(str_slice(body, 0, colon))
+    s.kind = vec_get_str(fields, 0)
+    s.arg = str_join_from(fields, 1, " ")
     if (s.kind == "newvar" || s.kind == "field") && s.arg != ""
       if !str_starts(s.arg, "of ")
-        u_fail(u_cat4("slot ", t, ": ", u_cat(s.kind, " takes 'of <slot>'")))
+        u_fail(str_concat4("slot ", t, ": ", str_concat(s.kind, " takes 'of <slot>'")))
         return null
       end
-      s.arg = u_trim(str_slice(s.arg, 3, len(s.arg)))
+      s.arg = str_trim(str_slice(s.arg, 3, len(s.arg)))
     end
     if s.kind == "field" && s.arg == ""
-      u_fail(u_cat3("slot ", t, ": field needs 'of <slot>', the expression whose field it is"))
+      u_fail(str_concat3("slot ", t, ": field needs 'of <slot>', the expression whose field it is"))
       return null
     end
     return s
@@ -692,16 +692,16 @@ code
     for j = i + 1 to vec_len(es) - 1
       let e = pf_elem(es, j)
       if e.lit != ""
-        u_push(out, e.lit)
+        vec_push_str(out, e.lit)
         return out
       elif e.optional != null
-        u_push(out, pf_elem(e.optional, 0).lit)
+        vec_push_str(out, pf_elem(e.optional, 0).lit)
       else
         return out
       end
     end
     for j = 0 to vec_len(after) - 1
-      u_push(out, u_get(after, j))
+      vec_push_str(out, vec_get_str(after, j))
     end
     return out
   end
@@ -715,9 +715,9 @@ code
         let then_ = pf_follow(es, i, after)
         if e.repeat
           let first = vec_new()
-          u_push(first, pf_elem(e.optional, 0).lit)
+          vec_push_str(first, pf_elem(e.optional, 0).lit)
           for j = 0 to vec_len(then_) - 1
-            u_push(first, u_get(then_, j))
+            vec_push_str(first, vec_get_str(then_, j))
           end
           then_ = first
         end
@@ -728,11 +728,11 @@ code
       if e.slot != null && (e.slot.kind == "block" || e.slot.kind == "fields")
         let f = pf_follow(es, i, after)
         if vec_len(f) == 0
-          return u_fail(u_cat4(e.slot.kind, " slot {", e.slot.name, "} must be followed by a literal (like 'end')"))
+          return u_fail(str_concat4(e.slot.kind, " slot {", e.slot.name, "} must be followed by a literal (like 'end')"))
         end
         e.slot.follow = f
         for j = 0 to vec_len(f) - 1
-          u_push(out, u_get(f, j))
+          vec_push_str(out, vec_get_str(f, j))
         end
       end
     end
@@ -743,7 +743,7 @@ code
     for i = 0 to vec_len(es) - 1
       let e = pf_elem(es, i)
       if e.lit != ""
-        u_push(out, e.lit)
+        vec_push_str(out, e.lit)
       end
       if e.optional != null
         pf_literals_into(e.optional, out)
@@ -772,30 +772,30 @@ code
     for i = 0 to vec_len(es) - 1
       let e = pf_elem(es, i)
       if e.lit != ""
-        u_push(parts, e.lit)
+        vec_push_str(parts, e.lit)
       elif e.slot != null
-        let s = u_cat3(e.slot.name, ": ", e.slot.kind)
+        let s = str_concat3(e.slot.name, ": ", e.slot.kind)
         if (e.slot.kind == "newvar" || e.slot.kind == "field") && e.slot.arg != ""
-          s = u_cat3(s, " of ", e.slot.arg)
+          s = str_concat3(s, " of ", e.slot.arg)
         elif e.slot.arg != ""
-          s = u_cat3(s, " ", e.slot.arg)
+          s = str_concat3(s, " ", e.slot.arg)
         end
-        u_push(parts, u_cat3("{", s, "}"))
+        vec_push_str(parts, str_concat3("{", s, "}"))
       elif e.optional != null
-        let g = u_cat3("[ ", pf_elems_string(e.optional), " ]")
+        let g = str_concat3("[ ", pf_elems_string(e.optional), " ]")
         if e.repeat
-          g = u_cat(g, "*")
+          g = str_concat(g, "*")
         end
-        u_push(parts, g)
+        vec_push_str(parts, g)
       end
     end
-    return u_join(parts, " ")
+    return str_join(parts, " ")
   end
 
   fn pf_pattern_string(p: ptr PfPattern) -> str
     let out = pf_elems_string(p.elems)
     if p.result != ""
-      out = u_cat3(out, " -> ", p.result)
+      out = str_concat3(out, " -> ", p.result)
     end
     return out
   end
@@ -811,7 +811,7 @@ code
         sb_byte(b, c)
       else
         sb_add(b, "\\x")
-        u_hex(b, c as int)
+        sb_hex(b, c as int)
       end
     end
     sb_byte(b, '"')
@@ -820,7 +820,7 @@ code
 
   fn pf_dump_body(b: ptr StrBuf, lines: ptr Vec)
     for i = 0 to vec_len(lines) - 1
-      let l = u_get(lines, i)
+      let l = vec_get_str(lines, i)
       if l == ""
         sb_add(b, "  |\n")
       else
@@ -833,18 +833,18 @@ code
 
   fn pf_dump(f: ptr PfFile) -> str
     let b = sb_new()
-    sb_add(b, u_cat3("package ", f.name, "\n"))
-    sb_add(b, u_cat3("doc ", pf_dquote(f.doc), "\n"))
+    sb_add(b, str_concat3("package ", f.name, "\n"))
+    sb_add(b, str_concat3("doc ", pf_dquote(f.doc), "\n"))
     pf_dump_body(b, f.doc_body)
     if vec_len(f.needs) > 0
-      sb_add(b, u_cat3("needs ", u_join(f.needs, " "), "\n"))
+      sb_add(b, str_concat3("needs ", str_join(f.needs, " "), "\n"))
     end
     for i = 0 to vec_len(f.types) - 1
       let t = vec_get(f.types, i) as ptr PfType
-      sb_add(b, u_cat4("type ", t.name, " ", u_cat(str_from_int(t.size), "\n")))
+      sb_add(b, str_concat4("type ", t.name, " ", str_concat(str_from_int(t.size), "\n")))
     end
     if f.is_truck
-      sb_add(b, u_cat3("truck ", u_join(f.truck, " "), "\n"))
+      sb_add(b, str_concat3("truck ", str_join(f.truck, " "), "\n"))
     end
     for i = 0 to vec_len(f.syntax) - 1
       let s = vec_get(f.syntax, i) as ptr PfSyntax
@@ -852,8 +852,8 @@ code
       if s.right
         assoc = "right"
       end
-      sb_add(b, u_cat4("syntax ", s.kind, " prec=", str_from_int(s.prec)))
-      sb_add(b, u_cat(" assoc=", assoc))
+      sb_add(b, str_concat4("syntax ", s.kind, " prec=", str_from_int(s.prec)))
+      sb_add(b, str_concat(" assoc=", assoc))
       if s.place
         sb_add(b, " place")
       end
@@ -871,7 +871,7 @@ code
       end
       sb_byte(b, '\n')
       for j = 0 to vec_len(s.patterns) - 1
-        sb_add(b, u_cat3("  pattern ", pf_pattern_string(vec_get(s.patterns, j) as ptr PfPattern), "\n"))
+        sb_add(b, str_concat3("  pattern ", pf_pattern_string(vec_get(s.patterns, j) as ptr PfPattern), "\n"))
       end
     end
     if f.expand != null
@@ -884,10 +884,10 @@ code
     end
     for i = 0 to vec_len(f.emits) - 1
       let e = vec_get(f.emits, i) as ptr PfEmit
-      sb_add(b, u_cat("emit section=", pf_dquote(e.section)))
+      sb_add(b, str_concat("emit section=", pf_dquote(e.section)))
       if e.cond != null
-        sb_add(b, u_cat4(" when slot=", e.cond.slot, " op=", e.cond.op))
-        sb_add(b, u_cat(" arg=", pf_dquote(e.cond.arg)))
+        sb_add(b, str_concat4(" when slot=", e.cond.slot, " op=", e.cond.op))
+        sb_add(b, str_concat(" arg=", pf_dquote(e.cond.arg)))
       end
       sb_byte(b, '\n')
       pf_dump_body(b, e.lines)
@@ -904,8 +904,8 @@ code
       sb_add(b, "resolve\n")
       for i = 0 to vec_len(f.resolve) - 1
         let r = vec_get(f.resolve, i) as ptr PfRename
-        sb_add(b, u_cat4("  rename ", r.kind, " ", pf_dquote(r.old)))
-        sb_add(b, u_cat4(" in ", r.scope, " to ", u_cat(pf_dquote(r.new_), "\n")))
+        sb_add(b, str_concat4("  rename ", r.kind, " ", pf_dquote(r.old)))
+        sb_add(b, str_concat4(" in ", r.scope, " to ", str_concat(pf_dquote(r.new_), "\n")))
       end
     end
     return sb_str(b)

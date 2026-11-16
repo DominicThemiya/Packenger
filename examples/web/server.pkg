@@ -281,14 +281,7 @@ fn header(req: str, name: str) -> str
     let line = str_slice(req, start, stop)
     let colon = str_find_byte(line, ':', 0)
     if colon > 0 && lower(str_slice(line, 0, colon)) == name
-      let v = str_slice(line, colon + 1, len(line))
-      while len(v) > 0 && (v[0] == ' ' || v[0] == '\t')
-        v = str_slice(v, 1, len(v))
-      end
-      while len(v) > 0 && (v[len(v) - 1] == '\r' || v[len(v) - 1] == ' ')
-        v = str_slice(v, 0, len(v) - 1)
-      end
-      return v
+      return str_trim(str_slice(line, colon + 1, len(line)))
     end
     lines = str_find_byte(req, '\n', start)
   end

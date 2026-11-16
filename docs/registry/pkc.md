@@ -18,14 +18,14 @@ PKC=$PWD/pkc go test ./bootstrap/
 
 Its packages use short prefixes, since library names share one
 namespace: `u_` (util), `fe_` (fetch), `lk_` (lock files), `pf_` (package files), `lx_`
-(lexer), `lg_` (grammar), `ty_` (types), `ps_` (parser), `cg_` (codegen), `dr_` (driver), `ui_` (errors), `rp_` (the `-vb`
+(lexer), `lg_` (grammar), `ty_` (types), `ps_` (parser), `cg_` (codegen), `dr_` (driver), `ui_` (errors), `rs_` (resolve sections), `rp_` (the `-vb`
 report), `tr_` (tree) and `pkc_` (the command line).
 
 ## Packages
 
 | package | summary |
 |---|---|
-| [pkc/util](pkc/util.md) | pkc helpers: string and vector utilities the compiler uses everywhere (prefix u_). |
+| [pkc/util](pkc/util.md) | pkc helpers: errors as values, and Go-compatible number parsing (prefix u_). |
 | [pkc/fetch](pkc/fetch.md) | pkc: downloading packages from the registry (port of internal/registry). |
 | [pkc/lock](pkc/lock.md) | pkc: lock files (port of internal/registry/lock.go). |
 | [pkc/pkgfile](pkc/pkgfile.md) | pkc: package files — parse sections, patterns and emit headers (port of internal/pkgfile). |

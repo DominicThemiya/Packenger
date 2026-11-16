@@ -10,7 +10,7 @@ format.
 ## The package tree
 
 - **[pkc](pkc.md)** (truck) — pkc: the Packenger compiler, written in Packenger.
-  - [pkc/util](pkc/util.md) — pkc helpers: string and vector utilities the compiler uses everywhere (prefix u_).
+  - [pkc/util](pkc/util.md) — pkc helpers: errors as values, and Go-compatible number parsing (prefix u_).
   - [pkc/fetch](pkc/fetch.md) — pkc: downloading packages from the registry (port of internal/registry).
   - [pkc/lock](pkc/lock.md) — pkc: lock files (port of internal/registry/lock.go).
   - [pkc/pkgfile](pkc/pkgfile.md) — pkc: package files — parse sections, patterns and emit headers (port of internal/pkgfile).
@@ -32,7 +32,7 @@ format.
 - **[rt](rt.md)** (truck) — The runtime truck: memory, vectors, strings, maps, files, folders, processes, sorting and formatting.
   - [rt/mem](rt/mem.md) — Raw memory: an allocator on mmap, plus copy, fill, compare and pointer arithmetic.
   - [rt/vec](rt/vec.md) — Growable arrays of 64-bit words (ints, or pointers and strings with as).
-  - [rt/str](rt/str.md) — Strings: slicing, searching, joining, numbers, and a string builder.
+  - [rt/str](rt/str.md) — Strings: slicing, searching, splitting, joining, quoting, numbers, and a string builder.
   - [rt/map](rt/map.md) — Hash map from strings to 64-bit words, iterated in insertion order.
   - [rt/io](rt/io.md) — Files and output: whole-file reads and writes, buffered stdout, stderr.
   - [rt/os](rt/os.md) — The process: environment variables, finding and running programs, exiting.

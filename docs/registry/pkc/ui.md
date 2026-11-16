@@ -36,7 +36,7 @@ fn ui_c(on: bool, s: str, codes: str) -> str
   if !on || codes == "" || s == ""
     return s
   end
-  return u_cat3(codes, s, UI_RESET)
+  return str_concat3(codes, s, UI_RESET)
 end
 
 fn ui_base(path: str) -> str
@@ -48,11 +48,11 @@ fn ui_base(path: str) -> str
 end
 
 fn ui_hint(msg: str) -> str
-  if u_has(msg, "cannot resolve") || u_has(msg, "can't reach")
+  if str_has(msg, "cannot resolve") || str_has(msg, "can't reach")
     return "check your internet connection, or build from a local copy of the registry:\n       PACKENGER_REGISTRY=file://$PWD/registry packenger ..."
-  elif u_has(msg, "not found in registry")
+  elif str_has(msg, "not found in registry")
     return "check the package name in your 'use' line, and that it has been pushed to the registry"
-  elif u_has(msg, "is not installed")
+  elif str_has(msg, "is not installed")
     return "install it, e.g. 'sudo pacman -S nasm binutils' or 'sudo apt install nasm binutils'"
   end
   return ""
@@ -102,14 +102,14 @@ fn ui_error(msg: str, src: str)
     rest = str_slice(msg, nl + 1, len(msg))
   end
   sb_add(b, "\n  ")
-  sb_add(b, ui_c(on, "✗ error", u_cat(UI_BOLD, UI_RED)))
+  sb_add(b, ui_c(on, "✗ error", str_concat(UI_BOLD, UI_RED)))
   sb_add(b, " ")
   sb_add(b, ui_c(on, first, UI_BOLD))
   sb_add(b, "\n")
   if nl >= 0
-    let lines = u_split(rest, '\n')
+    let lines = str_split(rest, '\n')
     for i = 0 to vec_len(lines) - 1
-      sb_add(b, u_cat3("    ", u_get(lines, i), "\n"))
+      sb_add(b, str_concat3("    ", vec_get_str(lines, i), "\n"))
     end
   end
   let file = ""
@@ -120,29 +120,29 @@ fn ui_error(msg: str, src: str)
     let ok = false
     let text = io_read_file(src, &ok)
     if ok
-      let lines = u_split(text, '\n')
+      let lines = str_split(text, '\n')
       if line >= 1 && line <= vec_len(lines)
-        let l = u_replace(u_get(lines, line - 1), "\t", " ")
+        let l = str_replace(vec_get_str(lines, line - 1), "\t", " ")
         let gutter = str_from_int(line)
-        sb_add(b, u_cat4("\n    ", ui_c(on, gutter, UI_DIM), " ", ui_c(on, "│", UI_DIM)))
-        sb_add(b, u_cat3(" ", l, "\n"))
+        sb_add(b, str_concat4("\n    ", ui_c(on, gutter, UI_DIM), " ", ui_c(on, "│", UI_DIM)))
+        sb_add(b, str_concat3(" ", l, "\n"))
         let spaces = sb_new()
         for i = 1 to len(gutter)
           sb_byte(spaces, ' ')
         end
-        sb_add(b, u_cat4("    ", sb_str(spaces), " ", ui_c(on, "│", UI_DIM)))
+        sb_add(b, str_concat4("    ", sb_str(spaces), " ", ui_c(on, "│", UI_DIM)))
         sb_byte(b, ' ')
         for i = 1 to col - 1
           sb_byte(b, ' ')
         end
-        sb_add(b, ui_c(on, "^", u_cat(UI_BOLD, UI_RED)))
+        sb_add(b, ui_c(on, "^", str_concat(UI_BOLD, UI_RED)))
         sb_byte(b, '\n')
       end
     end
   end
   let hint = ui_hint(msg)
   if hint != ""
-    sb_add(b, u_cat4("\n  ", ui_c(on, "hint", u_cat(UI_BOLD, UI_YELLOW)), " ", u_cat(hint, "\n")))
+    sb_add(b, str_concat4("\n  ", ui_c(on, "hint", str_concat(UI_BOLD, UI_YELLOW)), " ", str_concat(hint, "\n")))
   end
   sb_byte(b, '\n')
   io_err(sb_str(b))

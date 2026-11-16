@@ -50,7 +50,7 @@ fn pkc_usage() -> str
   sb_add(b, "  packenger dump  pkg <package>         print a registry package as parsed\n\n")
   sb_add(b, "Flags:\n")
   sb_add(b, "  --registry URL   where packages are hosted (env PACKENGER_REGISTRY;\n")
-  sb_add(b, u_cat3("                   default ", PKC_DEFAULT_REGISTRY, ")\n"))
+  sb_add(b, str_concat3("                   default ", PKC_DEFAULT_REGISTRY, ")\n"))
   sb_add(b, "  --target TRUCK   backend truck that translates packages to assembly\n")
   sb_add(b, "                   (default bintables)\n")
   sb_add(b, "  -o FILE          output file\n")
@@ -94,7 +94,7 @@ fn pkc_parse_args(argv_: [str], a: ptr PkcArgs) -> bool
     for i = 2 to len(argv_) - 1
       if argv_[i] == "--"
         for j = i + 1 to len(argv_) - 1
-          u_push(a.prog_args, argv_[j])
+          vec_push_str(a.prog_args, argv_[j])
         end
         stop = i
         break
@@ -106,7 +106,7 @@ fn pkc_parse_args(argv_: [str], a: ptr PkcArgs) -> bool
     let arg = argv_[i]
     if arg == "--"
       for j = i + 1 to stop - 1
-        u_push(a.pos, argv_[j])
+        vec_push_str(a.pos, argv_[j])
       end
       break
     end
@@ -129,7 +129,7 @@ fn pkc_parse_args(argv_: [str], a: ptr PkcArgs) -> bool
         if !has_value
           if i + 1 >= stop
             io_err(pkc_usage())
-            return u_fail(u_cat("flag needs an argument: -", name))
+            return u_fail(str_concat("flag needs an argument: -", name))
           end
           i = i + 1
           value = argv_[i]
@@ -144,10 +144,10 @@ fn pkc_parse_args(argv_: [str], a: ptr PkcArgs) -> bool
         end
       else
         io_err(pkc_usage())
-        return u_fail(u_cat("flag provided but not defined: -", name))
+        return u_fail(str_concat("flag provided but not defined: -", name))
       end
     else
-      u_push(a.pos, arg)
+      vec_push_str(a.pos, arg)
     end
     i = i + 1
   end
@@ -184,16 +184,16 @@ fn pkc_run(args: [str], a: ptr PkcArgs, src: ptr str) -> int
       u_fail("usage: packenger dump tokens|ast|asm <file.pkg>, or packenger dump pkg <package>")
       return -1
     end
-    stage = u_get(a.pos, 0)
+    stage = vec_get_str(a.pos, 0)
     if stage != "tokens" && stage != "ast" && stage != "asm" && stage != "pkg"
-      u_fail(u_cat3("unknown dump ", u_quote(stage), " (tokens, ast, asm or pkg)"))
+      u_fail(str_concat3("unknown dump ", str_quote(stage), " (tokens, ast, asm or pkg)"))
       return -1
     end
   elif vec_len(a.pos) != 1
-    u_fail(u_cat(a.cmd, " expects one source file (see packenger --help)"))
+    u_fail(str_concat(a.cmd, " expects one source file (see packenger --help)"))
     return -1
   end
-  *src = u_get(a.pos, vec_len(a.pos) - 1)
+  *src = vec_get_str(a.pos, vec_len(a.pos) - 1)
   let exe = a.out
   if a.cmd == "build" && exe == ""
     exe = ui_base(*src)
@@ -233,7 +233,7 @@ fn pkc_run(args: [str], a: ptr PkcArgs, src: ptr str) -> int
     end
     a.registry = pinned
     for i = 0 to vec_len(bases) - 1
-      if !lk_pin(u_get(bases, i), &pinned)
+      if !lk_pin(vec_get_str(bases, i), &pinned)
         return -1
       end
       vec_set(bases, i, pinned as int)
@@ -253,7 +253,7 @@ fn pkc_run(args: [str], a: ptr PkcArgs, src: ptr str) -> int
   if a.verbose
     rp_header(a.cmd, *src, exe, a.registry, a.target)
     for i = 0 to vec_len(prefixes) - 1
-      rp_route(u_get(prefixes, i), u_get(bases, i))
+      rp_route(vec_get_str(prefixes, i), vec_get_str(bases, i))
     end
     if lk_sums != null
       rp_lock(lock_path, map_len(lk_sums))
@@ -277,7 +277,7 @@ fn pkc_run(args: [str], a: ptr PkcArgs, src: ptr str) -> int
       return 0
     end
     if !io_write_file(a.out, r.asm)
-      u_fail(u_cat3("open ", a.out, ": can't write the file"))
+      u_fail(str_concat3("open ", a.out, ": can't write the file"))
       return -1
     end
     return 0
@@ -287,7 +287,7 @@ fn pkc_run(args: [str], a: ptr PkcArgs, src: ptr str) -> int
     return 0
   elif a.cmd == "lock"
     if !io_write_file(lock_path, lk_format(ui_base(*src), a.registry, prefixes, bases, lk_collect))
-      u_fail(u_cat3("open ", lock_path, ": can't write the file"))
+      u_fail(str_concat3("open ", lock_path, ": can't write the file"))
       return -1
     end
     rp_done("")
@@ -305,7 +305,7 @@ fn pkc_run(args: [str], a: ptr PkcArgs, src: ptr str) -> int
       u_fail("can't create a temporary directory in /tmp")
       return -1
     end
-    let prog = u_cat(dir, "/prog")
+    let prog = str_concat(dir, "/prog")
     if !dr_assemble(r.asm, prog, map_get(r.back, "toolchain") as ptr PfFile)
       dr_rmdir(dir)
       return -1
@@ -316,11 +316,11 @@ fn pkc_run(args: [str], a: ptr PkcArgs, src: ptr str) -> int
     let cargs = a.prog_args
     let runner = dr_run_command(map_get(r.back, "toolchain") as ptr PfFile, prog)
     if runner != null
-      cmd = u_get(runner, 0)
+      cmd = vec_get_str(runner, 0)
       if os_find(cmd) == ""
         dr_rm(prog)
         dr_rmdir(dir)
-        u_fail(u_cat4(cmd, " is not installed (target ", a.target, " runs programs with it)"))
+        u_fail(str_concat4(cmd, " is not installed (target ", a.target, " runs programs with it)"))
         return -1
       end
       cargs = vec_new()
@@ -336,18 +336,18 @@ fn pkc_run(args: [str], a: ptr PkcArgs, src: ptr str) -> int
     dr_rmdir(dir)
     return status
   end
-  u_fail(u_cat3("unknown command ", u_quote(a.cmd), " (see packenger --help)"))
+  u_fail(str_concat3("unknown command ", str_quote(a.cmd), " (see packenger --help)"))
   return -1
 end
 
 // pkc_locked reports a lock file that was written.
 fn pkc_locked(path: str, packages: int, registry: str, prefixes: ptr Vec, bases: ptr Vec)
   let on = term_colors(1)
-  io_out(u_cat4("  ", ui_c(on, "✓ locked", u_cat(UI_BOLD, UI_GREEN)), " ", rp_plural(packages, "package", "packages")))
-  io_out(u_cat4(" ", ui_c(on, "in", UI_DIM), " ", u_cat(path, "\n")))
-  io_out(u_cat4("    ", ui_c(on, "registry", UI_DIM), " ", u_cat(registry, "\n")))
+  io_out(str_concat4("  ", ui_c(on, "✓ locked", str_concat(UI_BOLD, UI_GREEN)), " ", rp_plural(packages, "package", "packages")))
+  io_out(str_concat4(" ", ui_c(on, "in", UI_DIM), " ", str_concat(path, "\n")))
+  io_out(str_concat4("    ", ui_c(on, "registry", UI_DIM), " ", str_concat(registry, "\n")))
   for i = 0 to vec_len(prefixes) - 1
-    io_out(u_cat4("    ", ui_c(on, "route", UI_DIM), " ", u_cat4(u_get(prefixes, i), " ", ui_c(on, "→", UI_DIM), u_cat3(" ", u_get(bases, i), "\n"))))
+    io_out(str_concat4("    ", ui_c(on, "route", UI_DIM), " ", str_concat4(vec_get_str(prefixes, i), " ", ui_c(on, "→", UI_DIM), str_concat3(" ", vec_get_str(bases, i), "\n"))))
   end
 end
 
@@ -382,12 +382,12 @@ end
 // pkc_read reads a source file, with Go's error message if it's missing.
 fn pkc_read(path: str, text: ptr str) -> bool
   if !io_exists(path)
-    return u_fail(u_cat3("open ", path, ": no such file or directory"))
+    return u_fail(str_concat3("open ", path, ": no such file or directory"))
   end
   let ok = false
   *text = io_read_file(path, &ok)
   if !ok
-    return u_fail(u_cat3("read ", path, ": can't read the file"))
+    return u_fail(str_concat3("read ", path, ": can't read the file"))
   end
   return true
 end
