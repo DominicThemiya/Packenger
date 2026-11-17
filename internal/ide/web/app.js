@@ -100,9 +100,11 @@ function buildEditor() {
   ED.gutter = h('div', { class: 'gutter', 'aria-hidden': 'true' });
   ED.layer = h('div', { class: 'layer' });
   ED.cur = h('div', { class: 'curline' });
+  ED.marks = h('div', { 'aria-hidden': 'true' });
+  ED.caret = h('div', { class: 'caret', 'aria-hidden': 'true' }, '^');
   ED.pre = h('pre', { 'aria-hidden': 'true' });
   ED.ta = h('textarea', { spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', wrap: 'off', 'aria-label': 'Editor' });
-  ED.layer.append(ED.cur, ED.pre, ED.ta);
+  ED.layer.append(ED.cur, ED.marks, ED.pre, ED.ta, ED.caret);
   ED.paper.append(ED.gutter, ED.layer);
   ED.root.append(ED.paper);
   $('#editorHost').append(ED.root);
@@ -116,6 +118,9 @@ function buildEditor() {
   ta.addEventListener('scroll', () => { ta.scrollTop = 0; ta.scrollLeft = 0; });
   ta.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== ta) hideComplete(); }, 150));
   ta.addEventListener('mousemove', onHoverMove);
+  ta.addEventListener('focus', () => ED.root.classList.add('focused'));
+  ta.addEventListener('blur', () => ED.root.classList.remove('focused'));
+  document.addEventListener('selectionchange', () => { if (document.activeElement === ta) markCurrentLine(); });
   ta.addEventListener('mouseleave', e => {
     clearTimeout(ED.hoverT);
     if (!(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#hover'))) hideHover();
@@ -131,7 +136,8 @@ function measure() {
   c.font = `${cs.fontSize} ${cs.fontFamily}`;
   ED.cw = c.measureText('MMMMMMMMMM').width / 10;
   ED.lh = parseFloat(cs.lineHeight) || 20;
-  ED.padL = 12;
+  ED.padL = parseFloat(getComputedStyle(ED.pre).paddingLeft) || 14;
+  ED.root.style.setProperty('--cw', ED.cw + 'px');
 }
 
 function tab() { return S.active; }
@@ -330,13 +336,113 @@ function caretLine() {
 }
 
 function markCurrentLine() {
-  const { line, col } = posOf(ED.ta.value, ED.ta.selectionStart);
+  const ta = ED.ta;
+  const { line, col } = posOf(ta.value, ta.selectionStart);
   ED.cur.style.top = (line * ED.lh) + 'px';
   const prev = ED.gutter.querySelector('.cur');
   if (prev) prev.classList.remove('cur');
   const g = ED.gutter.children[line];
   if (g) g.classList.add('cur');
   $('#statusPos').textContent = `${line + 1}:${col + 1}`;
+  moveCaret();
+  scheduleWordMarks();
+}
+
+// moveCaret puts the ^ under the character after the cursor; it glides
+// there (CSS), and blinks only once the cursor has rested.
+function moveCaret() {
+  const ta = ED.ta;
+  const end = ta.selectionDirection === 'backward' ? ta.selectionStart : ta.selectionEnd;
+  const { line, col } = posOf(ta.value, end);
+  const x = ED.padL + col * ED.cw;
+  const y = line * ED.lh + ED.lh - 4;
+  ED.caret.style.transform = `translate(${x}px, ${y}px)`;
+  ED.caret.classList.toggle('sel', ta.selectionStart !== ta.selectionEnd);
+  ED.caret.classList.remove('blink');
+  clearTimeout(ED.blinkT);
+  ED.blinkT = setTimeout(() => ED.caret.classList.add('blink'), 600);
+}
+
+// ---- the word at the cursor: highlighted where it occurs, and described
+// in the suggestions sidebar
+
+function wordAtCaret() {
+  const ta = ED.ta;
+  const v = ta.value;
+  const off = ta.selectionStart;
+  if (ta.selectionStart !== ta.selectionEnd) return null;
+  const L = lineAt(v, off);
+  const pkgLine = /^\s*(use|needs)\s/.test(L.text);
+  const re = pkgLine ? /[\w/-]/ : /\w/;
+  let a = off, b = off;
+  while (a > L.start && re.test(v[a - 1])) a--;
+  while (b < L.end && re.test(v[b])) b++;
+  const word = v.slice(a, b);
+  if (word.length < 2 || /^\d+$/.test(word) || inStringOrComment(v.slice(L.start, a))) return null;
+  return { word, start: a, end: b, line: posOf(v, a).line, col: a - L.start, pkgLine };
+}
+
+function inStringOrComment(prefix) {
+  let q = '';
+  for (let i = 0; i < prefix.length; i++) {
+    const c = prefix[i];
+    if (q) { if (c === '\\') i++; else if (c === q) q = ''; }
+    else if (c === '"' || c === "'") q = c;
+    else if (c === '/' && prefix[i + 1] === '/') return true;
+  }
+  return !!q;
+}
+
+let marksT;
+function scheduleWordMarks() {
+  ED.marks.replaceChildren();
+  clearTimeout(marksT);
+  marksT = setTimeout(drawWordMarks, 140);
+}
+
+function drawWordMarks() {
+  const w = wordAtCaret();
+  ED.marks.replaceChildren();
+  if (!w) { setAtCursor(null); return; }
+  const v = ED.ta.value;
+  const esc = w.word.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&');
+  const re = new RegExp(`(?<![\\w/-])${esc}(?![\\w/-])`, 'g');
+  const starts = lineStarts(v);
+  let m, n = 0, line = 0;
+  const marks = [];
+  while ((m = re.exec(v)) && n < 400) {
+    while (line + 1 < starts.length && starts[line + 1] <= m.index) line++;
+    const col = m.index - starts[line];
+    if (inStringOrComment(v.slice(starts[line], m.index))) continue;
+    n++;
+    marks.push(h('div', {
+      class: 'mark-word' + (m.index === w.start ? ' here' : ''),
+      style: `left:${ED.padL + col * ED.cw}px;top:${line * ED.lh}px;width:${w.word.length * ED.cw}px`,
+    }));
+  }
+  ED.marks.replaceChildren(...marks);
+  setAtCursor(w);
+}
+
+// setAtCursor asks what the word at the cursor is, for the sidebar.
+let atSeq = 0;
+async function setAtCursor(w) {
+  const t = tab();
+  if ($('#rightSuggest').hidden) { S.atKey = ''; return; }
+  const key = w ? `${t && t.path}:${w.start}:${w.word}` : '';
+  if (key === S.atKey) return;
+  S.atKey = key;
+  if (!w || !t) { S.atCursor = null; renderSuggest(); return; }
+  const seq = ++atSeq;
+  const text = ED.ta.value;
+  const lineText = text.split('\n')[w.line];
+  let info = null;
+  try {
+    info = await api('/api/hover', { ws: S.ws, path: t.ro ? '' : t.path, text, line: w.line, col: byteCol(lineText, w.col + 1) });
+  } catch { /* nothing to say */ }
+  if (seq !== atSeq || t !== tab()) return;
+  S.atCursor = info && info.title ? info : null;
+  renderSuggest();
 }
 
 function ensureVisible() {
@@ -1461,7 +1567,7 @@ function showRight(which) {
   $('#complete').classList.toggle('docked', which === 'suggest');
   store.set('right', which || '');
   if (which === 'build') renderBuilds();
-  if (which === 'suggest') renderSuggest();
+  if (which === 'suggest') { renderSuggest(); if (tab()) drawWordMarks(); }
   positionComplete();
 }
 
@@ -1536,6 +1642,23 @@ function hintNode(hint) {
   return pre;
 }
 
+// shortSource shortens a registry URL to its last folders.
+function shortSource(src) {
+  if (!/^(file|https?):\/\//.test(src)) return src;
+  const parts = src.replace(/\/+$/, '').split('/');
+  return parts.slice(-2).join('/');
+}
+
+function atCursorNode(info) {
+  const d = info.def;
+  const where = d ? (d.package ? `${d.package}, line ${d.line}` : `${baseName(d.file)}, line ${d.line}`) : '';
+  return h('div', { class: 'at-cursor' },
+    h('div', { class: 'lbl' }, 'At the cursor: ', h('b', {}, info.word)),
+    h('div', { class: 'title' }, info.title),
+    info.doc ? h('div', { class: 'doc' }, info.doc) : null,
+    d ? h('div', { class: 'go' }, h('button', { onmousedown: e => e.preventDefault(), onclick: () => goToDefinition() }, 'Go to definition'), where) : null);
+}
+
 let suggestQueued = false;
 function renderSuggest() {
   if (suggestQueued) return;
@@ -1551,13 +1674,14 @@ function drawSuggest() {
   const items = panelItems();
   const c = S.comp;
   const q = c && sameContext() ? currentPrefix().slice(c.before.length) : '';
+  const at = S.atCursor ? atCursorNode(S.atCursor) : null;
   const top = h('div', { class: 'sg-top' },
     h('div', { class: 'sg-ctx' }, c && sameContext()
       ? [`${items.length} suggestion${items.length === 1 ? '' : 's'}`, q ? [' for ', h('b', {}, q)] : ' here', ' · line ', String(c.line + 1)]
       : 'Move the cursor or start typing to see suggestions.'),
     c && c.hint && sameContext() ? hintNode(c.hint) : null);
   if (!items.length) {
-    pane.replaceChildren(top, h('div', { class: 'sg-empty' }, c && sameContext() ? 'Nothing to suggest here. Ctrl+Space asks again.' : ''));
+    pane.replaceChildren(...[at, top, h('div', { class: 'sg-empty' }, c && sameContext() ? 'Nothing to suggest here. Ctrl+Space asks again.' : '')].filter(Boolean));
     return;
   }
   const selected = !$('#complete').hidden ? S.shown[S.sel] : null;
@@ -1571,7 +1695,7 @@ function drawSuggest() {
     const ia = items.indexOf(a[1][0]), ib = items.indexOf(b[1][0]);
     return ia - ib;
   });
-  pane.replaceChildren(top, ...groups.map(([g, list]) => h('div', { class: 'sg-group' },
+  pane.replaceChildren(...(at ? [at] : []), top, ...groups.map(([g, list]) => h('div', { class: 'sg-group' },
     h('h4', {}, h('span', {}, (GROUPS.find(x => x[0] === g) || [g, g])[1]), h('span', {}, String(list.length))),
     ...list.map(it => {
       const on = it === selected || (!selected && it === S.panelSel);
@@ -1584,7 +1708,7 @@ function drawSuggest() {
         h('div', { class: 'sg-head' },
           h('span', { class: 'k ' + it.kind, title: it.kind }, kindLetter(it.kind)),
           h('span', { class: 'sg-label', html: highlightMatch(it.label, q) }),
-          it.source ? h('span', { class: 'sg-src', title: it.source }, it.source) : null),
+          it.source ? h('span', { class: 'sg-src', title: it.source }, shortSource(it.source)) : null),
         it.detail ? h('div', { class: 'sg-detail' }, it.detail) : null,
         it.doc ? h('div', { class: 'sg-doc' }, it.doc) : null,
         on && it.insert ? h('pre', { class: 'sg-insert' }, insertPreview(it.insert)) : null,
