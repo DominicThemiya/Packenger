@@ -31,7 +31,8 @@ window in a Chromium browser if there is one.
 ## Looks
 
 pkide uses [Catppuccin](https://catppuccin.com) Mocha, or Latte for a
-light theme (*Settings*), with a darker, near-black background, square
+light theme (*Settings*), or a colour scheme of your own (*Colors* in
+the sidebar), with a darker, near-black background, square
 corners throughout, and the
 [Monaspace Krypton](https://monaspace.githubnext.com) font, falling back to
 the system's monospace font if Krypton isn't installed. The editor keeps a
@@ -42,8 +43,8 @@ it occurs.
 
 ## The sidebar
 
-The right sidebar (<kbd>Ctrl+I</kbd>, <kbd>Ctrl+Shift+B</kbd>, or the
-buttons in the top bar) has two panels:
+The right sidebar (<kbd>Ctrl+I</kbd>, <kbd>Ctrl+Shift+B</kbd>,
+<kbd>Ctrl+Shift+K</kbd>, or the buttons in the top bar) has three panels:
 
 - **Suggestions** lists every suggestion for the cursor in full, grouped:
   what comes next in the statement, names in scope, fields, this file's
@@ -61,6 +62,15 @@ buttons in the top bar) has two panels:
   into found, built from git and added), the target, and where packages
   come from; and building from git or adding compilers. The chip in the top
   bar shows the current build and target, and opens it.
+- **Colors** makes colour schemes. Every colour the IDE is drawn with is
+  listed by where it shows (backgrounds, text, code, accents), each with a
+  colour picker and its hex value; the IDE changes as you pick. Changing a
+  colour of Mocha or Latte starts a scheme of your own (*My Mocha*), which
+  keeps the colours you haven't changed from the theme it's made from.
+  Schemes can be duplicated, renamed, deleted, switched to another base,
+  and exported to or imported from JSON; *reset* puts one colour back.
+  They are saved in pkide's config, and *Switch theme* in the command
+  palette cycles through them all.
 
 ## Writing code
 

@@ -1564,15 +1564,18 @@ function showRight(which) {
   $('#profileChip').classList.toggle('on', which === 'build');
   $('#rightSuggest').hidden = which !== 'suggest';
   $('#rightBuild').hidden = which !== 'build';
+  $('#rightColors').hidden = which !== 'colors';
   $('#complete').classList.toggle('docked', which === 'suggest');
   store.set('right', which || '');
   if (which === 'build') renderBuilds();
+  if (which === 'colors') renderColors();
   if (which === 'suggest') { renderSuggest(); if (tab()) drawWordMarks(); }
   positionComplete();
 }
 
 function toggleRight(which) {
-  const open = !$('#app').classList.contains('no-right') && !$(which === 'build' ? '#rightBuild' : '#rightSuggest').hidden;
+  const pane = { build: '#rightBuild', colors: '#rightColors' }[which] || '#rightSuggest';
+  const open = !$('#app').classList.contains('no-right') && !$(pane).hidden;
   showRight(open ? '' : which);
 }
 
@@ -1811,16 +1814,15 @@ function settingsDialog() {
   const st = S.state || {};
   modal('pkide', body => {
     const repo = h('input', { type: 'text', value: st.repo || '', placeholder: '/path/to/Packenger', 'aria-label': 'Packenger repository' });
-    const theme = h('select', { 'aria-label': 'Theme', onchange: async () => { applyTheme(theme.value); S.state = await api('/api/settings', { theme: theme.value }); } },
-      h('option', { value: 'mocha' }, 'Catppuccin Mocha'), h('option', { value: 'latte' }, 'Catppuccin Latte'));
-    theme.value = st.theme === 'latte' ? 'latte' : 'mocha';
+    const theme = schemeSelect(() => setTheme(theme.value));
     body.append(
       h('p', {}, 'The Packenger IDE. Completion and checking use the compiler’s own grammar; running and building use the build you choose.'),
       h('h3', {}, 'Packenger repository'),
       h('p', {}, 'A checkout of the Packenger source: for building versions from git, for formatting with tools/pkfmt.pkg, and as a registry.'),
       h('form', { onsubmit: async e => { e.preventDefault(); try { S.state = await api('/api/settings', { repo: repo.value.trim() }); await refreshProfile(); status('saved', 'good'); } catch (err) { status(err.message, 'bad'); } } },
         h('div', { class: 'field' }, repo, h('button', { class: 'btn' }, 'Save'))),
-      h('h3', {}, 'Theme'), h('div', { class: 'field' }, theme),
+      h('h3', {}, 'Theme'), h('div', { class: 'field' }, theme,
+        h('button', { class: 'btn quiet', onclick: () => { closeModal(); showRight('colors'); } }, 'Edit colours…')),
       h('h3', {}, 'Install'),
       S.installPrompt
         ? h('div', { class: 'row' }, h('button', { class: 'btn', onclick: async () => { S.installPrompt.prompt(); await S.installPrompt.userChoice; S.installPrompt = null; closeModal(); } }, 'Install pkide as an app'))
@@ -1858,7 +1860,7 @@ const COMMANDS = [
   ['Close the tab', 'close', 'Ctrl+W'], ['Open a file', 'quickOpen', 'Ctrl+P'], ['Open a folder', 'openFolder', 'Ctrl+O'],
   ['New file', 'newFile'], ['New folder', 'newFolder'], ['Go to definition', 'definition', 'F12'], ['Suggest', 'suggest', 'Ctrl+Space'],
   ['Build settings', 'builds', 'Ctrl+Shift+B'], ['Suggestions in detail', 'suggestions', 'Ctrl+I'], ['Show problems', 'problems'], ['Reload packages from the registry', 'reload'], ['Settings and install', 'settings'],
-  ['Switch theme', 'theme'],
+  ['Switch theme', 'theme'], ['Colour scheme', 'colors', 'Ctrl+Shift+K'],
 ];
 
 function palette() {
@@ -1888,21 +1890,250 @@ async function command(cmd) {
     case 'reload': await api('/api/reload'); for (const x of S.tabs) { loadGrammar(x); check(x); } return status('packages will be downloaded again', 'good');
     case 'settings': return settingsDialog();
     case 'theme': {
-      const next = document.documentElement.dataset.theme === 'latte' ? 'mocha' : 'latte';
-      applyTheme(next);
-      S.state = await api('/api/settings', { theme: next });
-      return;
+      const all = themeNames(), cur = all.indexOf(currentTheme());
+      return setTheme(all[(cur + 1) % all.length]);
     }
+    case 'colors': return toggleRight('colors');
     case 'stop': if (S.proc && S.proc.running) await api('/api/proc/kill', { id: S.proc.id }); return;
     case 'clear': $('#console').replaceChildren(); consoleState.partial = ''; return;
   }
 }
 
 function applyTheme(t) {
-  document.documentElement.dataset.theme = t === 'latte' ? 'latte' : 'mocha';
+  const root = document.documentElement;
+  const sc = schemeOf(t);
+  for (const n of COLOR_NAMES) root.style.removeProperty('--' + n);
+  root.dataset.theme = sc ? sc.base : t === 'latte' ? 'latte' : 'mocha';
+  if (sc) for (const [n, v] of Object.entries(sc.colors || {})) if (COLOR_NAMES.includes(n)) root.style.setProperty('--' + n, v);
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = t === 'latte' ? '#dce0e8' : '#11111b';
+  if (meta) meta.content = getComputedStyle(root).getPropertyValue('--crust').trim() || '#0a0a10';
   requestAnimationFrame(() => { if (ED.root) measure(); });
+}
+
+// ---- colour schemes: Catppuccin Mocha and Latte, and the user's own
+
+// Every colour the look is made of, by where it shows.
+const COLOR_GROUPS = [
+  ['Backgrounds', [
+    ['crust', 'Top bar, status bar, dividers'],
+    ['mantle', 'Side panels'],
+    ['base', 'Editor, cards'],
+    ['band', 'Every other three lines of paper'],
+    ['surface0', 'Borders, the current line, hovered rows'],
+    ['surface1', 'Strong borders, scrollbars'],
+    ['surface2', 'Hovered borders'],
+    ['sel', 'Selected text (with transparency)'],
+  ]],
+  ['Text', [
+    ['text', 'Text and code'],
+    ['subtext1', 'Buttons, headings'],
+    ['subtext0', 'Doc comments, secondary text'],
+    ['overlay2', 'Comments, notes'],
+    ['overlay1', 'Line numbers, hints'],
+    ['overlay0', 'Faint marks'],
+  ]],
+  ['Code', [
+    ['mauve', 'Keywords, focus, the word at the cursor'],
+    ['green', 'Strings, packages'],
+    ['peach', 'Numbers, the ^ cursor'],
+    ['blue', 'Functions, links'],
+    ['yellow', 'Types'],
+    ['sky', 'Symbols, operators'],
+    ['teal', 'Holes, slots, fields'],
+    ['red', 'Package-file sections, errors'],
+  ]],
+  ['Accents', [
+    ['lavender', 'Current line number, hints'],
+    ['sapphire', 'Signatures, the chosen target'],
+    ['pink', 'Hovered buttons'],
+    ['flamingo', 'Variables in suggestions'],
+    ['maroon', 'Globals and constants in suggestions'],
+  ]],
+];
+const COLOR_NAMES = COLOR_GROUPS.flatMap(g => g[1].map(c => c[0]));
+const BUILTIN = { mocha: 'Catppuccin Mocha', latte: 'Catppuccin Latte' };
+
+function schemes() { return (S.state && S.state.schemes) || []; }
+function schemeOf(t) { return t && t.startsWith('custom:') ? schemes().find(x => x.name === t.slice(7)) : null; }
+function currentTheme() { const t = (S.state && S.state.theme) || 'mocha'; return BUILTIN[t] || schemeOf(t) ? t : 'mocha'; }
+function themeNames() { return [...Object.keys(BUILTIN), ...schemes().map(x => 'custom:' + x.name)]; }
+
+function schemeSelect(onchange) {
+  const sel = h('select', { 'aria-label': 'Colour scheme', onchange },
+    h('optgroup', { label: 'Built in' }, ...Object.entries(BUILTIN).map(([v, n]) => h('option', { value: v }, n))),
+    schemes().length ? h('optgroup', { label: 'Yours' }, ...schemes().map(x => h('option', { value: 'custom:' + x.name }, x.name))) : null);
+  sel.value = currentTheme();
+  return sel;
+}
+
+async function setTheme(t) {
+  applyTheme(t);
+  try { S.state = await api('/api/settings', { theme: t }); } catch (e) { status(e.message, 'bad'); }
+  if (!$('#rightColors').hidden) renderColors();
+}
+
+async function saveSchemes(list, theme) {
+  const q = { schemes: list };
+  if (theme) q.theme = theme;
+  S.state = await api('/api/settings', q);
+  applyTheme(currentTheme());
+}
+
+// The colours of a built-in theme, read from the stylesheet.
+function baseColors(base) {
+  const root = document.documentElement, saved = root.getAttribute('style');
+  root.removeAttribute('style');
+  const was = root.dataset.theme;
+  root.dataset.theme = base;
+  const cs = getComputedStyle(root);
+  const out = {};
+  for (const n of COLOR_NAMES) out[n] = toHex(cs.getPropertyValue('--' + n).trim());
+  root.dataset.theme = was;
+  if (saved != null) root.setAttribute('style', saved);
+  return out;
+}
+
+// toHex turns a CSS colour (#rgb, #rrggbb, rgb(), rgba()) into #rrggbb, or
+// #rrggbbaa when it is transparent.
+function toHex(c) {
+  c = (c || '').trim();
+  if (/^#[0-9a-f]{3}$/i.test(c)) return '#' + [...c.slice(1)].map(x => x + x).join('').toLowerCase();
+  if (/^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(c)) return c.toLowerCase();
+  const m = c.match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+%?))?\s*\)$/);
+  if (!m) return '#000000';
+  const hx = n => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+  let a = m[4] == null ? 1 : m[4].endsWith('%') ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
+  return '#' + hx(+m[1]) + hx(+m[2]) + hx(+m[3]) + (a < 1 ? hx(a * 255) : '');
+}
+
+function uniqueName(want) {
+  const taken = new Set(schemes().map(x => x.name));
+  if (!taken.has(want)) return want;
+  for (let i = 2; ; i++) if (!taken.has(`${want} ${i}`)) return `${want} ${i}`;
+}
+
+// The Colors sidebar: pick a scheme, or change any colour of your own with
+// a colour picker; the IDE shows each change as you make it.
+function renderColors() {
+  const pane = $('#rightColors');
+  const t = currentTheme();
+  const sc = schemeOf(t);
+  const base = sc ? sc.base : t;
+  const def = baseColors(base);
+  const colors = { ...def, ...(sc ? sc.colors : {}) };
+
+  // a change to a built-in theme starts a scheme of your own
+  const own = async () => {
+    const cur = schemeOf(currentTheme());
+    if (cur) return cur;
+    const n = { name: uniqueName(`My ${BUILTIN[base].replace('Catppuccin ', '')}`), base, colors: {} };
+    await saveSchemes([...schemes(), n], 'custom:' + n.name);
+    status(`made the scheme “${n.name}”`, 'good');
+    return schemeOf('custom:' + n.name);
+  };
+  const setColor = async (name, value) => {
+    try {
+      const s = await own();
+      s.colors = s.colors || {};
+      if (value == null || value === def[name]) delete s.colors[name]; else s.colors[name] = value;
+      await saveSchemes(schemes());
+    } catch (e) { status(e.message, 'bad'); }
+    renderColors();
+  };
+
+  const row = ([name, note]) => {
+    const v = colors[name];
+    const rgb = v.slice(0, 7), alpha = v.length > 7 ? parseInt(v.slice(7), 16) : 255;
+    const changed = !!(sc && sc.colors[name]);
+    const hex = h('input', { type: 'text', class: 'hex', value: v, spellcheck: 'false', 'aria-label': name + ' as hex' });
+    const pick = h('input', { type: 'color', value: rgb, 'aria-label': name });
+    const a = name === 'sel' ? h('input', { type: 'range', min: 0, max: 255, value: alpha, class: 'alpha', 'aria-label': 'opacity of ' + name, title: 'opacity' }) : null;
+    const value = () => pick.value + (a && +a.value < 255 ? (+a.value).toString(16).padStart(2, '0') : '');
+    const live = () => { const x = value(); hex.value = x; sw.style.background = x; document.documentElement.style.setProperty('--' + name, x); };
+    const commit = () => setColor(name, value());
+    pick.addEventListener('input', live);
+    pick.addEventListener('change', commit);
+    if (a) { a.addEventListener('input', live); a.addEventListener('change', commit); }
+    hex.addEventListener('change', () => {
+      let x = hex.value.trim().toLowerCase();
+      if (!x.startsWith('#')) x = '#' + x;
+      if (!/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/.test(x)) { status(`${hex.value} is not a colour like #cba6f7`, 'bad'); hex.value = v; return; }
+      x = toHex(x);
+      if (name !== 'sel') x = x.slice(0, 7);
+      setColor(name, x);
+    });
+    const sw = h('span', { class: 'swatch-fill', style: `background:${v}` });
+    return h('div', { class: 'color-row' + (changed ? ' changed' : '') },
+      h('label', { class: 'swatch', title: 'Pick a colour' }, sw, pick),
+      h('div', { class: 'cname' }, h('b', {}, name), h('small', {}, note)),
+      h('div', { class: 'cval' }, hex, a,
+        changed ? h('button', { class: 'reset', title: `Back to ${BUILTIN[base]}’s ${def[name]}`, onclick: () => setColor(name, null) }, 'reset') : null));
+  };
+
+  const exportScheme = async () => {
+    const s = sc || { name: BUILTIN[base], base, colors: {} };
+    const json = JSON.stringify({ name: s.name, base: s.base, colors: { ...def, ...s.colors } }, null, 2);
+    try { await navigator.clipboard.writeText(json); status('the scheme is on the clipboard as JSON', 'good'); }
+    catch { modal('Scheme as JSON', body => body.append(h('pre', { class: 'code' }, json))); }
+  };
+  const importScheme = () => modal('Import a scheme', body => {
+    const ta = h('textarea', { class: 'import', rows: 14, spellcheck: 'false', placeholder: '{ "name": "…", "base": "mocha", "colors": { "base": "#12121b", … } }', 'aria-label': 'Scheme JSON' });
+    body.append(h('p', {}, 'Paste a scheme copied with Export.'), ta,
+      h('div', { class: 'row' }, h('button', { class: 'btn', onclick: async () => {
+        try {
+          const j = JSON.parse(ta.value);
+          const b = j.base === 'latte' ? 'latte' : 'mocha', d = baseColors(b);
+          const cs = {};
+          for (const [k, x] of Object.entries(j.colors || {})) {
+            if (!COLOR_NAMES.includes(k)) continue;
+            const hx = toHex(String(x));
+            if (hx !== d[k]) cs[k] = hx;
+          }
+          const n = { name: uniqueName(String(j.name || 'Imported').trim() || 'Imported'), base: b, colors: cs };
+          await saveSchemes([...schemes(), n], 'custom:' + n.name);
+          closeModal(); renderColors(); status(`imported “${n.name}”`, 'good');
+        } catch (e) { status(e.message, 'bad'); }
+      } }, 'Import')));
+  });
+
+  const sel = schemeSelect(() => setTheme(sel.value));
+  const acts = [
+    h('button', { class: 'btn quiet', onclick: async () => {
+      const name = await ask('Name of the new scheme', uniqueName(sc ? sc.name + ' copy' : 'My ' + BUILTIN[base].replace('Catppuccin ', '')));
+      if (!name) return;
+      if (schemes().some(x => x.name === name)) return status(`there is already a scheme named “${name}”`, 'bad');
+      try { await saveSchemes([...schemes(), { name, base, colors: { ...(sc ? sc.colors : {}) } }], 'custom:' + name); renderColors(); } catch (e) { status(e.message, 'bad'); }
+    } }, sc ? 'Duplicate' : 'New from this'),
+    sc ? h('button', { class: 'btn quiet', onclick: async () => {
+      const name = await ask('Rename the scheme', sc.name);
+      if (!name || name === sc.name) return;
+      if (schemes().some(x => x.name === name)) return status(`there is already a scheme named “${name}”`, 'bad');
+      try { await saveSchemes(schemes().map(x => x.name === sc.name ? { ...x, name } : x), 'custom:' + name); renderColors(); } catch (e) { status(e.message, 'bad'); }
+    } }, 'Rename') : null,
+    sc ? h('button', { class: 'btn quiet danger', onclick: async () => {
+      const ok = await ask(`Delete “${sc.name}”? Type its name to confirm`, '');
+      if (ok !== sc.name) { if (ok) status('the name didn’t match; nothing was deleted', 'bad'); return; }
+      try { await saveSchemes(schemes().filter(x => x.name !== sc.name), sc.base); renderColors(); status(`deleted “${sc.name}”`, 'good'); } catch (e) { status(e.message, 'bad'); }
+    } }, 'Delete') : null,
+    h('button', { class: 'btn quiet', onclick: exportScheme }, 'Export'),
+    h('button', { class: 'btn quiet', onclick: importScheme }, 'Import'),
+  ];
+
+  pane.replaceChildren(h('div', { class: 'bs colors' },
+    h('section', {},
+      h('h3', {}, 'Scheme'),
+      h('p', { class: 'note' }, sc
+        ? `Your scheme, made from ${BUILTIN[sc.base]}. Changes show as you pick and are saved at once.`
+        : 'Change any colour below to start a scheme of your own from this one.'),
+      h('div', { class: 'field' }, sel),
+      h('div', { class: 'scheme-acts' }, acts),
+      sc ? h('div', { class: 'opt-row' },
+        h('span', { class: 'note' }, 'Made from'),
+        ...Object.entries(BUILTIN).map(([b, n]) => h('button', { class: 'chip-btn' + (sc.base === b ? ' on' : ''), title: 'Colours you haven’t changed come from here',
+          onclick: async () => { if (sc.base !== b) { await saveSchemes(schemes().map(x => x.name === sc.name ? { ...x, base: b } : x)); renderColors(); } } }, n.replace('Catppuccin ', '')))) : null,
+      h('div', { class: 'preview' }, ...['crust', 'mantle', 'base', 'surface0', 'text', 'mauve', 'green', 'peach', 'blue', 'yellow', 'sky', 'teal', 'red']
+        .map(n => h('span', { title: n, style: `background:${colors[n]}` })))),
+    ...COLOR_GROUPS.map(([g, list]) => h('section', {}, h('h3', {}, g), ...list.map(row)))));
 }
 
 // ------------------------------------------------------------------ welcome and workspace
@@ -2016,6 +2247,7 @@ function wire() {
     if (mod && e.key === 'Enter') { e.preventDefault(); command('run'); return; }
     if (mod && e.key.toLowerCase() === 'b' && !e.shiftKey) { e.preventDefault(); command('build'); return; }
     if (mod && e.shiftKey && e.key.toLowerCase() === 'b') { e.preventDefault(); toggleRight('build'); return; }
+    if (mod && e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); toggleRight('colors'); return; }
     if (mod && !e.shiftKey && e.key.toLowerCase() === 'i') { e.preventDefault(); toggleRight('suggest'); return; }
     if (mod && e.shiftKey && e.key.toLowerCase() === 't') { e.preventDefault(); command('test'); return; }
     if (mod && e.shiftKey && e.key.toLowerCase() === 'p') { e.preventDefault(); palette(); return; }

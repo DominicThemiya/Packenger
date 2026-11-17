@@ -125,23 +125,24 @@ func writeJSON(w http.ResponseWriter, v any) {
 // ---------------------------------------------------------------- requests
 
 type req struct {
-	WS     string   `json:"ws"`
-	Path   string   `json:"path"`
-	Text   *string  `json:"text"`
-	Line   int      `json:"line"`
-	Col    int      `json:"col"`
-	Prefix string   `json:"prefix"`
-	Name   string   `json:"name"`
-	To     string   `json:"to"`
-	Dir    bool     `json:"dir"`
-	Action string   `json:"action"`
-	Arg    string   `json:"arg"`
-	ID     string   `json:"id"`
-	Rev    string   `json:"rev"`
-	Pkc    bool     `json:"pkc"`
-	Repo   *string  `json:"repo"`
-	Theme  *string  `json:"theme"`
-	Prof   *Profile `json:"profile"`
+	WS     string     `json:"ws"`
+	Path   string     `json:"path"`
+	Text   *string    `json:"text"`
+	Line   int        `json:"line"`
+	Col    int        `json:"col"`
+	Prefix string     `json:"prefix"`
+	Name   string     `json:"name"`
+	To     string     `json:"to"`
+	Dir    bool       `json:"dir"`
+	Action string     `json:"action"`
+	Arg    string     `json:"arg"`
+	ID     string     `json:"id"`
+	Rev    string     `json:"rev"`
+	Pkc    bool       `json:"pkc"`
+	Repo   *string    `json:"repo"`
+	Theme  *string    `json:"theme"`
+	Scheme *[]*Scheme `json:"schemes"`
+	Prof   *Profile   `json:"profile"`
 }
 
 func parse(body []byte) (*req, error) {
@@ -212,7 +213,7 @@ func (s *Server) state() map[string]any {
 	home, _ := os.UserHomeDir()
 	_, wasmtime := exec.LookPath("wasmtime")
 	return map[string]any{
-		"repo": s.Config.Repo, "builds": s.Config.Builds, "recent": s.Config.Recent, "theme": s.Config.Theme,
+		"repo": s.Config.Repo, "builds": s.Config.Builds, "recent": s.Config.Recent, "theme": s.Config.Theme, "schemes": s.Config.Schemes,
 		"home": home, "dataDir": DataDir(), "configDir": ConfigDir(), "wasmtime": wasmtime == nil,
 		"defaultRegistry": s.Engine.DefaultRegistry,
 	}
@@ -225,7 +226,15 @@ func (s *Server) routes(api func(string, func(*http.Request, []byte) (any, error
 		if err != nil {
 			return nil, err
 		}
+		if q.Scheme != nil {
+			if err := CheckSchemes(*q.Scheme); err != nil {
+				return nil, err
+			}
+		}
 		s.Config.mu.Lock()
+		if q.Scheme != nil {
+			s.Config.Schemes = *q.Scheme
+		}
 		if q.Repo != nil {
 			s.Config.Repo = *q.Repo
 		}

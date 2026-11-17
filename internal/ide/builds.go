@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -73,10 +74,54 @@ type Config struct {
 	Builds   []*Build            `json:"builds"`
 	Profiles map[string]*Profile `json:"profiles"` // workspace path -> profile
 	Recent   []string            `json:"recent"`   // workspaces, latest first
-	Theme    string              `json:"theme"`
+	Theme    string              `json:"theme"`    // "mocha", "latte" or "custom:<name>"
+	Schemes  []*Scheme           `json:"schemes"`  // the user's colour schemes
 
 	mu   sync.Mutex
 	path string
+}
+
+// Scheme is a colour scheme made in the Colors sidebar: a built-in theme
+// (Base) with some of its colours replaced. Colors maps a colour's name
+// (the CSS variable without "--", e.g. "mauve") to #rrggbb or #rrggbbaa.
+type Scheme struct {
+	Name   string            `json:"name"`
+	Base   string            `json:"base"`
+	Colors map[string]string `json:"colors"`
+}
+
+var hexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$`)
+var colorName = regexp.MustCompile(`^[a-z][a-z0-9]{0,23}$`)
+
+// CheckSchemes reports the first thing wrong with schemes: a missing or
+// repeated name, an unknown base, or a colour that isn't a hex colour.
+func CheckSchemes(schemes []*Scheme) error {
+	seen := map[string]bool{}
+	for _, sc := range schemes {
+		if sc == nil {
+			return fmt.Errorf("a scheme is empty")
+		}
+		sc.Name = strings.TrimSpace(sc.Name)
+		if sc.Name == "" || len(sc.Name) > 60 {
+			return fmt.Errorf("a scheme needs a name of at most 60 characters")
+		}
+		if seen[sc.Name] {
+			return fmt.Errorf("two schemes are named %q", sc.Name)
+		}
+		seen[sc.Name] = true
+		if sc.Base != "mocha" && sc.Base != "latte" {
+			return fmt.Errorf("scheme %q: the base is mocha or latte, not %q", sc.Name, sc.Base)
+		}
+		if len(sc.Colors) > 64 {
+			return fmt.Errorf("scheme %q has too many colours", sc.Name)
+		}
+		for k, v := range sc.Colors {
+			if !colorName.MatchString(k) || !hexColor.MatchString(v) {
+				return fmt.Errorf("scheme %q: %s: %q is not a colour like #cba6f7", sc.Name, k, v)
+			}
+		}
+	}
+	return nil
 }
 
 // ConfigDir is where pkide keeps its config; DataDir its builds.

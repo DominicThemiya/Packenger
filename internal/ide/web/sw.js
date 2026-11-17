@@ -1,6 +1,6 @@
 // pkide's service worker: keeps the app shell so the installed app opens
 // even when its server isn't running (and then says how to start it).
-const CACHE = 'pkide-v2';
+const CACHE = 'pkide-v3';
 const SHELL = ['/style.css', '/app.js', '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png', '/offline.html'];
 
 self.addEventListener('install', e => {
