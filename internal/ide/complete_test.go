@@ -71,7 +71,7 @@ func TestCompleteProgram(t *testing.T) {
 	if c.Items[0].Kind != "var" && c.Items[0].Kind != "param" && c.Items[0].Kind != "keyword" {
 		t.Errorf("first item %+v", c.Items[0])
 	}
-	if it := labels(c)["twice"]; it.Detail != "twice(n: int) -> int" || it.Doc != "doubles n" || it.Insert != "twice(${n})" {
+	if it := labels(c)["twice"]; it.Detail != "twice(n: int) -> int" || it.Doc != "doubles n" || it.Insert != "twice(${n})" || it.Source != "this file" {
 		t.Errorf("twice: %+v", it)
 	}
 	if it := labels(c)["if"]; !strings.Contains(it.Insert, "${cond}") || !strings.Contains(it.Insert, "\n  end") {
@@ -181,4 +181,27 @@ func TestHoverAndOutline(t *testing.T) {
 	if d := e.Check(context.Background(), Source{Path: p, Text: "use std\nprint nosuch\n"}); len(d) != 1 || d[0].Line != 2 || d[0].Col != 7 {
 		t.Errorf("check %+v", d)
 	}
+}
+
+func TestCompleteSources(t *testing.T) {
+	e := engine(t)
+	p := filepath.Join(t.TempDir(), "a.pkg")
+	c := complete(t, e, p, "use std\nuse rt\nlet k = 1\n|\n")
+	ls := labels(c)
+	for label, want := range map[string]string{"k": "in scope", "str_trim": "rt/str", "while": "std/while", "vec_len": "rt/vec"} {
+		if ls[label].Source != want {
+			t.Errorf("%s: source %q, want %q", label, ls[label].Source, want)
+		}
+	}
+	if !strings.Contains(ls["str_trim"].Doc, "") || strings.Contains(ls["while"].Doc, "std/while:") {
+		t.Errorf("docs: %+v %+v", ls["str_trim"], ls["while"])
+	}
+}
+
+// A mistake elsewhere in the file doesn't hide the names in scope.
+func TestCompleteDespiteErrors(t *testing.T) {
+	e := engine(t)
+	p := filepath.Join(t.TempDir(), "a.pkg")
+	c := complete(t, e, p, "use std\nlet total = 0\nlet xs = 3\n|\nprint nosuch\nif total <\n  print 1\nend\n")
+	want(t, c, "total", "xs")
 }

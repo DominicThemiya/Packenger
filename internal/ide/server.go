@@ -814,7 +814,7 @@ func (s *Server) format(r *http.Request, body []byte) (any, error) {
 	return map[string]string{"text": out.String()}, nil
 }
 
-// Icon draws pkide's icon: an amber P on a dark screen, pixel by pixel.
+// Icon draws pkide's icon: a mauve P on Catppuccin crust, pixel by pixel.
 func Icon(n int) image.Image {
 	glyph := []string{
 		"........",
@@ -827,9 +827,9 @@ func Icon(n int) image.Image {
 		"........",
 	}
 	img := image.NewRGBA(image.Rect(0, 0, n, n))
-	bg := color.RGBA{0x14, 0x12, 0x0f, 0xff}
-	frame := color.RGBA{0x3a, 0x33, 0x28, 0xff}
-	amber := color.RGBA{0xff, 0xb0, 0x00, 0xff}
+	bg := color.RGBA{0x11, 0x11, 0x1b, 0xff}    // Catppuccin Mocha crust
+	frame := color.RGBA{0x31, 0x32, 0x44, 0xff} // surface0
+	amber := color.RGBA{0xcb, 0xa6, 0xf7, 0xff} // mauve
 	cell := n / 12
 	off := (n - 8*cell) / 2
 	for y := 0; y < n; y++ {

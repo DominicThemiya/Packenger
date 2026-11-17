@@ -4,13 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="pkide-token" content="{{TOKEN}}">
-<meta name="theme-color" content="#d3dccb">
+<meta name="theme-color" content="#11111b">
 <title>pkide</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans+Condensed:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -19,16 +16,9 @@
     <button class="brand" id="brand" title="Settings and install">pkide</button>
     <button class="ws" id="wsButton" title="Open a folder (Ctrl+O)">open a folder</button>
     <span class="fill"></span>
-    <label class="pick" title="The Packenger build this workspace compiles with">
-      <span>build</span><select id="buildSelect"></select>
-    </label>
-    <label class="pick" title="Backend target">
-      <span>target</span><select id="targetSelect">
-        <option value="bintables">bintables</option>
-        <option value="ctables">ctables</option>
-        <option value="webtables">webtables</option>
-      </select>
-    </label>
+    <button class="chip" id="profileChip" title="Build settings: compiler, target and registry (Ctrl+Shift+B)">
+      <span class="dot"></span><span class="name">no build</span><span class="tgt"></span>
+    </button>
     <nav class="cmds" id="topCmds">
       <button data-cmd="run" title="Run the file (Ctrl+Enter)">Run</button>
       <button data-cmd="build" title="Build an executable (Ctrl+B)">Build</button>
@@ -37,6 +27,10 @@
       <button data-cmd="why" title="Why is a package in the build?">Why</button>
       <button data-cmd="tree" title="Which packages built the program">Tree</button>
       <button data-cmd="asm" title="Show the generated code">Asm</button>
+    </nav>
+    <nav class="toggles">
+      <button data-right="suggest" title="Suggestions in detail (Ctrl+I)">Suggestions</button>
+      <button data-right="build" title="Build settings (Ctrl+Shift+B)">Build</button>
     </nav>
   </header>
 
@@ -78,7 +72,6 @@
         <nav class="tabs" id="bottomTabs">
           <button data-bottom="console" class="on">Console</button>
           <button data-bottom="problems">Problems <span class="count" id="problemCount"></span></button>
-          <button data-bottom="builds">Builds</button>
         </nav>
         <span class="fill"></span>
         <nav class="cmds" id="consoleCmds">
@@ -93,9 +86,22 @@
         </form>
       </div>
       <div class="bottom-body" id="problemsPane" hidden></div>
-      <div class="bottom-body" id="buildsPane" hidden></div>
     </section>
   </main>
+
+  <div class="split v" id="splitRight" title="Drag to resize"></div>
+  <aside class="right" id="right">
+    <div class="tag">
+      <nav class="tabs" id="rightTabs">
+        <button data-right="suggest">Suggestions</button>
+        <button data-right="build">Build</button>
+      </nav>
+      <span class="fill"></span>
+      <nav class="cmds"><button data-right="" title="Hide the sidebar">Hide</button></nav>
+    </div>
+    <div class="right-body" id="rightSuggest"></div>
+    <div class="right-body" id="rightBuild" hidden></div>
+  </aside>
 
   <footer class="status" id="status">
     <span id="statusPos"></span>

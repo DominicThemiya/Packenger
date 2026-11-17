@@ -28,6 +28,33 @@ If the server isn't running, the installed app says how to start it.
 `pkide [folder]` starts the server if needed and opens a window, as an app
 window in a Chromium browser if there is one.
 
+## Looks
+
+pkide uses [Catppuccin](https://catppuccin.com) Mocha, or Latte for a
+light theme (*Settings*), and the
+[Monaspace Krypton](https://monaspace.githubnext.com) font, falling back to
+the system's monospace font if Krypton isn't installed. The editor keeps a
+faint three-line banding and punched holes down the gutter, like
+line-printer paper.
+
+## The sidebar
+
+The right sidebar (<kbd>Ctrl+I</kbd>, <kbd>Ctrl+Shift+B</kbd>, or the
+buttons in the top bar) has two panels:
+
+- **Suggestions** lists every suggestion for the cursor in full, grouped:
+  what comes next in the statement, names in scope, fields, this file's
+  definitions, statements and expressions, libraries, types and packages.
+  Each shows its signature or pattern, its documentation and the package it
+  comes from; the selected one (it follows the popup) also shows exactly
+  what it inserts, placeholders marked. Above them is the pattern of the
+  statement being written, or the signature of the call, with the current
+  argument marked. Double-click or *Insert* to use one.
+- **Build** is the workspace's profile: the compiler (as cards, grouped
+  into found, built from git and added), the target, and where packages
+  come from; and building from git or adding compilers. The chip in the top
+  bar shows the current build and target, and opens it.
+
 ## Writing code
 
 | | |
@@ -67,7 +94,7 @@ grammar of the package's `needs`.
 
 ## Builds
 
-The *Builds* panel lists the Packenger compilers pkide knows, and the
+The *Build* panel of the sidebar lists the Packenger compilers pkide knows, and the
 workspace's profile: which build compiles it, for which target, and where
 packages come from.
 

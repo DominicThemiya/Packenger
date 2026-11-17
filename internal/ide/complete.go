@@ -21,6 +21,8 @@ type Item struct {
 	// placeholder, visited in order with Tab.
 	Insert string `json:"insert,omitempty"`
 	Rank   int    `json:"rank"` // lower first, before the match score
+	// Source is where it comes from: a package, "this file", "in scope".
+	Source string `json:"source,omitempty"`
 }
 
 // A Completion is the answer to a completion request: Word, the partial
@@ -136,7 +138,7 @@ func (e *Engine) completePackageName(ctx context.Context, src Source, prefix, kw
 		for _, n := range e.PackageNames(ctx, base) {
 			if !seen[n] {
 				seen[n] = true
-				it := Item{Label: n, Kind: "package", Rank: rankOther + strings.Count(n, "/")}
+				it := Item{Label: n, Kind: "package", Rank: rankOther + strings.Count(n, "/"), Source: base}
 				out.Items = append(out.Items, it)
 			}
 		}
@@ -291,7 +293,7 @@ func forms(front map[string]*pkgfile.File, statements bool, indent string) []Ite
 					if g >= 0 {
 						label = first + " … " + groupLabel(p.Elems[g])
 					}
-					out = append(out, Item{Label: label, Kind: "keyword", Detail: detail, Doc: f.Name + ": " + f.Doc, Insert: ins, Rank: rankKeyword + vi})
+					out = append(out, Item{Label: label, Kind: "keyword", Detail: detail, Doc: f.Doc, Source: f.Name, Insert: ins, Rank: rankKeyword + vi})
 				}
 			}
 		}
@@ -463,6 +465,15 @@ func (s *scope) lookupVar(name string) *lang.Var {
 	return nil
 }
 
+// origin names where something declared at p comes from: "this file",
+// or the package.
+func (s *scope) origin(p lang.Pos) string {
+	if p.File == "" || p.File == s.file {
+		return "this file"
+	}
+	return strings.TrimSuffix(p.File, ".pkg")
+}
+
 // consts lists the program's constants: name -> type.
 func (s *scope) consts() map[string]*lang.Node {
 	out := map[string]*lang.Node{}
@@ -493,13 +504,13 @@ func (v *View) names(s *scope, fileLines []string) []Item {
 		if s.params[l] {
 			kind = "param"
 		}
-		out = append(out, Item{Label: l.Name, Kind: kind, Detail: l.Type, Rank: rankLocal})
+		out = append(out, Item{Label: l.Name, Kind: kind, Detail: l.Type, Rank: rankLocal, Source: "in scope"})
 	}
 	if s.prog != nil {
 		for _, g := range s.prog.Globals {
 			if !seen[g.Name] {
 				seen[g.Name] = true
-				out = append(out, Item{Label: g.Name, Kind: "global", Detail: g.Type, Rank: rankUser})
+				out = append(out, Item{Label: g.Name, Kind: "global", Detail: g.Type, Rank: rankUser, Source: s.origin(s.decls[g])})
 			}
 		}
 	}
@@ -511,7 +522,7 @@ func (v *View) names(s *scope, fileLines []string) []Item {
 			if val := consts[name].Slots["value"]; val != nil {
 				typ = val.Type
 			}
-			out = append(out, Item{Label: name, Kind: "const", Detail: typ, Rank: rankUser})
+			out = append(out, Item{Label: name, Kind: "const", Detail: typ, Rank: rankUser, Source: s.origin(consts[name].Pos)})
 		}
 	}
 	for _, f := range s.funcs() {
@@ -521,16 +532,15 @@ func (v *View) names(s *scope, fileLines []string) []Item {
 		}
 		seen[name] = true
 		doc, where := s.funcDoc(f, fileLines, v.Offset)
-		rank := rankUser
+		rank, source := rankUser, "this file"
 		if where != "" {
-			rank = rankLib
-			doc = strings.TrimSpace(doc + "\n\n" + where)
+			rank, source = rankLib, where
 		}
 		var args []string
 		for _, p := range paramsOf(f) {
 			args = append(args, "${"+p.Name+"}")
 		}
-		out = append(out, Item{Label: name, Kind: "func", Detail: signature(f), Doc: doc, Insert: name + "(" + strings.Join(args, ", ") + ")", Rank: rank})
+		out = append(out, Item{Label: name, Kind: "func", Detail: signature(f), Doc: doc, Insert: name + "(" + strings.Join(args, ", ") + ")", Rank: rank, Source: source})
 	}
 	return out
 }
@@ -538,14 +548,14 @@ func (v *View) names(s *scope, fileLines []string) []Item {
 // types lists the type names: primitives, structs and the type syntax.
 func (s *scope) types(L *lang.Lang) []Item {
 	var out []Item
-	prims := map[string]bool{}
+	prims := map[string]string{}
 	for _, f := range s.front {
 		for _, t := range f.Types {
-			prims[t.Name] = true
+			prims[t.Name] = f.Name
 		}
 	}
 	for _, p := range sortedNames(prims) {
-		out = append(out, Item{Label: p, Kind: "type", Detail: "primitive", Rank: rankKeyword})
+		out = append(out, Item{Label: p, Kind: "type", Detail: "primitive", Rank: rankKeyword, Source: prims[p]})
 	}
 	if s.prog != nil {
 		for _, name := range s.prog.Types.StructNames() {
@@ -554,7 +564,11 @@ func (s *scope) types(L *lang.Lang) []Item {
 			for _, f := range st.Fields {
 				fs = append(fs, f.Name+": "+f.Type)
 			}
-			out = append(out, Item{Label: name, Kind: "struct", Detail: "struct", Doc: strings.Join(fs, "\n"), Rank: rankUser})
+			src := ""
+			if loc := structDef(s, name, func(p lang.Pos) *Location { return &Location{Package: s.origin(p)} }); loc != nil {
+				src = loc.Package
+			}
+			out = append(out, Item{Label: name, Kind: "struct", Detail: "struct", Doc: strings.Join(fs, "\n"), Rank: rankUser, Source: src})
 		}
 	}
 	out = append(out,
@@ -709,7 +723,7 @@ func closersFor(front map[string]*pkgfile.File, opener, indent string) []Item {
 							if rest := clauseAfter(p.Elems, c); rest != "" {
 								ins = c + " " + rest
 							}
-							out = append(out, Item{Label: c, Kind: "keyword", Detail: "in " + opener + " … " + patternText(p.Elems), Insert: ins, Rank: rankPattern})
+							out = append(out, Item{Label: c, Kind: "keyword", Detail: "in " + opener + " … " + patternText(p.Elems), Doc: f.Doc, Source: f.Name, Insert: ins, Rank: rankPattern})
 						}
 					}
 				}
@@ -794,7 +808,7 @@ func continuations(front map[string]*pkgfile.File, toks []lang.Token) []Item {
 				for m := k; m < len(seq) && !seq[m].afterBlock; m++ {
 					if !seen[seq[m].text] {
 						seen[seq[m].text] = true
-						out = append(out, Item{Label: seq[m].text, Kind: "operator", Detail: patternText(p.Elems), Doc: name + ": " + front[name].Doc, Rank: rankPattern})
+						out = append(out, Item{Label: seq[m].text, Kind: "operator", Detail: patternText(p.Elems), Doc: front[name].Doc, Source: name, Rank: rankPattern})
 					}
 					if !seq[m].optional {
 						break
@@ -912,7 +926,7 @@ func (v *View) completeCode(fileLines []string, line int, prefix string) *Comple
 		typ := s.exprType(toks[:len(toks)-1])
 		if st := s.structOf(typ); st != nil {
 			for i, f := range st.Fields {
-				out.Items = append(out.Items, Item{Label: f.Name, Kind: "field", Detail: f.Type, Doc: st.Name + "." + f.Name, Rank: rankLocal + i})
+				out.Items = append(out.Items, Item{Label: f.Name, Kind: "field", Detail: f.Type, Doc: "field of struct " + st.Name, Source: st.Name, Rank: rankLocal + i})
 			}
 		}
 		return out
@@ -942,7 +956,7 @@ func (v *View) completeCode(fileLines []string, line int, prefix string) *Comple
 				}
 				for _, p := range sy.Patterns {
 					if len(p.Elems) > 1 && isWordLit(p.Elems[1].Lit) {
-						out.Items = append(out.Items, Item{Label: p.Elems[1].Lit, Kind: "operator", Detail: patternText(p.Elems), Doc: name + ": " + v.A.Front[name].Doc, Rank: rankKeyword})
+						out.Items = append(out.Items, Item{Label: p.Elems[1].Lit, Kind: "operator", Detail: patternText(p.Elems), Doc: v.A.Front[name].Doc, Source: name, Rank: rankKeyword})
 					}
 				}
 			}

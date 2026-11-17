@@ -166,9 +166,25 @@ func (e *Engine) Analyze(ctx context.Context, src Source, line int) (*View, erro
 		}
 		return out
 	}
-	a, err := e.analyzeText(ctx, src, strings.Join(blank(lines, at), "\n"))
+	cur := blank(lines, at)
+	a, err := e.analyzeText(ctx, src, strings.Join(cur, "\n"))
 	if err != nil {
 		return v, err
+	}
+	// a mistake elsewhere in the file shouldn't hide what's in scope: leave
+	// out the lines the parser stops at, a few times
+	name := filepath.Base(src.Path)
+	for i := 0; i < 6 && a.Program == nil && a.Err != nil; i++ {
+		d := diagnose(a.Err, name, 0)
+		if d.File != "" || d.Line < 1 || d.Line > len(cur) || strings.TrimSpace(cur[d.Line-1]) == "" || isUseLine(cur[d.Line-1]) {
+			break
+		}
+		cur[d.Line-1] = ""
+		b, err := e.analyzeText(ctx, src, strings.Join(cur, "\n"))
+		if err != nil {
+			break
+		}
+		a = b
 	}
 	v.A = a
 	if a.Program == nil && at < len(lines) {

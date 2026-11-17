@@ -16,7 +16,7 @@ function h(tag, attrs, ...kids) {
     else if (k === 'html') el.innerHTML = v;
     else el.setAttribute(k, v === true ? '' : v);
   }
-  for (const kid of kids.flat()) {
+  for (const kid of kids.flat(Infinity)) {
     if (kid == null || kid === false) continue;
     el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
   }
@@ -446,7 +446,9 @@ function activate(t) {
   hideComplete();
   hideHover();
   S.snippet = null;
+  S.comp = null;
   S.active = t;
+  renderSuggest();
   $('#welcome').hidden = !!t;
   ED.root.hidden = !t;
   if (!t) { renderTabs(); renderWelcome(); renderOutline(); return; }
@@ -543,6 +545,7 @@ function onInput(e) {
     }
   }, 650);
   ensureVisible();
+  renderSuggest();
   const typed = e && e.inputType === 'insertText' ? e.data : null;
   if (typed == null) { if (e && /delete/.test(e.inputType || '') && !$('#complete').hidden) filterComplete(); return; }
   if (!$('#complete').hidden && /^[\w/-]$/.test(typed) && sameContext()) { filterComplete(); scheduleComplete(false, 140); return; }
@@ -589,8 +592,10 @@ async function requestComplete(open, silent) {
   S.comp = { items: res.items || [], line, before: prefix.slice(0, prefix.length - word.length), hint: res.hint || '' };
   $('#statusHint').textContent = (res.hint || '').split('\n')[0];
   $('#statusHint').title = res.hint || '';
+  S.panelSel = null;
   if (open && sameContext()) filterComplete();
   else if (!open && !$('#complete').hidden) filterComplete();
+  renderSuggest();
 }
 
 function score(label, q) {
@@ -655,6 +660,7 @@ function select(i) {
   const li = list.children[S.sel];
   if (li) li.scrollIntoView({ block: 'nearest' });
   const it = S.shown[S.sel];
+  renderSuggest();
   const doc = $('#completeDoc');
   doc.replaceChildren();
   if (it.detail || it.doc) {
@@ -679,15 +685,20 @@ function positionComplete() {
 }
 
 function hideComplete() {
+  if ($('#complete').hidden) return;
   $('#complete').hidden = true;
   S.shown = [];
+  renderSuggest();
 }
 
 // accept inserts a completion item in place of the word being typed.
 function accept(i) {
-  const it = S.shown[i == null ? S.sel : i];
+  acceptItem(S.shown[i == null ? S.sel : i]);
+}
+
+function acceptItem(it) {
   hideComplete();
-  if (!it) return;
+  if (!it || !S.comp || !sameContext()) return;
   const ta = ED.ta;
   const end = ta.selectionStart;
   const q = currentPrefix().slice(S.comp.before.length);
@@ -1172,9 +1183,7 @@ function showBottom(which) {
   for (const b of $('#bottomTabs').children) b.classList.toggle('on', b.dataset.bottom === which);
   $('#consolePane').hidden = which !== 'console';
   $('#problemsPane').hidden = which !== 'problems';
-  $('#buildsPane').hidden = which !== 'builds';
   $('#consoleCmds').style.visibility = which === 'console' ? '' : 'hidden';
-  if (which === 'builds') renderBuilds();
   if (which === 'problems') renderProblems();
 }
 
@@ -1308,102 +1317,126 @@ async function whyDialog() {
   pick('Why is this package in the build?', pkgs.filter(p => !p.truck).map(p => ({ label: p.name, detail: p.doc })), it => runAction('why', it.label), 'a package name, e.g. std/add or bintables/add', true);
 }
 
-// ------------------------------------------------------------------ builds
+// ------------------------------------------------------------------ build settings (right sidebar)
 
-function buildOf(id) { return (S.state.builds || []).find(b => b.id === id); }
+function buildOf(id) { return ((S.state && S.state.builds) || []).find(b => b.id === id); }
 
+const TARGETS = [
+  ['bintables', 'NASM → a native x86-64 executable'],
+  ['ctables', 'C, built with cc -O2: faster code'],
+  ['webtables', 'WebAssembly, run with wasmtime'],
+];
+
+// renderBuildSelect updates the profile chip and the commands it enables.
 function renderBuildSelect() {
-  const sel = $('#buildSelect');
-  const builds = (S.state && S.state.builds) || [];
-  sel.replaceChildren(...builds.map(b => h('option', { value: b.id }, b.name)));
-  if (!builds.length) sel.append(h('option', { value: '' }, 'no builds'));
-  if (S.profile) {
-    sel.value = S.profile.build || '';
-    $('#targetSelect').value = S.profile.target || 'bintables';
-  }
+  const chip = $('#profileChip');
   const b = S.profile && buildOf(S.profile.build);
+  chip.querySelector('.dot').className = 'dot' + (!b ? ' none' : b.kind === 'wasm' ? ' wasm' : '');
+  chip.querySelector('.name').textContent = b ? b.name : (S.ws ? 'choose a build' : 'no folder open');
+  chip.querySelector('.tgt').textContent = b && S.profile ? S.profile.target || 'bintables' : '';
   for (const btn of document.querySelectorAll('#topCmds button')) {
     const runs = ['run', 'build', 'test'].includes(btn.dataset.cmd);
     btn.disabled = !S.ws || !b || (runs && b.kind === 'wasm');
   }
+  if (!$('#rightBuild').hidden) renderBuilds();
 }
 
 async function setProfile(change) {
-  if (!S.ws) return;
+  if (!S.ws) { status('open a folder first', 'bad'); return; }
   S.profile = Object.assign({}, S.profile, change);
   try { S.profile = await api('/api/profile', { ws: S.ws, profile: S.profile }); } catch (e) { status(e.message, 'bad'); }
   renderBuildSelect();
-  if (!$('#buildsPane').hidden) renderBuilds();
   if (change.registry !== undefined) { await api('/api/reload'); for (const t of S.tabs) { loadGrammar(t); check(t); } }
 }
 
-function registryLabel(p) {
-  return { '': 'default', repo: 'repository', build: 'the build’s own' }[p.registry] ?? 'custom';
+function buildCard(b, prof, st) {
+  const on = b.id === prof.build;
+  const ver = b.version ? `${b.version.slice(0, 7)}${b.subject ? ' · ' + b.subject : ''}` : '';
+  return h('div', {
+    class: 'card' + (on ? ' on' : ''), role: 'radio', 'aria-checked': on ? 'true' : 'false', tabindex: '0', title: b.path,
+    onclick: e => { if (!e.target.closest('.acts')) setProfile({ build: b.id }); },
+    onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setProfile({ build: b.id }); } },
+  },
+    h('span', { class: 'radio' }),
+    h('span', { class: 'title' }, b.name),
+    h('span', { class: 'badge ' + b.kind }, b.kind),
+    ver ? h('span', { class: 'meta ver' }, ver) : null,
+    h('span', { class: 'meta' }, b.path.replace(st.home || '\u0000', '~')),
+    b.kind === 'wasm' ? h('span', { class: 'meta' }, 'checks and prints asm only (runs in wasmtime)') : null,
+    h('span', { class: 'acts' },
+      h('span', { onclick: async () => { const n = await ask('Rename build', b.name, 'a name for this build'); if (n) { S.state = await api('/api/builds/rename', { id: b.id, name: n }); renderBuilds(); renderBuildSelect(); } } }, 'Rename'),
+      b.auto ? null : h('span', { class: 'danger', onclick: async () => {
+        if (!confirm(`Remove ${b.name}?${b.source ? ' Its files in ' + st.dataDir + ' are deleted.' : ''}`)) return;
+        try { S.state = await api('/api/builds/remove', { id: b.id }); await refreshProfile(); renderBuilds(); } catch (e) { status(e.message, 'bad'); }
+      } }, 'Remove')));
 }
 
-async function renderBuilds() {
-  const pane = $('#buildsPane');
+function option(on, title, note, onclick, disabled) {
+  return h('button', { class: 'opt' + (on ? ' on' : ''), role: 'radio', 'aria-checked': on ? 'true' : 'false', disabled, onclick },
+    h('span', { class: 'radio' }), h('b', {}, title), note ? h('small', {}, note) : null);
+}
+
+function renderBuilds() {
+  const pane = $('#rightBuild');
   const st = S.state || {};
   const builds = st.builds || [];
   const prof = S.profile || {};
-  const table = h('table', {},
-    h('thead', {}, h('tr', {}, h('th', {}, ''), h('th', {}, 'Build'), h('th', {}, 'Kind'), h('th', {}, 'Version'), h('th', {}, 'Path'), h('th', {}, ''))),
-    h('tbody', {}, ...builds.map(b => h('tr', { class: b.id === prof.build ? 'on' : '' },
-      h('td', {}, h('input', { type: 'radio', name: 'activeBuild', checked: b.id === prof.build, disabled: !S.ws, 'aria-label': 'Use ' + b.name, onchange: () => setProfile({ build: b.id }) })),
-      h('td', {}, b.name),
-      h('td', {}, h('span', { class: 'kind' }, b.kind)),
-      h('td', { title: b.subject || '' }, b.version ? b.version.slice(0, 7) + (b.subject ? ' ' + b.subject.slice(0, 40) : '') : (b.auto ? 'found' : 'added')),
-      h('td', { class: 'path', title: b.path }, b.path),
-      h('td', { class: 'row-cmds' },
-        h('button', { onclick: async () => { const n = await ask('Rename build', b.name, 'a name for this build'); if (n) { S.state = await api('/api/builds/rename', { id: b.id, name: n }); renderBuilds(); renderBuildSelect(); } } }, 'Rename'),
-        !b.auto ? h('button', { class: 'danger', onclick: async () => {
-          if (!confirm(`Remove ${b.name}?${b.source ? ' Its files in ' + st.dataDir + ' are deleted.' : ''}`)) return;
-          try { S.state = await api('/api/builds/remove', { id: b.id }); await refreshProfile(); renderBuilds(); } catch (e) { status(e.message, 'bad'); }
-        } }, 'Remove') : null)))));
-  if (!builds.length) table.append(h('tr', {}, h('td', { colspan: 6, class: 'note' }, 'No builds yet. Add a compiler below, or build one from the repository.')));
-
-  const regSel = h('select', { 'aria-label': 'Registry', onchange: e => {
-    if (e.target.value === 'custom') { ask('Registry URL', prof.registry && !['', 'repo', 'build'].includes(prof.registry) ? prof.registry : 'http://localhost:6464', 'an http(s):// or file:// registry').then(u => { if (u) setProfile({ registry: u }); else renderBuilds(); }); }
-    else setProfile({ registry: e.target.value });
-  } },
-    h('option', { value: '' }, 'default: the program’s lock file or package tree, else ' + (st.defaultRegistry || '')),
-    h('option', { value: 'repo', disabled: !st.repo }, 'the repository’s registry/ folder'),
-    h('option', { value: 'build', disabled: !(buildOf(prof.build) || {}).source }, 'the registry the build came with'),
-    h('option', { value: 'custom' }, prof.registry && !['', 'repo', 'build'].includes(prof.registry) ? 'custom: ' + prof.registry : 'a custom URL…'));
-  regSel.value = ['', 'repo', 'build'].includes(prof.registry || '') ? (prof.registry || '') : 'custom';
+  const groups = [
+    ['Found in the repository and on PATH', builds.filter(b => b.auto)],
+    ['Built from git', builds.filter(b => !b.auto && b.version)],
+    ['Added', builds.filter(b => !b.auto && !b.version)],
+  ].filter(g => g[1].length);
+  const custom = prof.registry && !['', 'repo', 'build'].includes(prof.registry);
+  const cur = buildOf(prof.build) || {};
 
   const path = h('input', { type: 'text', placeholder: '/path/to/packenger, pkc or pkc.wasm', 'aria-label': 'Path of a compiler' });
-  const rev = h('input', { type: 'text', placeholder: 'main, a tag, or a commit', list: 'gitRefs', 'aria-label': 'Git revision' });
+  const rev = h('input', { type: 'text', placeholder: 'main, a tag or a commit', list: 'gitRefs', 'aria-label': 'Git revision' });
   const refs = h('datalist', { id: 'gitRefs' });
-  const withPkc = h('input', { type: 'checkbox', checked: true, id: 'withPkc' });
+  const withPkc = h('input', { type: 'checkbox', checked: true });
   api('/api/git/refs').then(rs => refs.replaceChildren(...rs.map(r => h('option', { value: r.split(' ')[0] }, r)))).catch(() => {});
 
-  pane.replaceChildren(h('div', { class: 'builds' },
-    h('h3', {}, S.ws ? 'Builds — the checked one compiles ' + baseName(S.ws) : 'Builds'),
-    table,
-    h('h3', {}, 'Profile for this workspace'),
-    h('div', { class: 'forms' },
-      h('div', {}, h('p', { class: 'note' }, 'Packages come from'), h('div', { class: 'field' }, regSel)),
-      h('div', {}, h('p', { class: 'note' }, 'Target (also in the top bar)'), h('div', { class: 'field' },
-        (() => { const s = h('select', { onchange: e => setProfile({ target: e.target.value }) }, ...['bintables', 'ctables', 'webtables'].map(x => h('option', { value: x }, x))); s.value = prof.target || 'bintables'; return s; })()))),
-    h('h3', {}, 'Add builds'),
-    h('div', { class: 'forms' },
-      h('form', { onsubmit: async e => { e.preventDefault(); try { S.state = await api('/api/builds/add', { path: path.value }); path.value = ''; await refreshProfile(); renderBuilds(); } catch (err) { status(err.message, 'bad'); } } },
-        h('p', { class: 'note' }, 'A compiler on disk: the Go compiler, pkc, pkc-c, or pkc.wasm (which runs in wasmtime and can only check and print asm).'),
-        h('div', { class: 'field' }, path, h('button', { class: 'btn' }, 'Add'))),
+  pane.replaceChildren(h('div', { class: 'bs' },
+    h('section', {},
+      h('h3', {}, 'Compiler'),
+      h('p', { class: 'note' }, S.ws ? `The build that runs, builds and tests ${baseName(S.ws)}.` : 'Open a folder to choose its build.'),
+      builds.length ? groups.flatMap(([name, list]) => [h('div', { class: 'group-name' }, name), ...list.map(b => buildCard(b, prof, st))])
+        : h('p', { class: 'note' }, 'No builds yet: add a compiler or build one from git below.')),
+    h('section', {},
+      h('h3', {}, 'Target'),
+      h('p', { class: 'note' }, 'The backend truck that translates the program.'),
+      h('div', { class: 'seg', role: 'radiogroup' }, ...TARGETS.map(([t, note]) =>
+        h('button', { class: (prof.target || 'bintables') === t ? 'on' : '', role: 'radio', 'aria-checked': (prof.target || 'bintables') === t ? 'true' : 'false', onclick: () => setProfile({ target: t }) }, h('b', {}, t), h('small', {}, note))))),
+    h('section', {},
+      h('h3', {}, 'Packages from'),
+      h('p', { class: 'note' }, 'Where builds, completion and checking download packages.'),
+      option(!prof.registry, 'Default', `the program’s lock file or pkg_tree.pkg, else ${st.defaultRegistry || 'the universal tree'}`, () => setProfile({ registry: '' })),
+      option(prof.registry === 'repo', 'The repository', st.repo ? `${st.repo.replace(st.home || '\u0000', '~')}/registry` : 'set the repository in the settings', () => setProfile({ registry: 'repo' }), !st.repo),
+      option(prof.registry === 'build', 'The build’s own', cur.source ? 'the registry of the commit the build came from' : 'only for builds from git', () => setProfile({ registry: 'build' }), !cur.source),
+      option(custom, 'A URL', custom ? prof.registry : 'an http(s):// or file:// registry, e.g. your own server', async () => {
+        const u = await ask('Registry URL', custom ? prof.registry : 'http://localhost:6464', 'an http(s):// or file:// registry');
+        if (u) setProfile({ registry: u });
+      })),
+    h('section', {},
+      h('h3', {}, 'Build from git'),
+      h('p', { class: 'note' }, st.repo ? `Packenger at any commit of the repository, kept side by side in ${st.dataDir.replace(st.home || '\u0000', '~')}/builds.` : 'Set the Packenger repository in the settings to build versions from git.'),
       h('form', { onsubmit: async e => {
         e.preventDefault();
         try {
           const r = await api('/api/builds/git', { rev: rev.value, pkc: withPkc.checked });
           if ($('#console').childNodes.length) consoleWrite('\n');
-          follow(r.id, '', async () => { S.state = await api('/api/state'); await refreshProfile(); });
+          follow(r.id, '', async () => { S.state = await api('/api/state'); await refreshProfile(); renderBuilds(); });
         } catch (err) { status(err.message, 'bad'); }
       } },
-        h('p', { class: 'note' }, st.repo ? `Build Packenger at any commit of ${st.repo}, kept side by side in ${st.dataDir}/builds.` : 'Set the Packenger repository in the settings to build versions from git.'),
-        h('div', { class: 'field' }, rev, refs, h('label', { for: 'withPkc' }, withPkc, ' and pkc'), h('button', { class: 'btn', disabled: !st.repo }, 'Build'))),
-      h('div', {},
-        h('p', { class: 'note' }, 'Look again for compilers in the repository’s bin/ folder and on PATH.'),
-        h('button', { class: 'btn quiet', onclick: async () => { S.state = await api('/api/builds/detect'); await refreshProfile(); renderBuilds(); status('builds refreshed', 'good'); } }, 'Find builds')))));
+        h('div', { class: 'field' }, rev, refs),
+        h('div', { class: 'field', style: 'margin-top:8px' }, h('label', { class: 'check' }, withPkc, 'build pkc too'), h('span', { class: 'fill' }), h('button', { class: 'btn', disabled: !st.repo }, 'Build')))),
+    h('section', {},
+      h('h3', {}, 'Add a compiler'),
+      h('p', { class: 'note' }, 'Any Packenger compiler on disk: the Go compiler, pkc, pkc-c or pkc.wasm.'),
+      h('form', { onsubmit: async e => { e.preventDefault(); try { S.state = await api('/api/builds/add', { path: path.value }); path.value = ''; await refreshProfile(); renderBuilds(); } catch (err) { status(err.message, 'bad'); } } },
+        h('div', { class: 'field' }, path, h('button', { class: 'btn' }, 'Add'))),
+      h('div', { class: 'field', style: 'margin-top:10px' },
+        h('button', { class: 'btn quiet', onclick: async () => { S.state = await api('/api/builds/detect'); await refreshProfile(); renderBuilds(); status('builds refreshed', 'good'); } }, 'Look for builds again'),
+        h('button', { class: 'btn quiet', onclick: settingsDialog }, 'Settings')))));
 }
 
 async function refreshProfile() {
@@ -1414,6 +1447,152 @@ async function refreshProfile() {
     S.state = r.state;
   } catch { /* keep */ }
   renderBuildSelect();
+}
+
+// ------------------------------------------------------------------ right sidebar
+
+function showRight(which) {
+  const app = $('#app');
+  app.classList.toggle('no-right', !which);
+  for (const b of document.querySelectorAll('[data-right]')) b.classList.toggle('on', !!which && b.dataset.right === which);
+  $('#profileChip').classList.toggle('on', which === 'build');
+  $('#rightSuggest').hidden = which !== 'suggest';
+  $('#rightBuild').hidden = which !== 'build';
+  $('#complete').classList.toggle('docked', which === 'suggest');
+  store.set('right', which || '');
+  if (which === 'build') renderBuilds();
+  if (which === 'suggest') renderSuggest();
+  positionComplete();
+}
+
+function toggleRight(which) {
+  const open = !$('#app').classList.contains('no-right') && !$(which === 'build' ? '#rightBuild' : '#rightSuggest').hidden;
+  showRight(open ? '' : which);
+}
+
+// ---- the suggestions panel: every suggestion, in full
+
+const GROUPS = [
+  ['next', 'Next in this statement'],
+  ['scope', 'In scope'],
+  ['fields', 'Fields'],
+  ['file', 'This file'],
+  ['forms', 'Statements and expressions'],
+  ['lib', 'Libraries'],
+  ['types', 'Types'],
+  ['packages', 'Packages'],
+  ['pkgfile', 'Package file'],
+];
+
+function groupOf(it) {
+  if (it.rank === 15 || it.kind === 'operator') return 'next';
+  switch (it.kind) {
+    case 'var': case 'param': return 'scope';
+    case 'field': return 'fields';
+    case 'type': case 'struct': return 'types';
+    case 'package': return 'packages';
+    case 'section': case 'slot': case 'hole': case 'snippet': return 'pkgfile';
+    case 'func': case 'global': case 'const': return it.source === 'this file' ? 'file' : 'lib';
+  }
+  return 'forms';
+}
+
+// panelItems are the suggestions for the word at the cursor, best first.
+function panelItems() {
+  const c = S.comp;
+  if (!c || !tab() || !sameContext()) return [];
+  const q = currentPrefix().slice(c.before.length);
+  const out = [];
+  for (const it of c.items) {
+    const s = score(it.label, q);
+    if (s >= 0) out.push([s, it]);
+  }
+  out.sort((a, b) => a[0] - b[0] || a[1].rank - b[1].rank || a[1].label.length - b[1].label.length || a[1].label.localeCompare(b[1].label));
+  return out.map(x => x[1]);
+}
+
+function insertPreview(text) {
+  const frag = document.createDocumentFragment();
+  let last = 0;
+  const re = /\$\{([^}]*)\}/g;
+  let m;
+  while ((m = re.exec(text))) {
+    frag.append(text.slice(last, m.index), h('span', { class: 'ph' }, m[1]));
+    last = re.lastIndex;
+  }
+  frag.append(text.slice(last));
+  return frag;
+}
+
+function hintNode(hint) {
+  const pre = h('pre', { class: 'sg-hint' });
+  for (const [i, line] of hint.split('\n').entries()) {
+    if (i) pre.append('\n');
+    const [pat, pkg] = line.split('   — ');
+    const parts = pat.split(/(‹[^›]*›)/);
+    for (const p of parts) pre.append(p.startsWith('‹') ? h('span', { class: 'arg' }, p.slice(1, -1)) : p);
+    if (pkg) pre.append(h('span', { class: 'pkg' }, '  ' + pkg));
+  }
+  return pre;
+}
+
+let suggestQueued = false;
+function renderSuggest() {
+  if (suggestQueued) return;
+  suggestQueued = true;
+  requestAnimationFrame(() => { suggestQueued = false; drawSuggest(); });
+}
+
+function drawSuggest() {
+  const pane = $('#rightSuggest');
+  if (pane.hidden) return;
+  const t = tab();
+  if (!t) { pane.replaceChildren(h('div', { class: 'sg-empty' }, 'Open a file: what you can write at the cursor shows up here, in detail.')); return; }
+  const items = panelItems();
+  const c = S.comp;
+  const q = c && sameContext() ? currentPrefix().slice(c.before.length) : '';
+  const top = h('div', { class: 'sg-top' },
+    h('div', { class: 'sg-ctx' }, c && sameContext()
+      ? [`${items.length} suggestion${items.length === 1 ? '' : 's'}`, q ? [' for ', h('b', {}, q)] : ' here', ' · line ', String(c.line + 1)]
+      : 'Move the cursor or start typing to see suggestions.'),
+    c && c.hint && sameContext() ? hintNode(c.hint) : null);
+  if (!items.length) {
+    pane.replaceChildren(top, h('div', { class: 'sg-empty' }, c && sameContext() ? 'Nothing to suggest here. Ctrl+Space asks again.' : ''));
+    return;
+  }
+  const selected = !$('#complete').hidden ? S.shown[S.sel] : null;
+  const byGroup = new Map();
+  for (const it of items.slice(0, 160)) {
+    const g = groupOf(it);
+    if (!byGroup.has(g)) byGroup.set(g, []);
+    byGroup.get(g).push(it);
+  }
+  const groups = [...byGroup.entries()].sort((a, b) => {
+    const ia = items.indexOf(a[1][0]), ib = items.indexOf(b[1][0]);
+    return ia - ib;
+  });
+  pane.replaceChildren(top, ...groups.map(([g, list]) => h('div', { class: 'sg-group' },
+    h('h4', {}, h('span', {}, (GROUPS.find(x => x[0] === g) || [g, g])[1]), h('span', {}, String(list.length))),
+    ...list.map(it => {
+      const on = it === selected || (!selected && it === S.panelSel);
+      const el = h('div', {
+        class: 'sg-item' + (on ? ' on' : ''), role: 'option', tabindex: '-1',
+        onmousedown: e => e.preventDefault(),
+        onclick: () => { S.panelSel = it; const i = S.shown.indexOf(it); if (i >= 0) select(i); else drawSuggest(); },
+        ondblclick: () => acceptItem(it),
+      },
+        h('div', { class: 'sg-head' },
+          h('span', { class: 'k ' + it.kind, title: it.kind }, kindLetter(it.kind)),
+          h('span', { class: 'sg-label', html: highlightMatch(it.label, q) }),
+          it.source ? h('span', { class: 'sg-src', title: it.source }, it.source) : null),
+        it.detail ? h('div', { class: 'sg-detail' }, it.detail) : null,
+        it.doc ? h('div', { class: 'sg-doc' }, it.doc) : null,
+        on && it.insert ? h('pre', { class: 'sg-insert' }, insertPreview(it.insert)) : null,
+        on ? h('div', { class: 'sg-actions' }, h('button', { onclick: e => { e.stopPropagation(); acceptItem(it); } }, 'Insert'), 'or Enter / Tab in the editor') : null);
+      return el;
+    }))));
+  const on = pane.querySelector('.sg-item.on');
+  if (on) on.scrollIntoView({ block: 'nearest' });
 }
 
 // ------------------------------------------------------------------ dialogs
@@ -1509,8 +1688,8 @@ function settingsDialog() {
   modal('pkide', body => {
     const repo = h('input', { type: 'text', value: st.repo || '', placeholder: '/path/to/Packenger', 'aria-label': 'Packenger repository' });
     const theme = h('select', { 'aria-label': 'Theme', onchange: async () => { applyTheme(theme.value); S.state = await api('/api/settings', { theme: theme.value }); } },
-      h('option', { value: '' }, 'follow the system'), h('option', { value: 'paper' }, 'paper'), h('option', { value: 'night' }, 'night'));
-    theme.value = st.theme || '';
+      h('option', { value: 'mocha' }, 'Catppuccin Mocha'), h('option', { value: 'latte' }, 'Catppuccin Latte'));
+    theme.value = st.theme === 'latte' ? 'latte' : 'mocha';
     body.append(
       h('p', {}, 'The Packenger IDE. Completion and checking use the compiler’s own grammar; running and building use the build you choose.'),
       h('h3', {}, 'Packenger repository'),
@@ -1554,7 +1733,7 @@ const COMMANDS = [
   ['Show the generated code (asm)', 'asm'], ['Lock package versions', 'lock'], ['Save', 'save', 'Ctrl+S'], ['Save all', 'saveAll'],
   ['Close the tab', 'close', 'Ctrl+W'], ['Open a file', 'quickOpen', 'Ctrl+P'], ['Open a folder', 'openFolder', 'Ctrl+O'],
   ['New file', 'newFile'], ['New folder', 'newFolder'], ['Go to definition', 'definition', 'F12'], ['Suggest', 'suggest', 'Ctrl+Space'],
-  ['Show builds', 'builds'], ['Show problems', 'problems'], ['Reload packages from the registry', 'reload'], ['Settings and install', 'settings'],
+  ['Build settings', 'builds', 'Ctrl+Shift+B'], ['Suggestions in detail', 'suggestions', 'Ctrl+I'], ['Show problems', 'problems'], ['Reload packages from the registry', 'reload'], ['Settings and install', 'settings'],
   ['Switch theme', 'theme'],
 ];
 
@@ -1579,13 +1758,13 @@ async function command(cmd) {
     case 'refreshFiles': S.dirs.clear(); return renderFiles();
     case 'definition': return goToDefinition();
     case 'suggest': ED.ta.focus(); return requestComplete(true);
-    case 'builds': return showBottom('builds');
+    case 'builds': return showRight('build');
+    case 'suggestions': return toggleRight('suggest');
     case 'problems': return showBottom('problems');
     case 'reload': await api('/api/reload'); for (const x of S.tabs) { loadGrammar(x); check(x); } return status('packages will be downloaded again', 'good');
     case 'settings': return settingsDialog();
     case 'theme': {
-      const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'night' : 'paper');
-      const next = cur === 'night' ? 'paper' : 'night';
+      const next = document.documentElement.dataset.theme === 'latte' ? 'mocha' : 'latte';
       applyTheme(next);
       S.state = await api('/api/settings', { theme: next });
       return;
@@ -1596,7 +1775,9 @@ async function command(cmd) {
 }
 
 function applyTheme(t) {
-  if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+  document.documentElement.dataset.theme = t === 'latte' ? 'latte' : 'mocha';
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = t === 'latte' ? '#dce0e8' : '#11111b';
   requestAnimationFrame(() => { if (ED.root) measure(); });
 }
 
@@ -1613,7 +1794,7 @@ function renderWelcome() {
         h('li', {}, h('button', { onclick: openFolderDialog }, 'Open a folder…')),
         S.ws ? h('li', {}, h('button', { onclick: () => newFile('') }, 'New file…')) : null,
         S.ws ? h('li', {}, h('button', { onclick: quickOpen }, 'Open a file…')) : null,
-        h('li', {}, h('button', { onclick: () => showBottom('builds') }, 'Manage builds')),
+        h('li', {}, h('button', { onclick: () => showRight('build') }, 'Build settings')),
         h('li', {}, h('button', { onclick: settingsDialog }, 'Settings and install')))),
       st.recent && st.recent.length ? h('div', {}, h('h2', {}, 'Recent folders'), h('ul', {}, ...st.recent.slice(0, 8).map(r => h('li', {}, h('button', { onclick: () => openWorkspace(r), title: r }, r.replace(st.home || '\u0000', '~')))))) : null,
       h('div', {}, h('h2', {}, 'Keys'), h('dl', {},
@@ -1663,8 +1844,8 @@ function splitter(el, prop, axis, min, max, invert) {
     e.preventDefault();
     el.setPointerCapture(e.pointerId);
     const start = axis === 'x' ? e.clientX : e.clientY;
-    const host = prop === '--side-w' ? $('#app') : $('#main');
-    const cur = parseFloat(getComputedStyle(host).getPropertyValue(prop)) || (prop === '--side-w' ? 300 : 220);
+    const host = prop === '--bottom-h' ? $('#main') : $('#app');
+    const cur = parseFloat(getComputedStyle(host).getPropertyValue(prop)) || ({ '--side-w': 280, '--right-w': 380 }[prop] || 220);
     const move = ev => {
       const d = (axis === 'x' ? ev.clientX : ev.clientY) - start;
       const v = Math.max(min, Math.min(max(), cur + (invert ? -d : d)));
@@ -1676,7 +1857,7 @@ function splitter(el, prop, axis, min, max, invert) {
     el.addEventListener('pointerup', up);
   });
   const saved = store.get(prop, null);
-  if (saved) (prop === '--side-w' ? $('#app') : $('#main')).style.setProperty(prop, saved + 'px');
+  if (saved) (prop === '--bottom-h' ? $('#main') : $('#app')).style.setProperty(prop, saved + 'px');
 }
 
 // ------------------------------------------------------------------ start
@@ -1689,11 +1870,12 @@ function wire() {
     if (s) showSide(s.dataset.side);
     const bt = e.target.closest('[data-bottom]');
     if (bt) showBottom(bt.dataset.bottom);
+    const rt = e.target.closest('[data-right]');
+    if (rt) { if (rt.closest('.toggles')) toggleRight(rt.dataset.right); else showRight(rt.dataset.right); }
   });
   $('#brand').onclick = settingsDialog;
   $('#wsButton').onclick = openFolderDialog;
-  $('#buildSelect').onchange = e => setProfile({ build: e.target.value });
-  $('#targetSelect').onchange = e => setProfile({ target: e.target.value });
+  $('#profileChip').onclick = () => toggleRight('build');
   $('#modalBack').addEventListener('mousedown', e => { if (e.target.id === 'modalBack') closeModal(); });
   $('#stdinForm').onsubmit = async e => {
     e.preventDefault();
@@ -1709,6 +1891,8 @@ function wire() {
     if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); if (e.shiftKey) saveAll(); else save(); return; }
     if (mod && e.key === 'Enter') { e.preventDefault(); command('run'); return; }
     if (mod && e.key.toLowerCase() === 'b' && !e.shiftKey) { e.preventDefault(); command('build'); return; }
+    if (mod && e.shiftKey && e.key.toLowerCase() === 'b') { e.preventDefault(); toggleRight('build'); return; }
+    if (mod && !e.shiftKey && e.key.toLowerCase() === 'i') { e.preventDefault(); toggleRight('suggest'); return; }
     if (mod && e.shiftKey && e.key.toLowerCase() === 't') { e.preventDefault(); command('test'); return; }
     if (mod && e.shiftKey && e.key.toLowerCase() === 'p') { e.preventDefault(); palette(); return; }
     if (mod && !e.shiftKey && e.key.toLowerCase() === 'p') { e.preventDefault(); quickOpen(); return; }
@@ -1721,6 +1905,7 @@ function wire() {
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); S.installPrompt = e; });
   splitter($('#splitSide'), '--side-w', 'x', 160, () => innerWidth * 0.5);
   splitter($('#splitBottom'), '--bottom-h', 'y', 80, () => innerHeight * 0.7, true);
+  splitter($('#splitRight'), '--right-w', 'x', 260, () => innerWidth * 0.5, true);
 }
 
 async function start() {
@@ -1737,6 +1922,7 @@ async function start() {
   renderBuildSelect();
   renderProblems();
   showBottom('console');
+  showRight(store.get('right', 'suggest'));
   if (ws) await openWorkspace(ws);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
