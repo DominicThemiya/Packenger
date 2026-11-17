@@ -4,6 +4,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -94,7 +95,7 @@ func run(args []string) error {
 	if ws != "" {
 		u += "#ws=" + url.QueryEscape(ws)
 	}
-	if !running(*port) {
+	if !replaceOld(*port) {
 		if err := startDetached(*port, *repo); err != nil {
 			return err
 		}
@@ -106,17 +107,51 @@ func run(args []string) error {
 	return nil
 }
 
-// running reports whether pkide already answers on port.
-func running(port int) bool {
+type ping struct {
+	App     string `json:"app"`
+	Version string `json:"version"`
+	Pid     int    `json:"pid"`
+}
+
+// pingServer asks what answers on port; nil if it isn't pkide.
+func pingServer(port int) *ping {
 	c := http.Client{Timeout: 700 * time.Millisecond}
 	resp, err := c.Get(fmt.Sprintf("http://127.0.0.1:%d/api/ping", port))
 	if err != nil {
-		return false
+		return nil
 	}
 	defer resp.Body.Close()
-	var b [64]byte
-	n, _ := resp.Body.Read(b[:])
-	return strings.Contains(string(b[:n]), "pkide")
+	var p ping
+	if json.NewDecoder(resp.Body).Decode(&p) != nil || p.App != "pkide" {
+		return nil
+	}
+	return &p
+}
+
+// running reports whether pkide already answers on port.
+func running(port int) bool { return pingServer(port) != nil }
+
+// replaceOld stops a pkide server on port that is another build than this
+// one (one started before pkide was rebuilt or reinstalled), so that the
+// window opens on this version. It reports whether one is still running.
+func replaceOld(port int) bool {
+	p := pingServer(port)
+	if p == nil {
+		return false
+	}
+	if p.Version == ide.Version() || p.Pid <= 0 {
+		return true
+	}
+	proc, err := os.FindProcess(p.Pid)
+	if err != nil || proc.Signal(syscall.SIGTERM) != nil {
+		fmt.Printf("an older pkide (pid %d) is running on port %d; stop it to use this version\n", p.Pid, port)
+		return true
+	}
+	fmt.Printf("stopped an older pkide (pid %d)\n", p.Pid)
+	for i := 0; i < 30 && pingServer(port) != nil; i++ {
+		time.Sleep(100 * time.Millisecond)
+	}
+	return pingServer(port) != nil
 }
 
 func serve(port int, repo string) error {

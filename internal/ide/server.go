@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -73,7 +74,7 @@ func (s *Server) Handler() http.Handler {
 		}
 	})
 	mux.HandleFunc("/api/ping", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]string{"app": "pkide"})
+		writeJSON(w, map[string]any{"app": "pkide", "version": Version(), "pid": os.Getpid()})
 	})
 	api := func(path string, h func(r *http.Request, body []byte) (any, error)) {
 		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
@@ -812,6 +813,33 @@ func (s *Server) format(r *http.Request, body []byte) (any, error) {
 		return nil, fmt.Errorf("pkfmt: %s", strings.ReplaceAll(strings.TrimSpace(errb.String()), tmp, filepath.Base(file)))
 	}
 	return map[string]string{"text": out.String()}, nil
+}
+
+var version struct {
+	once sync.Once
+	v    string
+}
+
+// Version identifies this build of pkide: a hash of its executable, so a
+// running server can be told apart from a newer binary.
+func Version() string {
+	version.once.Do(func() {
+		version.v = "unknown"
+		exe, err := os.Executable()
+		if err != nil {
+			return
+		}
+		f, err := os.Open(exe)
+		if err != nil {
+			return
+		}
+		defer f.Close()
+		h := sha256.New()
+		if _, err := io.Copy(h, f); err == nil {
+			version.v = hex.EncodeToString(h.Sum(nil)[:8])
+		}
+	})
+	return version.v
 }
 
 // Icon draws pkide's icon: a mauve P on Catppuccin crust, pixel by pixel.
