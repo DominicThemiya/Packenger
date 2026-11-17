@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="pkide-token" content="{{TOKEN}}">
+<meta name="theme-color" content="#d3dccb">
+<title>pkide</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans+Condensed:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="app">
+  <header class="tag top" id="top">
+    <button class="brand" id="brand" title="Settings and install">pkide</button>
+    <button class="ws" id="wsButton" title="Open a folder (Ctrl+O)">open a folder</button>
+    <span class="fill"></span>
+    <label class="pick" title="The Packenger build this workspace compiles with">
+      <span>build</span><select id="buildSelect"></select>
+    </label>
+    <label class="pick" title="Backend target">
+      <span>target</span><select id="targetSelect">
+        <option value="bintables">bintables</option>
+        <option value="ctables">ctables</option>
+        <option value="webtables">webtables</option>
+      </select>
+    </label>
+    <nav class="cmds" id="topCmds">
+      <button data-cmd="run" title="Run the file (Ctrl+Enter)">Run</button>
+      <button data-cmd="build" title="Build an executable (Ctrl+B)">Build</button>
+      <button data-cmd="test" title="Run tests (Ctrl+Shift+T)">Test</button>
+      <button data-cmd="fmt" title="Format with pkfmt (Alt+Shift+F)">Fmt</button>
+      <button data-cmd="why" title="Why is a package in the build?">Why</button>
+      <button data-cmd="tree" title="Which packages built the program">Tree</button>
+      <button data-cmd="asm" title="Show the generated code">Asm</button>
+    </nav>
+  </header>
+
+  <aside class="side" id="side">
+    <div class="tag">
+      <nav class="tabs" id="sideTabs">
+        <button data-side="files" class="on">Files</button>
+        <button data-side="outline">Outline</button>
+        <button data-side="packages">Packages</button>
+      </nav>
+      <span class="fill"></span>
+      <nav class="cmds" id="fileCmds">
+        <button data-cmd="newFile" title="New file">New</button>
+        <button data-cmd="newFolder" title="New folder">Dir</button>
+        <button data-cmd="refreshFiles" title="Reload the file list">Get</button>
+      </nav>
+    </div>
+    <div class="side-body" id="sideFiles"></div>
+    <div class="side-body" id="sideOutline" hidden></div>
+    <div class="side-body" id="sidePackages" hidden></div>
+  </aside>
+  <div class="split v" id="splitSide" title="Drag to resize"></div>
+
+  <main class="main" id="main">
+    <div class="tag" id="tabBar">
+      <nav class="tabs files" id="tabs"></nav>
+      <span class="fill"></span>
+      <nav class="cmds">
+        <button data-cmd="save" title="Save (Ctrl+S)">Put</button>
+        <button data-cmd="close" title="Close the tab (Ctrl+W)">Del</button>
+      </nav>
+    </div>
+    <div class="editor-host" id="editorHost">
+      <div class="welcome" id="welcome"></div>
+    </div>
+    <div class="split h" id="splitBottom" title="Drag to resize"></div>
+    <section class="bottom" id="bottom">
+      <div class="tag">
+        <nav class="tabs" id="bottomTabs">
+          <button data-bottom="console" class="on">Console</button>
+          <button data-bottom="problems">Problems <span class="count" id="problemCount"></span></button>
+          <button data-bottom="builds">Builds</button>
+        </nav>
+        <span class="fill"></span>
+        <nav class="cmds" id="consoleCmds">
+          <button data-cmd="stop" title="Stop the running program">Stop</button>
+          <button data-cmd="clear" title="Clear the console">Clear</button>
+        </nav>
+      </div>
+      <div class="bottom-body" id="consolePane">
+        <pre class="console" id="console"></pre>
+        <form class="stdin" id="stdinForm" autocomplete="off">
+          <span>stdin</span><input id="stdin" placeholder="type input for the running program, then Enter" disabled>
+        </form>
+      </div>
+      <div class="bottom-body" id="problemsPane" hidden></div>
+      <div class="bottom-body" id="buildsPane" hidden></div>
+    </section>
+  </main>
+
+  <footer class="status" id="status">
+    <span id="statusPos"></span>
+    <span id="statusKind"></span>
+    <span class="hint" id="statusHint"></span>
+    <span class="fill"></span>
+    <span id="statusMsg"></span>
+  </footer>
+</div>
+
+<div class="complete" id="complete" hidden>
+  <ul id="completeList" role="listbox"></ul>
+  <div class="complete-doc" id="completeDoc"></div>
+</div>
+<div class="hover" id="hover" hidden></div>
+<div class="modal-back" id="modalBack" hidden><div class="modal" id="modal" role="dialog" aria-modal="true"></div></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

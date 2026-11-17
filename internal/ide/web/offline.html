@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pkide isn't running</title>
+<style>
+  :root { --a: #f6f8ef; --b: #e3eeda; --ink: #1e2b23; --muted: #5e6e62; }
+  @media (prefers-color-scheme: dark) { :root { --a: #161d18; --b: #1b241e; --ink: #d2e2cb; --muted: #8a9c8c; } }
+  body { margin: 0; min-height: 100vh; color: var(--ink); font: 15px/1.6 "IBM Plex Mono", ui-monospace, monospace;
+    background: repeating-linear-gradient(to bottom, var(--a) 0, var(--a) 60px, var(--b) 60px, var(--b) 120px); }
+  main { max-width: 60ch; padding: 64px 32px; }
+  h1 { font-size: 26px; margin: 0 0 12px; }
+  p { color: var(--muted); }
+  code { color: var(--ink); background: var(--b); padding: 1px 6px; }
+  button { font: inherit; padding: 4px 12px; border: 1.5px solid var(--ink); background: var(--a); color: var(--ink); cursor: pointer; }
+</style>
+</head>
+<body>
+<main>
+  <h1>pkide isn't running</h1>
+  <p>The app is installed, but its server isn't answering. Start it from a terminal with <code>pkide</code>, or keep it running with <code>pkide install --service</code>.</p>
+  <button onclick="location.reload()">Try again</button>
+</main>
+</body>
+</html>

@@ -76,6 +76,7 @@ instruction comes from a package.
 |---|---|
 | [`cmd/packenger`](../cmd/packenger) | the command-line tool |
 | [`cmd/pkgdoc`](../cmd/pkgdoc) | regenerates `docs/registry` |
+| [`cmd/pkide`](../cmd/pkide), [`internal/ide`](../internal/ide) | the IDE: analysis, completion, hover, builds, its server and web app ([pkide](ide.md)) |
 | [`internal/registry`](../internal/registry) | downloading packages over HTTP or `file://`, in memory; package trees and lock files |
 | [`internal/pkgfile`](../internal/pkgfile) | parsing package files: sections, patterns, emit headers |
 | [`internal/lang/lexer.go`](../internal/lang/lexer.go) | tokenizer; symbols come from the loaded packages |
@@ -84,7 +85,8 @@ instruction comes from a package.
 | [`internal/lang/codegen.go`](../internal/lang/codegen.go) | rendering emit templates: placeholders, conditions, `@include`, `{each}` |
 | [`internal/lang/driver.go`](../internal/lang/driver.go) | the pipeline, parallel fetching, `nasm`/`ld`, `tree` |
 | [`internal/lang/report.go`](../internal/lang/report.go) | the build events behind `-vb` |
-| [`internal/lang/resolve.go`](../internal/lang/resolve.go) | resolve sections: renaming keywords in patterns and names in library code |
+| [`internal/lang/resolve.go`](../internal/lang/resolve.go) | resolve sections: renaming keywords and symbols in patterns, templates and library code, and names in library code |
+| [`internal/lang/analyze.go`](../internal/lang/analyze.go), [`why.go`](../internal/lang/why.go) | `Analyze` for editor tooling; `packenger why` |
 | [`internal/lang/dump.go`](../internal/lang/dump.go), [`internal/pkgfile/dump.go`](../internal/pkgfile/dump.go) | the `dump` formats |
 | [`bootstrap/`](../bootstrap) | the comparison harness and its corpus |
 | [`tools/`](../tools) | programs for working with registries, in Packenger ([tools](tools.md)) |

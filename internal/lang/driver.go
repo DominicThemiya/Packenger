@@ -175,9 +175,23 @@ func (c *Compiler) CompileFile(ctx context.Context, path string) (*Result, error
 // Lex runs the pipeline up to tokenizing: fetch the syntax packages named by
 // the use lines, build the grammar, and tokenize the rest of the file.
 func (c *Compiler) Lex(ctx context.Context, file, src string) ([]Token, *Lang, map[string]*pkgfile.File, []string, error) {
+	body, uses, front, L, err := c.grammar(ctx, file, src)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	toks, err := Lex(body, file, L.Puncts, false)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	return toks, L, front, uses, nil
+}
+
+// grammar fetches the syntax packages named by the use lines and builds the
+// grammar. body is the source with the use lines blanked out.
+func (c *Compiler) grammar(ctx context.Context, file, src string) (string, []string, map[string]*pkgfile.File, *Lang, error) {
 	uses, body, err := scanUses(src)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("%s: %w", file, err)
+		return "", nil, nil, nil, fmt.Errorf("%s: %w", file, err)
 	}
 
 	// 1. front end: the packages that define the language
@@ -197,11 +211,11 @@ func (c *Compiler) Lex(ctx context.Context, file, src string) ([]Token, *Lang, m
 		return out
 	})
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return "", nil, nil, nil, err
 	}
-	// resolve sections rename keywords before the grammar is built
+	// resolve sections rename keywords and symbols before the grammar is built
 	if c.keywordRenames, err = resolvePatterns(front); err != nil {
-		return nil, nil, nil, nil, err
+		return "", nil, nil, nil, err
 	}
 	c.tokenRules = tokenRules(front)
 	var syntaxPkgs []*pkgfile.File
@@ -213,18 +227,13 @@ func (c *Compiler) Lex(ctx context.Context, file, src string) ([]Token, *Lang, m
 	sort.Slice(syntaxPkgs, func(i, j int) bool { return syntaxPkgs[i].Name < syntaxPkgs[j].Name })
 	L, err := NewLang(syntaxPkgs, c.tokenRules)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return "", nil, nil, nil, err
 	}
 	c.report().Grammar(GrammarInfo{
 		Packages: len(syntaxPkgs), Forms: L.forms(), Infix: len(L.infix), Prefix: len(L.prefix),
 		Keywords: sortedKeys(L.keywords), Symbols: L.Puncts,
 	})
-
-	toks, err := Lex(body, file, L.Puncts, false)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-	return toks, L, front, uses, nil
+	return body, uses, front, L, nil
 }
 
 func (c *Compiler) Compile(ctx context.Context, file, src string) (*Result, error) {
