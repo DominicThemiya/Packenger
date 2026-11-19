@@ -204,12 +204,43 @@ expand
       end
     end
   ```
+- `{#x}` is the **index** (from 0) of the item loop variable `x` stands
+  for, as a number; outside a loop, `{#list}` is how many items a list
+  slot has.
+- `{cat part...}` **glues** parts into one name: quoted text, slots and
+  loop variables written as a single token, `#x` indexes and `$x` private
+  names. [enums/enum](registry/enums/enum.md) declares
+  `fn {cat name "_name"}(...)`, so `enum Color(...)` gets `Color_name`.
+- `{quote x}` is **the source of slot `x`** as a string literal, as the
+  user wrote it: [check/require](registry/check/require.md) prints the
+  failed condition with it, and `enums` returns each name as a string.
+- An expansion **at the top level** can declare: its statements may be
+  functions, structs, globals and constants, which belong to the program
+  like ones written out (also before the expansion, in a second pass).
+  Mark such a package `top`, like `const`:
+
+  ```
+  syntax statement top
+    enum {name: ident}( {first: ident} [, {n: ident}]* )
+  expand
+    const {first} = 0
+    {each c in ,}
+    const {c.n} = {#c} + 1
+    {end}
+    const {cat name "_count"} = {#,} + 1
+  ```
+
+  A repeated group is named after its first literal, so here the list is
+  `,`.
 - A loop variable can take the **element type** of another slot with
   `of <slot>[]`, as in [stdx/forin](registry/stdx/forin.md):
   `for {x: newvar of xs[]} in {xs: expr [T]} {body: block} end`.
 - List the packages the template uses in `needs`, so they're loaded even
   when the user loads only this package.
 - Expression slots are pasted inside parentheses, so precedence is kept.
+- **Hygiene:** names written in a template are pasted as they are, so a
+  local variable or parameter in it can clash with a name the user passes
+  in a slot. Name them with `{$x}`.
 - **Limitations:** a slot used twice is evaluated twice; `function`
   packages can't expand.
 

@@ -1,0 +1,46 @@
+use std
+use rt/test
+use rt/vec
+use strfmt
+
+// show picks a conversion by type
+test_str(show(-42), "-42", "show int")
+test_str(show("hi"), "hi", "show str")
+test_str(show(1 < 2), "true", "show bool")
+test_str(show(false), "false", "show false")
+test_str(show('a'), "a", "show u8")
+let xs = make([int], 3)
+xs[0] = 1
+xs[2] = -3
+test_str(show(xs), "[1, 0, -3]", "show [int]")
+let ss = make([str], 2)
+ss[0] = "a"
+ss[1] = "q\"x"
+test_str(show(ss), "[\"a\", \"q\\\"x\"]", "show [str]")
+test_str(show(make([int], 0)), "[]", "show empty slice")
+
+// cat
+test_str(cat("n is ", 3, ", even: ", 3 % 2 == 0), "n is 3, even: false", "cat")
+test_str(cat(), "", "cat nothing")
+test_str(cat("x"), "x", "cat one")
+test_str(cat(1, 2, 3), "123", "cat ints")
+
+// fmt
+test_str(fmt("{} is {} years old", "Ada", 36), "Ada is 36 years old", "fmt")
+test_str(fmt("no placeholders"), "no placeholders", "fmt plain")
+test_str(fmt("[{:5}] [{:-5}] [{:05}]", 42, 42, -42), "[   42] [42   ] [-0042]", "fmt widths")
+test_str(fmt("{:3}", "toolong"), "toolong", "width smaller than value")
+test_str(fmt("{{}} and {{{}}}", 7), "{} and {7}", "fmt braces")
+test_str(fmt("{} {}", 1), "1 {!missing}", "fmt missing")
+test_str(fmt("{}", 1, 2), "1{!extra 2}", "fmt extra")
+test_str(fmt("{:x}", 5), "{!bad :x}", "fmt bad spec")
+test_str(fmt("{:-}", 5), "{!bad :-}", "fmt bad width")
+test_str(fmt("a } b { c"), "a } b { c", "lone braces")
+test_str(fmt("{}{}", 'o', "k"), "ok", "adjacent")
+let t = "{}-{}"
+test_str(fmt(t, true, xs), "true-[1, 0, -3]", "template in a variable")
+let args = vec_new()
+vec_push_str(args, "x")
+vec_push_str(args, "y")
+test_str(sf_format("<{}|{:3}>", args), "<x|  y>", "sf_format")
+return test_done()

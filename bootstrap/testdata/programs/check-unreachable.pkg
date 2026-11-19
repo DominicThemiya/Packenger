@@ -1,0 +1,15 @@
+use std
+use check
+use stdx
+
+fn name(n: int) -> str
+  match n
+  case 1
+    return "one"
+  end
+  unreachable
+  return ""
+end
+
+print name(1)
+print name(2)

@@ -27,3 +27,7 @@ Kind: `infix`, precedence 50, left-associative
 | `right` | expression | `int` |
 
 Produces: `int`
+
+## Used by
+
+[bits/bor_assign](../bits/bor_assign.md), [enums/flags](../enums/flags.md)

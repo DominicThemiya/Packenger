@@ -1,0 +1,13 @@
+doc n gib: gibibytes: 1024 mib, as bytes.
+  ```
+  print 2 gib  // 2147483648
+  ```
+
+  Binds tighter than any operator, so `2 * 3 gib` is `2 * (3 gib)`.
+  See [units](../units.md).
+
+needs std/mul
+syntax postfix 90
+  {n: expr int} gib -> int
+expand
+  {n} * 1073741824

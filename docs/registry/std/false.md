@@ -22,4 +22,4 @@ Produces: `bool`
 
 ## Used by
 
-[stdx/match](../stdx/match.md)
+[nocheck/ensure](../nocheck/ensure.md), [nocheck/invariant](../nocheck/invariant.md), [nocheck/require](../nocheck/require.md), [stdx/match](../stdx/match.md)

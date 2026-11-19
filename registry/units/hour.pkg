@@ -1,0 +1,13 @@
+doc n hour: hours: 60 min, as nanoseconds.
+  ```
+  print 1 hour   // 3600000000000
+  ```
+
+  Binds tighter than any operator, so `2 * 3 hour` is `2 * (3 hour)`.
+  See [units](../units.md).
+
+needs std/mul
+syntax postfix 90
+  {n: expr int} hour -> int
+expand
+  {n} * 3600000000000

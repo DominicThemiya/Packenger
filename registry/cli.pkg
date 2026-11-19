@@ -1,0 +1,38 @@
+doc Command-line interfaces: flags, arguments and subcommands, with --help written for you.
+  ```
+  use std
+  use rt
+  use cli
+
+  let c = cli_new("greet", "say hello")
+  cli_flag(c, "loud", "l", "shout it")
+  cli_num(c, "times", "n", "N", "how many times", 1)
+  cli_arg(c, "name", "who to greet")
+  cli_parse_or_exit(c, argv)
+
+  let msg = str_concat("hello, ", cli_get(c, "name"))
+  for i = 1 to cli_int(c, "times")
+    print msg
+  end
+  ```
+
+  ```
+  $ greet --help
+  greet: say hello
+
+  Usage:
+    greet [flags] <name>
+
+  Arguments:
+    name  who to greet
+
+  Flags:
+    -l, --loud     shout it
+    -n, --times N  how many times (default 1)
+    -h, --help     show this help
+  ```
+
+  See [cli/cli](cli/cli.md) for everything it does.
+
+truck
+  cli

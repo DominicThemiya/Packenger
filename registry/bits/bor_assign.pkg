@@ -1,0 +1,16 @@
+doc Bitwise-or assignment: x |= y, short for x = x | y.
+  ```
+  let flags = 1
+  flags |= 4
+  print flags       // 5
+  ```
+
+  The left side can be any place of type `int`: a variable, a field, a
+  slice element or `*p`, evaluated once.
+
+needs std/let std/addr std/deref std/assign std/bor
+syntax statement
+  {x: place int} |= {y: expr int}
+expand
+  let {$p} = &{x}
+  *{$p} = *{$p} | {y}

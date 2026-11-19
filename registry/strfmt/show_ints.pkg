@@ -1,0 +1,9 @@
+doc show(x) for [int]: `[1, 2, 3]`.
+  One of the `show` packages; the type of `x` picks which one applies.
+  See [strfmt](../strfmt.md).
+
+needs strfmt/lib
+syntax expr
+  show ( {x: expr [int]} ) -> str
+expand
+  sf_ints({x})

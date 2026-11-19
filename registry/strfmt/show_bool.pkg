@@ -1,0 +1,9 @@
+doc show(x) for bool: `true` or `false`.
+  One of the `show` packages; the type of `x` picks which one applies.
+  See [strfmt](../strfmt.md).
+
+needs strfmt/lib
+syntax expr
+  show ( {x: expr bool} ) -> str
+expand
+  sf_bool({x})

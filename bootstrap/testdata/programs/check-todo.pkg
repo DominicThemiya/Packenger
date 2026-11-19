@@ -1,0 +1,7 @@
+use std
+use check
+
+// todo stops the program, flushing what rt/io buffered first
+use rt/io
+io_out("buffered output comes first\n")
+todo "the rest"

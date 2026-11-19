@@ -1,0 +1,72 @@
+doc Enumeration: enum Color(red, green, blue) declares numbered constants.
+  ```
+  enum Color(red, green, blue)
+
+  print green                 // 1
+  print Color_count           // 3
+  print Color_name(blue)      // blue
+  print Color_parse("red")    // 0
+  print Color_valid(7)        // false
+  ```
+
+  Each name becomes a `const`, numbered from 0 in the order written. The
+  list may be spread over several lines, since it is in parentheses. It
+  also declares, named after the enumeration:
+
+  | declaration | is |
+  |---|---|
+  | `const <Name>_count` | how many names there are |
+  | `fn <Name>_name(v: int) -> str` | the name of a value, or `""` for a number that isn't one |
+  | `fn <Name>_parse(s: str) -> int` | the value with that name, or -1 |
+  | `fn <Name>_valid(v: int) -> bool` | is `v` one of the values |
+
+  Use it at the top level, like `const`; the names can be used anywhere in
+  the program, also before the enumeration. They are plain constants, so
+  two enumerations can't share a name. Combine with `stdx`'s `match`:
+
+  ```
+  match c
+  case red, green
+    print "warm-ish"
+  else
+    print "cool"
+  end
+  ```
+
+needs std/const std/fn std/if std/eq std/return std/and std/ge std/lt
+syntax statement top
+  enum {name: ident} ( {first: ident} [, {n: ident}]* )
+expand
+  const {first} = 0
+  {each c in ,}
+  const {c.n} = {#c} + 1
+  {end}
+  const {cat name "_count"} = {#,} + 1
+
+  fn {cat name "_name"}({$v}: int) -> str
+    if {$v} == {first}
+      return {quote first}
+    end
+    {each c in ,}
+    if {$v} == {c.n}
+      return {quote c.n}
+    end
+    {end}
+    return ""
+  end
+
+  fn {cat name "_parse"}({$s}: str) -> int
+    if {$s} == {quote first}
+      return {first}
+    end
+    {each c in ,}
+    if {$s} == {quote c.n}
+      return {c.n}
+    end
+    {end}
+    return -1
+  end
+
+  fn {cat name "_valid"}({$v}: int) -> bool
+    return {$v} >= 0 && {$v} < {cat name "_count"}
+  end

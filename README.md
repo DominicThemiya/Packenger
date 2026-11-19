@@ -25,7 +25,7 @@ go build -o bin/packenger ./cmd/packenger
 ./bin/packenger run examples/fib.pkg        # 9227465
 ./bin/packenger build examples/fib.pkg -vb  # show every step
 ./bin/packenger lock examples/fib.pkg       # pin exact package versions
-./bin/packenger test tests/rt               # run the rt truck's tests
+./bin/packenger test                        # run every truck's tests (tests/)
 ```
 
 `lock` writes `fib.lock`, which pins the registry to the current commit

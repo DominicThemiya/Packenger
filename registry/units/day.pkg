@@ -1,0 +1,13 @@
+doc n day: days: 24 hours, as nanoseconds.
+  ```
+  print 2 day    // 172800000000000
+  ```
+
+  Binds tighter than any operator, so `2 * 3 day` is `2 * (3 day)`.
+  See [units](../units.md).
+
+needs std/mul
+syntax postfix 90
+  {n: expr int} day -> int
+expand
+  {n} * 86400000000000

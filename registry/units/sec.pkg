@@ -1,0 +1,13 @@
+doc n sec: seconds: 1000 ms, as nanoseconds.
+  ```
+  print 2 sec    // 2000000000
+  ```
+
+  Binds tighter than any operator, so `2 * 3 sec` is `2 * (3 sec)`.
+  See [units](../units.md).
+
+needs std/mul
+syntax postfix 90
+  {n: expr int} sec -> int
+expand
+  {n} * 1000000000

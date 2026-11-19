@@ -39,3 +39,7 @@ return
 | slot | takes | type |
 |---|---|---|
 | `value` | expression | any |
+
+## Used by
+
+[enums/enum](../enums/enum.md), [enums/flags](../enums/flags.md)

@@ -1,0 +1,5 @@
+use std
+use check
+
+// the condition must be a bool, also with checks off
+require 1 + 1, "not a bool"

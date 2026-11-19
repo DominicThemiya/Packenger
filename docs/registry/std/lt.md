@@ -34,4 +34,4 @@ Produces: `bool`
 
 ## Used by
 
-[stdx/forin](../stdx/forin.md)
+[enums/enum](../enums/enum.md), [enums/flags](../enums/flags.md), [stdx/forin](../stdx/forin.md)

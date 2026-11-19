@@ -1,0 +1,14 @@
+doc Postcondition, turned off: ensure cond checks only the types.
+  The same syntax as [check/ensure](../check/ensure.md), but the condition and
+  messages are never evaluated: the statement compiles to a jump over
+  them. Use the `nocheck` truck to switch a whole program's checks off.
+
+needs std/if std/and std/false std/let
+syntax statement
+  ensure {c: expr bool} [, {m: expr str}]*
+expand
+  if false && {c}
+    {each g in ,}
+    let {cat $m #g} = {g.m}
+    {end}
+  end

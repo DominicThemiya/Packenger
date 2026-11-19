@@ -1,0 +1,28 @@
+doc Math: integer functions, fixed-point decimals, big integers and random numbers.
+  ```
+  use std
+  use math
+
+  print math_gcd(84, 36)                       // 12
+  print math_is_prime(2147483647)              // true
+  print fx_str(fx_div(fx(22), fx(7)))          // 3.142857
+  print big_str(big_pow(big_new(3), 50))       // 717897987691852588770249
+  rand_seed(7)
+  print rand_range(1, 6)
+  ```
+
+  | package | gives |
+  |---|---|
+  | `math/int` | `math_abs`, `math_min`, `math_max`, `math_clamp`, `math_gcd`, `math_pow`, `math_pow_mod`, `math_isqrt`, `math_ilog2`, `math_is_prime`, `math_floor_div`, checked `+ - *`, ... |
+  | `math/fixed` | decimals with six places in an `int`: `fx`, `fx_mul`, `fx_div`, `fx_sqrt`, `fx_parse`, `fx_str`, ... |
+  | `math/big` | integers of any size: `big_new`, `big_parse`, `big_add`, `big_mul`, `big_div`, `big_pow`, `big_str`, ... |
+  | `math/rand` | a seedable generator: `rand_seed`, `rand_int`, `rand_range`, `rand_shuffle`, ... |
+
+  Packenger has no floating point; fixed-point decimals cover most of
+  what it would be used for, exactly and the same on every backend.
+
+truck
+  int
+  fixed
+  big
+  rand

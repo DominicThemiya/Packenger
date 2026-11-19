@@ -1,0 +1,9 @@
+doc show(x) for u8: the byte as a one-character string (`'a'` gives `a`; use `x as int` for its number).
+  One of the `show` packages; the type of `x` picks which one applies.
+  See [strfmt](../strfmt.md).
+
+needs strfmt/lib
+syntax expr
+  show ( {x: expr u8} ) -> str
+expand
+  sf_char({x})

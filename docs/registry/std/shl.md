@@ -27,3 +27,7 @@ Kind: `infix`, precedence 60, left-associative
 | `right` | expression | `int` |
 
 Produces: `int`
+
+## Used by
+
+[bits/shl_assign](../bits/shl_assign.md), [enums/flags](../enums/flags.md)

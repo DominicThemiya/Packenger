@@ -1,0 +1,189 @@
+doc Fixed-point decimals: numbers with six decimal places, kept in an int as millionths.
+  Packenger has no floating point. A fixed-point number is an `int`
+  counting millionths: `fx(3)` is 3000000, and `fx_parse("2.5", &ok)` is
+  2500000. Add and subtract them with `+` and `-`, compare them with `<`
+  and `==`, and use these for the rest:
+
+  ```
+  let ok = false
+  let price = fx_parse("19.99", &ok)
+  let total = fx_mul(price, fx(3))
+  print fx_str(total)                  // 59.97
+  print fx_str(fx_div(fx(1), fx(3)))   // 0.333333
+  print fx_str(fx_sqrt(fx(2)))         // 1.414213
+  print fx_str_places(FX_PI, 2)        // 3.14
+  ```
+
+  | function | gives |
+  |---|---|
+  | `fx(n: int) -> int` | the whole number `n` |
+  | `fx_ratio(a: int, b: int) -> int` | `a / b` as a decimal: `fx_ratio(1, 4)` is 0.25 |
+  | `fx_mul(a, b)`, `fx_div(a, b)` | product and quotient, truncated toward zero, without overflowing in between |
+  | `fx_int(x)` | the whole part, truncated toward zero |
+  | `fx_floor(x)`, `fx_ceil(x)`, `fx_round(x)` | the nearest whole number below, above, or nearest (halves away from zero), as an `int` |
+  | `fx_abs(x)` | the absolute value |
+  | `fx_sqrt(x)` | the square root, truncated; 0 for negative `x` |
+  | `fx_pow(x, n: int)` | `x` to the power `n >= 0` |
+  | `fx_str(x) -> str` | as a decimal, without trailing zeros: `"-2.5"`, `"3"` |
+  | `fx_str_places(x, places) -> str` | rounded to `places` (0 to 6) decimals, all of them shown: `"2.50"` |
+  | `fx_parse(s, ok) -> int` | read `"-12.375"`; more than six decimals are truncated; `*ok` is false if it isn't a decimal number or doesn't fit |
+  | `FX_ONE`, `FX_PI`, `FX_E` | 1, π and e (rounded to six places) |
+
+  The range is about ±9.2 trillion. Results are truncated, not rounded,
+  like integer division, except in `fx_round` and `fx_str_places`.
+
+needs std rt/str rt/fmt math/int
+code
+  const FX_ONE = 1000000
+  const FX_PI = 3141593
+  const FX_E = 2718282
+
+  fn fx(n: int) -> int
+    return n * FX_ONE
+  end
+
+  fn fx_ratio(a: int, b: int) -> int
+    return fx_div(a, b)
+  end
+
+  fn fx_mul(a: int, b: int) -> int
+    let aq = a / FX_ONE
+    let ar = a % FX_ONE
+    let bq = b / FX_ONE
+    let br = b % FX_ONE
+    return aq * b + ar * bq + ar * br / FX_ONE
+  end
+
+  fn fx_div(a: int, b: int) -> int
+    let q = a / b
+    let r = a % b
+    let f = 0
+    // six more decimal digits of r / b, long-division style
+    for k = 1 to 6
+      r = r * 10
+      f = f * 10 + r / b
+      r = r % b
+    end
+    return q * FX_ONE + f
+  end
+
+  fn fx_int(x: int) -> int
+    return x / FX_ONE
+  end
+
+  fn fx_floor(x: int) -> int
+    return math_floor_div(x, FX_ONE)
+  end
+
+  fn fx_ceil(x: int) -> int
+    return math_ceil_div(x, FX_ONE)
+  end
+
+  fn fx_round(x: int) -> int
+    return math_div_round(x, FX_ONE)
+  end
+
+  fn fx_abs(x: int) -> int
+    return math_abs(x)
+  end
+
+  fn fx_sqrt(x: int) -> int
+    if x <= 0
+      return 0
+    end
+    if x <= MATH_MAX / FX_ONE
+      return math_isqrt(x * FX_ONE)
+    end
+    // too big to scale first: start near the root, then Newton's method
+    let y = math_isqrt(x) * 1000
+    for k = 1 to 4
+      y = (y + fx_div(x, y)) / 2
+    end
+    while fx_mul(y, y) > x
+      y = y - 1
+    end
+    while fx_mul(y + 1, y + 1) <= x
+      y = y + 1
+    end
+    return y
+  end
+
+  fn fx_pow(x: int, n: int) -> int
+    let r = FX_ONE
+    for k = 1 to n
+      r = fx_mul(r, x)
+    end
+    return r
+  end
+
+  fn fx_str(x: int) -> str
+    let s = fmt_fixed(x, 6)
+    s = str_rtrim(s, '0')
+    return str_rtrim(s, '.')
+  end
+
+  fn fx_str_places(x: int, places: int) -> str
+    let p = math_clamp(places, 0, 6)
+    let unit = math_pow(10, 6 - p)
+    let r = math_div_round(x, unit)
+    return fmt_fixed(r, p)
+  end
+
+  fn fx_parse(s: str, ok: ptr bool) -> int
+    *ok = false
+    let i = 0
+    let neg = false
+    if len(s) > 0 && (s[0] == '-' || s[0] == '+')
+      neg = s[0] == '-'
+      i = 1
+    end
+    let whole = 0
+    let digits = 0
+    while i < len(s) && s[i] >= '0' && s[i] <= '9'
+      let cok = false
+      whole = math_mul_checked(whole, 10, &cok)
+      if !cok
+        return 0
+      end
+      whole = whole + (s[i] as int - 48)
+      digits = digits + 1
+      i = i + 1
+    end
+    if digits == 0
+      return 0
+    end
+    let frac = 0
+    let fdigits = 0
+    if i < len(s) && s[i] == '.'
+      i = i + 1
+      let start = i
+      while i < len(s) && s[i] >= '0' && s[i] <= '9'
+        if fdigits < 6
+          frac = frac * 10 + (s[i] as int - 48)
+          fdigits = fdigits + 1
+        end
+        i = i + 1
+      end
+      if i == start
+        return 0
+      end
+    end
+    if i != len(s)
+      return 0
+    end
+    while fdigits < 6
+      frac = frac * 10
+      fdigits = fdigits + 1
+    end
+    let cok = false
+    let v = math_mul_checked(whole, FX_ONE, &cok)
+    if !cok
+      return 0
+    end
+    v = v + frac
+    if neg
+      v = 0 - v
+    end
+    *ok = true
+    return v
+  end

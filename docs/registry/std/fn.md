@@ -38,3 +38,7 @@ fn {name: newfunc} ( {params: params} ) [ -> {ret: type} ] {body: block} end
 | `params` | parameter list | — |
 | `ret` (optional) |  | — |
 | `body` | block of statements | — |
+
+## Used by
+
+[enums/enum](../enums/enum.md), [enums/flags](../enums/flags.md)

@@ -1,0 +1,181 @@
+doc Helper: the functions that strfmt's show, cat and fmt expand into.
+  | function | does |
+  |---|---|
+  | `sf_bool(b: bool) -> str` | `"true"` or `"false"` |
+  | `sf_char(c: u8) -> str` | a one-byte string |
+  | `sf_ints(xs: [int]) -> str`, `sf_strs(xs: [str]) -> str` | `[1, 2, 3]`, `["a", "b"]` |
+  | `sf_put(b: ptr StrBuf, s: str) -> ptr StrBuf` | append and return `b`, so calls nest |
+  | `sf_start(t: str) -> ptr SfFmt`, `sf_arg(f: ptr SfFmt, s: str) -> ptr SfFmt`, `sf_end(f: ptr SfFmt) -> str` | fill a template's `{}`s one by one |
+  | `sf_format(t: str, args: ptr Vec) -> str` | fill a template with a vector of `str`s, for templates chosen at run time |
+
+needs std rt/str rt/vec
+code
+  struct SfFmt
+    t: str
+    i: int
+    b: ptr StrBuf
+  end
+
+  fn sf_bool(b: bool) -> str
+    if b
+      return "true"
+    end
+    return "false"
+  end
+
+  fn sf_char(c: u8) -> str
+    let b = sb_new()
+    sb_byte(b, c)
+    return sb_str(b)
+  end
+
+  fn sf_ints(xs: [int]) -> str
+    let b = sb_new()
+    sb_byte(b, '[')
+    for i = 0 to len(xs) - 1
+      if i > 0
+        sb_add(b, ", ")
+      end
+      sb_int(b, xs[i])
+    end
+    sb_byte(b, ']')
+    return sb_str(b)
+  end
+
+  fn sf_strs(xs: [str]) -> str
+    let b = sb_new()
+    sb_byte(b, '[')
+    for i = 0 to len(xs) - 1
+      if i > 0
+        sb_add(b, ", ")
+      end
+      sb_add(b, str_quote(xs[i]))
+    end
+    sb_byte(b, ']')
+    return sb_str(b)
+  end
+
+  fn sf_put(b: ptr StrBuf, s: str) -> ptr StrBuf
+    sb_add(b, s)
+    return b
+  end
+
+  fn sf_start(t: str) -> ptr SfFmt
+    let f = new SfFmt
+    f.t = t
+    f.b = sb_new()
+    return f
+  end
+
+  // sf_literal copies template text up to the next placeholder, turning
+  // {{ and }} into braces. It leaves f.i at the placeholder's '{', or at
+  // the end, and reports whether there is one.
+  fn sf_literal(f: ptr SfFmt) -> bool
+    let t = f.t
+    while f.i < len(t)
+      let c = t[f.i]
+      if c == '{' && f.i + 1 < len(t) && t[f.i + 1] == '{'
+        sb_byte(f.b, '{')
+        f.i = f.i + 2
+      elif c == '}' && f.i + 1 < len(t) && t[f.i + 1] == '}'
+        sb_byte(f.b, '}')
+        f.i = f.i + 2
+      elif c == '{' && str_find_byte(t, '}', f.i) > 0
+        return true
+      else
+        sb_byte(f.b, c)
+        f.i = f.i + 1
+      end
+    end
+    return false
+  end
+
+  // sf_spec applies a placeholder's spec (the text between '{' and '}')
+  // to s: "" as is, ":N" right-aligned in N, ":-N" left-aligned, ":0N"
+  // zero-padded after any sign. An unknown spec writes the placeholder.
+  fn sf_spec(b: ptr StrBuf, spec: str, s: str)
+    if spec == ""
+      sb_add(b, s)
+      return
+    end
+    let left = false
+    let zero = false
+    let k = 1
+    if len(spec) < 2 || spec[0] != ':'
+      sf_bad(b, spec)
+      return
+    end
+    if spec[1] == '-'
+      left = true
+      k = 2
+    elif spec[1] == '0'
+      zero = true
+      k = 2
+    end
+    let ok = false
+    let w = str_parse_int(str_slice(spec, k, len(spec)), &ok)
+    if !ok || w < 0 || k == len(spec) || spec[k] == '-'
+      sf_bad(b, spec)
+      return
+    end
+    let pad = w - len(s)
+    if left
+      sb_add(b, s)
+    end
+    let start = 0
+    if zero && len(s) > 0 && (s[0] == '-' || s[0] == '+')
+      sb_byte(b, s[0])
+      start = 1
+    end
+    if !left
+      while pad > 0
+        if zero
+          sb_byte(b, '0')
+        else
+          sb_byte(b, ' ')
+        end
+        pad = pad - 1
+      end
+      sb_add(b, str_slice(s, start, len(s)))
+    else
+      while pad > 0
+        sb_byte(b, ' ')
+        pad = pad - 1
+      end
+    end
+  end
+
+  fn sf_bad(b: ptr StrBuf, spec: str)
+    sb_add(b, "{!bad ")
+    sb_add(b, spec)
+    sb_byte(b, '}')
+  end
+
+  fn sf_arg(f: ptr SfFmt, s: str) -> ptr SfFmt
+    if !sf_literal(f)
+      sb_add(f.b, "{!extra ")
+      sb_add(f.b, s)
+      sb_byte(f.b, '}')
+      return f
+    end
+    let close = str_find_byte(f.t, '}', f.i)
+    sf_spec(f.b, str_slice(f.t, f.i + 1, close), s)
+    f.i = close + 1
+    return f
+  end
+
+  fn sf_end(f: ptr SfFmt) -> str
+    while sf_literal(f)
+      sb_add(f.b, "{!missing}")
+      f.i = str_find_byte(f.t, '}', f.i) + 1
+    end
+    return sb_str(f.b)
+  end
+
+  fn sf_format(t: str, args: ptr Vec) -> str
+    let f = sf_start(t)
+    for i = 0 to vec_len(args) - 1
+      sf_arg(f, vec_get_str(args, i))
+    end
+    return sf_end(f)
+  end

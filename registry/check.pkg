@@ -1,0 +1,47 @@
+doc Checks: require, ensure and invariant conditions, unreachable and todo, with nocheck to turn them off.
+  ```
+  use std
+  use check
+
+  fn average(xs: [int]) -> int
+    require len(xs) > 0, "average of nothing"
+    let total = 0
+    for i = 0 to len(xs) - 1
+      total = total + xs[i]
+    end
+    return total / len(xs)
+  end
+  ```
+
+  A failed check writes where it is, the condition as written and the
+  messages to stderr, and exits with status 2:
+
+  ```
+  stats.pkg:4:3: requirement failed: len(xs) > 0: average of nothing
+  ```
+
+  | package | statement | for |
+  |---|---|---|
+  | `check/require` | `require cond, messages...` | preconditions |
+  | `check/ensure` | `ensure cond, messages...` | postconditions |
+  | `check/invariant` | `invariant cond, messages...` | what stays true |
+  | `check/unreachable`, `check/unreachable_msg` | `unreachable`, `unreachable "why"` | code that must never run |
+  | `check/todo`, `check/todo_msg` | `todo`, `todo "what"` | code not written yet |
+
+  `stdx`'s `assert` does the same as `require` without the condition text
+  or messages. Messages are only evaluated when a check fails.
+
+  **Turning checks off**: `use nocheck` instead of `use check` keeps the
+  same statements, but `require`, `ensure` and `invariant` compile to a
+  jump over the condition, which is still type-checked. `unreachable` and
+  `todo` stay on.
+
+truck
+  fail
+  require
+  ensure
+  invariant
+  unreachable
+  unreachable_msg
+  todo
+  todo_msg

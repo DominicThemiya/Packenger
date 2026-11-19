@@ -1,0 +1,43 @@
+doc String formatting: show(x), cat(...) and fmt("{} and {}", ...) for ints, strings, bools, bytes and slices.
+  ```
+  use std
+  use strfmt
+
+  let name = "Ada"
+  let age = 36
+  print fmt("{} is {} years old", name, age)
+  print cat("next year: ", age + 1, ", adult: ", age >= 18)
+  print fmt("|{:-8}|{:6}|", name, age)    // |Ada     |    36|
+  let xs = make([int], 3)
+  print cat("xs = ", xs)                  // xs = [0, 0, 0]
+  ```
+
+  | package | gives |
+  |---|---|
+  | `strfmt/show_int`, `show_str`, `show_bool`, `show_char`, `show_ints`, `show_strs` | `show(x) -> str` for `int`, `str`, `bool`, `u8`, `[int]` and `[str]`; the type of `x` picks the package |
+  | `strfmt/cat` | `cat(a, b, ...) -> str`: every value shown, one after another |
+  | `strfmt/fmt` | `fmt(template, values...) -> str`: `{}`, `{:N}`, `{:-N}`, `{:0N}`, `{{`, `}}` |
+  | `strfmt/lib` | the functions they expand into, and `sf_format(template, vector of strs)` |
+
+  `show` packages all start with the same word, and the parser tries each
+  until the type fits, so `cat` and `fmt` call `show` on each value and
+  the right conversion is chosen at compile time. Add `show` for your own
+  types with a package like:
+
+  ```
+  syntax expr
+    show ( {x: expr ptr Point} ) -> str
+  expand
+    point_str({x})
+  ```
+
+truck
+  lib
+  show_int
+  show_str
+  show_bool
+  show_char
+  show_ints
+  show_strs
+  cat
+  fmt

@@ -134,4 +134,4 @@ end
 
 ## Used by
 
-[rt/os](os.md)
+[check/fail](../check/fail.md), [cli/cli](../cli/cli.md), [rt/os](os.md)

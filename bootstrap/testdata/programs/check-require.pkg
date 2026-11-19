@@ -1,0 +1,13 @@
+use std
+use check
+
+// a failed requirement: the position, the condition and the messages on
+// stderr, exit status 2
+fn half(n: int) -> int
+  require n % 2 == 0, "an odd number ", "given to half"
+  return n / 2
+end
+
+print half(10)
+print half(7)
+print "not reached"

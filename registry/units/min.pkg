@@ -1,0 +1,13 @@
+doc n min: minutes: 60 sec, as nanoseconds.
+  ```
+  print 5 min    // 300000000000
+  ```
+
+  Binds tighter than any operator, so `2 * 3 min` is `2 * (3 min)`.
+  See [units](../units.md).
+
+needs std/mul
+syntax postfix 90
+  {n: expr int} min -> int
+expand
+  {n} * 60000000000

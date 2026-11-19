@@ -122,3 +122,7 @@ fn map_value(m: ptr Map, i: int) -> int
   return vec_get(m.vals, i)
 end
 ```
+
+## Used by
+
+[json/parse](../json/parse.md), [json/value](../json/value.md), [json/write](../json/write.md)

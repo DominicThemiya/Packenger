@@ -1,0 +1,104 @@
+use std
+use rt/test
+use bits
+
+// the assignments and ~
+let n = 3
+n <<= 2
+test_int(n, 12, "<<=")
+n >>= 1
+test_int(n, 6, ">>=")
+let m = -16
+m >>= 2
+test_int(m, -4, ">>= keeps the sign")
+n |= 9
+test_int(n, 15, "|=")
+n &= 10
+test_int(n, 10, "&=")
+n ^= 15
+test_int(n, 5, "^=")
+let xs = make([int], 3)
+xs[1] = 1
+xs[1] <<= 4
+test_int(xs[1], 16, "<<= on an element")
+test_int(~0, -1, "~0")
+test_int(~5, -6, "~5")
+test_int(255 & ~15, 240, "mask with ~")
+test_int(-~4, 5, "-~x")
+
+// counting
+test_int(bit_count(0), 0, "count 0")
+test_int(bit_count(255), 8, "count 255")
+test_int(bit_count(-1), 64, "count -1")
+test_int(bit_lz(1), 63, "lz 1")
+test_int(bit_lz(0), 64, "lz 0")
+test_int(bit_lz(-1), 0, "lz negative")
+test_int(bit_lz(1 << 62), 1, "lz 2^62")
+test_int(bit_tz(40), 3, "tz 40")
+test_int(bit_tz(0), 64, "tz 0")
+test_int(bit_tz(1 << 63), 63, "tz min")
+test_int(bit_len(255), 8, "len 255")
+test_int(bit_len(256), 9, "len 256")
+test_int(bit_parity(7), 1, "parity odd")
+test_int(bit_parity(6), 0, "parity even")
+
+// shifts and rotations
+test_int(bit_ushr(-1, 60), 15, "ushr -1")
+test_int(bit_ushr(-1, 0), -1, "ushr by 0")
+test_int(bit_ushr(-1, 64), 0, "ushr by 64")
+test_int(bit_ushr(256, 4), 16, "ushr positive")
+test_int(bit_rotl(1, 1), 2, "rotl 1")
+test_int(bit_rotl(1 << 63, 1), 1, "rotl wraps")
+test_int(bit_rotr(1, 1), 1 << 63, "rotr wraps")
+test_int(bit_rotl(5, 64), 5, "rotl by 64")
+test_int(bit_rotr(bit_rotl(123456789, 17), 17), 123456789, "rotr undoes rotl")
+
+// single bits and fields
+test_true(bit_get(5, 2), "get set bit")
+test_true(!bit_get(5, 1), "get clear bit")
+test_true(!bit_get(5, 64), "get outside")
+test_true(bit_get(-1, 63), "get sign bit")
+test_int(bit_set(0, 4), 16, "set")
+test_int(bit_set(0, 70), 0, "set outside")
+test_int(bit_clear(31, 0), 30, "clear")
+test_int(bit_flip(5, 1), 7, "flip")
+test_int(bit_put(0, 3, true), 8, "put on")
+test_int(bit_put(15, 3, false), 7, "put off")
+test_int(bit_mask(4), 15, "mask 4")
+test_int(bit_mask(0), 0, "mask 0")
+test_int(bit_mask(64), -1, "mask 64")
+test_int(bit_field(43981, 4, 8), 188, "field")
+test_int(bit_field(-1, 60, 8), 15, "field at the top")
+test_int(bit_with_field(43981, 4, 8, 0), 40973, "with field 0")
+test_int(bit_with_field(0, 8, 4, 255), 3840, "with field truncates")
+
+// powers of two, reversal, bytes
+test_true(bit_is_pow2(64), "pow2 64")
+test_true(!bit_is_pow2(0), "pow2 0")
+test_true(!bit_is_pow2(96), "pow2 96")
+test_int(bit_ceil_pow2(5), 8, "ceil 5")
+test_int(bit_ceil_pow2(8), 8, "ceil 8")
+test_int(bit_ceil_pow2(0), 1, "ceil 0")
+test_int(bit_ceil_pow2((1 << 62) + 1), 0, "ceil too big")
+test_int(bit_reverse(1), 1 << 63, "reverse 1")
+test_int(bit_reverse(bit_reverse(987654321)), 987654321, "reverse twice")
+test_int(bit_swap(1), 1 << 56, "swap 1")
+test_int(bit_swap(258), 144396663052566528, "swap 0x0102")
+
+// binary text
+test_str(bit_str(5, 4), "0101", "str padded")
+test_str(bit_str(0, 0), "0", "str 0")
+test_str(bit_str(10, 1), "1010", "str wider than width")
+test_int(len(bit_str(-1, 0)), 64, "str of -1 has 64 digits")
+let ok = false
+test_int(bit_parse("1010", &ok), 10, "parse")
+test_true(ok, "parse ok")
+test_int(bit_parse("0b1111_0000", &ok), 240, "parse 0b and _")
+test_true(ok, "parse 0b ok")
+bit_parse("12", &ok)
+test_true(!ok, "parse bad digit")
+bit_parse("", &ok)
+test_true(!ok, "parse empty")
+bit_parse("1__0", &ok)
+test_true(!ok, "parse double _")
+return test_done()

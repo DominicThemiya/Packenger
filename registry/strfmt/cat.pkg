@@ -1,0 +1,14 @@
+doc cat(a, b, ...): the values shown as text, one after another.
+  ```
+  let n = 3
+  print cat("n is ", n, ", even: ", n % 2 == 0)   // n is 3, even: false
+  ```
+
+  Each argument goes through `show`, so it can be an `int`, `str`, `bool`,
+  `u8`, `[int]` or `[str]`. It builds the string in one buffer.
+
+needs strfmt/lib strfmt/show_int strfmt/show_str strfmt/show_bool strfmt/show_char strfmt/show_ints strfmt/show_strs
+syntax expr
+  cat ( {xs: args} ) -> str
+expand
+  sb_str({each v in xs}sf_put({end}sb_new(){each v in xs}, show({v})){end})

@@ -208,6 +208,7 @@ code
     consts: ptr Map
     gorder: ptr Vec
     loops: ptr Vec
+    top_exp: bool
   end
 
   struct PFar
@@ -520,17 +521,22 @@ code
           end
         end
         ps_clear_far(p)
-        if u.lib && n.frame == null && (n.rule == null || n.rule.syn.kind != "struct" && !n.rule.syn.top)
-          pk_err = str_concat4(ps_pos(n), ": library code (", u.name, ") may only contain functions, structs and top-level declarations such as global and const")
-          return null
-        end
-        vec_push(prog.top, n as int)
-        if n.rule != null && n.rule.syn.kind == "struct"
-          vec_push(prog.structs, n as int)
-        elif n.frame != null
-          vec_push(prog.funcs, n as int)
-        else
-          ps_add_item(body, n)
+        let ns = vec_new()
+        ps_top_level(n, ns)
+        for k = 0 to vec_len(ns) - 1
+          n = ps_nd(ns, k)
+          if u.lib && n.frame == null && (n.rule == null || n.rule.syn.kind != "struct" && !n.rule.syn.top)
+            pk_err = str_concat4(ps_pos(n), ": library code (", u.name, ") may only contain functions, structs and top-level declarations such as global and const")
+            return null
+          end
+          vec_push(prog.top, n as int)
+          if n.rule != null && n.rule.syn.kind == "struct"
+            vec_push(prog.structs, n as int)
+          elif n.frame != null
+            vec_push(prog.funcs, n as int)
+          else
+            ps_add_item(body, n)
+          end
         end
       end
     end
@@ -538,6 +544,53 @@ code
     prog.globals = p.gorder
     ps_number(prog)
     return prog
+  end
+
+  // ps_top_level appends the top-level statements n stands for to out: n
+  // itself, or, for an expansion that declares functions, structs, globals
+  // or constants (such as an enum), the statements it expanded into, each
+  // marked as expanded from the same packages (port of topLevel).
+  fn ps_top_level(n: ptr PNode, out: ptr Vec)
+    if n.kind != "block" || n.expanded == null || vec_len(n.expanded) == 0 || !ps_declares(n)
+      vec_push(out, n as int)
+      return
+    end
+    for i = 0 to vec_len(n.items) - 1
+      let inner = vec_new()
+      ps_top_level(ps_nd(n.items, i), inner)
+      for k = 0 to vec_len(inner) - 1
+        let d = ps_nd(inner, k)
+        let ex = vec_new()
+        for m = 0 to vec_len(n.expanded) - 1
+          vec_push(ex, vec_get(n.expanded, m))
+        end
+        if d.expanded != null
+          for m = 0 to vec_len(d.expanded) - 1
+            vec_push(ex, vec_get(d.expanded, m))
+          end
+        end
+        d.expanded = ex
+        vec_push(out, d as int)
+      end
+    end
+  end
+
+  // ps_declares: does an expanded block hold a top-level declaration,
+  // directly or in a nested expansion
+  fn ps_declares(n: ptr PNode) -> bool
+    if n.items == null
+      return false
+    end
+    for i = 0 to vec_len(n.items) - 1
+      let c = ps_nd(n.items, i)
+      if c.frame != null || c.rule != null && (c.rule.syn.kind == "struct" || c.rule.syn.top)
+        return true
+      end
+      if c.kind == "block" && c.expanded != null && vec_len(c.expanded) > 0 && ps_declares(c)
+        return true
+      end
+    end
+    return false
   end
 
   fn ps_statement(p: ptr Parser, top: bool) -> ptr PNode
@@ -624,6 +677,7 @@ code
       return null
     end
     if r.tmpl != null
+      p.top_exp = top
       return ps_expand(p, r, n, s)
     end
     return n
@@ -1707,7 +1761,7 @@ code
   // ps_fill pastes the slots of n into r.tmpl[from:to] and appends the
   // result to toks. names and items are the {each} loop variables in scope,
   // innermost last (port of fill in parser.go).
-  fn ps_fill(p: ptr Parser, r: ptr LgRule, n: ptr PNode, tmpl: ptr Vec, lo: int, hi: int, names: ptr Vec, items: ptr Vec, toks: ptr Vec) -> bool
+  fn ps_fill(p: ptr Parser, r: ptr LgRule, n: ptr PNode, tmpl: ptr Vec, lo: int, hi: int, names: ptr Vec, items: ptr Vec, idxs: ptr Vec, toks: ptr Vec) -> bool
     let i = lo
     while i < hi
       let t = lx_tok(tmpl, i)
@@ -1766,20 +1820,23 @@ code
         if !found
           return false
         end
-        if c != null
-          if c.kind != "groups" && c.kind != "args"
-            return u_fail(str_concat4(lx_pos(t), ": {each} needs a repeated group or an args slot, but {", list, str_concat("} is ", c.kind)))
-          end
+        if c != null && c.kind != "groups" && c.kind != "args"
+          return u_fail(str_concat4(lx_pos(t), ": {each} needs a repeated group or an args slot, but {", list, str_concat("} is ", c.kind)))
+        end
+        if c != null && c.items != null
           for k = 0 to vec_len(c.items) - 1
             let inner_names = vec_new()
             let inner_items = vec_new()
+            let inner_idxs = vec_new()
             for m = 0 to vec_len(names) - 1
               vec_push(inner_names, vec_get(names, m))
               vec_push(inner_items, vec_get(items, m))
+              vec_push(inner_idxs, vec_get(idxs, m))
             end
             vec_push_str(inner_names, var_)
             vec_push(inner_items, vec_get(c.items, k))
-            if !ps_fill(p, r, n, tmpl, i + 1, j, inner_names, inner_items, toks)
+            vec_push(inner_idxs, k)
+            if !ps_fill(p, r, n, tmpl, i + 1, j, inner_names, inner_items, inner_idxs, toks)
               return false
             end
           end
@@ -1789,6 +1846,45 @@ code
       end
       if t.text == "end"
         return u_fail(str_concat(lx_pos(t), ": {end} without {each}"))
+      end
+      if str_starts(t.text, "#")
+        // {#x}: the index of loop variable x, or the length of list x
+        let ok = false
+        let k = ps_hole_index(r, n, str_trim(str_slice(t.text, 1, len(t.text))), names, items, idxs, t, &ok)
+        if !ok
+          return false
+        end
+        let it = ps_tok_copy(TK_INT, str_from_int(k), t)
+        it.ival = k
+        vec_push(toks, it as int)
+        i = i + 1
+        continue
+      end
+      if vec_len(f) == 2 && vec_get_str(f, 0) == "quote"
+        // {quote x}: the source of slot x, as a string
+        let found = false
+        let c = ps_lookup_hole(r, n, vec_get_str(f, 1), names, items, t, &found)
+        if !found
+          return false
+        end
+        let text = ""
+        if c != null
+          text = ps_source_text(c.toks, c.start, c.stop)
+        end
+        vec_push(toks, ps_tok_copy(TK_STR, text, t) as int)
+        i = i + 1
+        continue
+      end
+      if vec_len(f) > 1 && vec_get_str(f, 0) == "cat"
+        // {cat a "_" b}: one name glued from slots and quoted text
+        let ok = false
+        let id = ps_hole_cat(p, r, n, f, names, items, idxs, t, &ok)
+        if !ok
+          return false
+        end
+        vec_push(toks, ps_tok_copy(TK_IDENT, id, t) as int)
+        i = i + 1
+        continue
       end
       let found = false
       let c = ps_lookup_hole(r, n, t.text, names, items, t, &found)
@@ -1811,6 +1907,155 @@ code
       i = i + 1
     end
     return true
+  end
+
+  // ps_hole_index is {#x}: the 0-based index of the item that loop variable
+  // x stands for, or the number of items of list slot x (0 if not given).
+  fn ps_hole_index(r: ptr LgRule, n: ptr PNode, name: str, names: ptr Vec, items: ptr Vec, idxs: ptr Vec, t: ptr Tok, ok: ptr bool) -> int
+    *ok = true
+    let k = vec_len(names) - 1
+    while k >= 0
+      if vec_get_str(names, k) == name
+        return vec_get(idxs, k)
+      end
+      k = k - 1
+    end
+    let found = false
+    let c = ps_lookup_hole(r, n, name, names, items, t, &found)
+    if !found
+      *ok = false
+      return 0
+    end
+    if c == null
+      return 0
+    end
+    if c.kind != "groups" && c.kind != "args"
+      *ok = false
+      u_fail(str_concat4(lx_pos(t), ": {#", name, str_concat4("} needs a loop variable, a repeated group or an args slot, but {", name, "} is ", c.kind)))
+      return 0
+    end
+    if c.items == null
+      return 0
+    end
+    return vec_len(c.items)
+  end
+
+  // ps_hole_cat is {cat part...}: the parts glued into one name. A part in
+  // double quotes is literal text, "#x" an index, "$x" a private name, and
+  // anything else a slot or loop variable written as one token.
+  fn ps_hole_cat(p: ptr Parser, r: ptr LgRule, n: ptr PNode, f: ptr Vec, names: ptr Vec, items: ptr Vec, idxs: ptr Vec, t: ptr Tok, ok: ptr bool) -> str
+    *ok = false
+    let b = sb_new()
+    for i = 1 to vec_len(f) - 1
+      let part = vec_get_str(f, i)
+      if len(part) >= 2 && part[0] == '"' && part[len(part) - 1] == '"'
+        sb_add(b, str_slice(part, 1, len(part) - 1))
+      elif str_starts(part, "#")
+        let iok = false
+        let k = ps_hole_index(r, n, str_slice(part, 1, len(part)), names, items, idxs, t, &iok)
+        if !iok
+          return ""
+        end
+        sb_add(b, str_from_int(k))
+      elif str_starts(part, "$")
+        sb_add(b, str_concat4("__", str_slice(part, 1, len(part)), "_", str_concat4(str_from_int(n.line), "_", str_from_int(n.col), str_concat("_", str_from_int(p.depth)))))
+      else
+        let found = false
+        let c = ps_lookup_hole(r, n, part, names, items, t, &found)
+        if !found
+          return ""
+        end
+        if c != null
+          if c.stop - c.start != 1
+            u_fail(str_concat4(lx_pos(t), ": {cat}: {", part, "} must be a single name or number"))
+            return ""
+          end
+          sb_add(b, lx_tok(c.toks, c.start).text)
+        end
+      end
+    end
+    let id = sb_str(b)
+    let good = len(id) > 0 && (id[0] == '_' || id[0] >= 'a' && id[0] <= 'z' || id[0] >= 'A' && id[0] <= 'Z')
+    for i = 0 to len(id) - 1
+      let ch = id[i]
+      if !(ch == '_' || ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9')
+        good = false
+      end
+    end
+    if !good
+      u_fail(str_concat4(lx_pos(t), ": {cat} made ", str_quote(id), ", which is not a name"))
+      return ""
+    end
+    *ok = true
+    return id
+  end
+
+  // ps_source_text writes toks[lo:hi] back as source: string and character
+  // literals quoted, and a space between two tokens where the source had
+  // one (or a line break). Port of SourceText.
+  fn ps_source_text(toks: ptr Vec, lo: int, hi: int) -> str
+    let b = sb_new()
+    let pline = 0
+    let pcol = 0
+    let pw = 0
+    for i = lo to hi - 1
+      let t = lx_tok(toks, i)
+      if t.kind == TK_NL || t.kind == TK_EOF
+        continue
+      end
+      let text = t.text
+      if t.kind == TK_STR
+        text = ps_quote_text(t.text, '"')
+      elif t.kind == TK_CHAR
+        let one = str_alloc(1)
+        *cstr(one) = t.ival as u8
+        text = ps_quote_text(one, '\'')
+      end
+      if sb_len(b) > 0 && (t.line != pline || t.col != pcol + pw)
+        sb_byte(b, ' ')
+      end
+      sb_add(b, text)
+      pline = t.line
+      pcol = t.col
+      pw = ps_runes(text)
+    end
+    return sb_str(b)
+  end
+
+  fn ps_runes(s: str) -> int
+    let n = 0
+    for i = 0 to len(s) - 1
+      if (s[i] as int) & 192 != 128
+        n = n + 1
+      end
+    end
+    return n
+  end
+
+  // ps_quote_text quotes s with q, escaping like str_quote
+  fn ps_quote_text(s: str, q: u8) -> str
+    let b = sb_new()
+    sb_byte(b, q)
+    for i = 0 to len(s) - 1
+      let c = s[i]
+      if c == q || c == '\\'
+        sb_byte(b, '\\')
+        sb_byte(b, c)
+      elif c == '\n'
+        sb_add(b, "\\n")
+      elif c == '\t'
+        sb_add(b, "\\t")
+      elif c == '\r'
+        sb_add(b, "\\r")
+      elif c < ' ' || c == 127 as u8 || q == '\'' && c >= 128 as u8
+        sb_add(b, "\\x")
+        sb_hex(b, c as int)
+      else
+        sb_byte(b, c)
+      end
+    end
+    sb_byte(b, q)
+    return sb_str(b)
   end
 
   // ps_lookup_hole finds what {name} or {name.slot} refers to: a loop
@@ -1865,11 +2110,14 @@ code
       pk_err = str_concat4(ps_pos(n), ": expansion of ", r.pkg.name, " nests too deeply (does it expand into itself?)")
       return null
     end
+    // set by ps_match for a statement at the top level
+    let top = p.top_exp
+    p.top_exp = false
     let stop = p.i
     let outer = p.toks
     ps_unwind(p, s)
     let toks = vec_new()
-    if !ps_fill(p, r, n, r.tmpl, 0, vec_len(r.tmpl), vec_new(), vec_new(), toks)
+    if !ps_fill(p, r, n, r.tmpl, 0, vec_len(r.tmpl), vec_new(), vec_new(), vec_new(), toks)
       p.toks = outer
       p.i = stop
       return null
@@ -1889,7 +2137,7 @@ code
         if ps_tok(p).kind == TK_EOF
           break
         end
-        let st = ps_statement(p, false)
+        let st = ps_statement(p, top)
         if st == null
           pk_err = str_concat4("in expansion of ", r.pkg.name, " at ", str_concat3(ps_pos(n), ": ", ps_best(p, pk_err)))
           p.toks = outer

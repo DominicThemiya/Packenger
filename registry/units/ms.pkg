@@ -1,0 +1,13 @@
+doc n ms: milliseconds: 1000 us, as nanoseconds.
+  ```
+  print 20 ms    // 20000000
+  ```
+
+  Binds tighter than any operator, so `2 * 3 ms` is `2 * (3 ms)`.
+  See [units](../units.md).
+
+needs std/mul
+syntax postfix 90
+  {n: expr int} ms -> int
+expand
+  {n} * 1000000

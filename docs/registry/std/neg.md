@@ -28,3 +28,7 @@ Kind: `prefix`, precedence 70, left-associative
 | `operand` | expression | `int` |
 
 Produces: `int`
+
+## Used by
+
+[bits/bnot](../bits/bnot.md)

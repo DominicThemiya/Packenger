@@ -1,0 +1,13 @@
+doc n tb: terabytes: 1000 gb, as bytes.
+  ```
+  print 3 tb   // 3000000000000
+  ```
+
+  Binds tighter than any operator, so `2 * 3 tb` is `2 * (3 tb)`.
+  See [units](../units.md).
+
+needs std/mul
+syntax postfix 90
+  {n: expr int} tb -> int
+expand
+  {n} * 1000000000000

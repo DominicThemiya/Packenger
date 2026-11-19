@@ -41,4 +41,4 @@ while {cond: expr bool} {body: block} [ next {step: block} ] end
 
 ## Used by
 
-[std/for](for.md), [stdx/forin](../stdx/forin.md)
+[enums/flags](../enums/flags.md), [std/for](for.md), [stdx/forin](../stdx/forin.md)

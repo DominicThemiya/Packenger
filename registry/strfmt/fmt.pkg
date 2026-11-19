@@ -1,0 +1,29 @@
+doc fmt(template, values...): a template with {} filled in by the values.
+  ```
+  print fmt("{} is {} years old", "Ada", 36)     // Ada is 36 years old
+  print fmt("[{:5}] [{:-5}] [{:05}]", 42, 42, -42)
+  // [   42] [42   ] [-0042]
+  print fmt("{{}} stays")                         // {} stays
+  ```
+
+  Each `{}` takes the next value, shown as text with `show`, so a value
+  can be an `int`, `str`, `bool`, `u8`, `[int]` or `[str]`.
+
+  | placeholder | gives |
+  |---|---|
+  | `{}` | the value |
+  | `{:N}` | right-aligned in `N` columns (bytes) |
+  | `{:-N}` | left-aligned in `N` columns |
+  | `{:0N}` | right-aligned, padded with zeros after any sign |
+  | `{{`, `}}` | a literal `{` or `}` |
+
+  A `{}` without a value becomes `{!missing}`, a value without a `{}` is
+  added as `{!extra value}`, and an unknown spec as `{!bad spec}`, so
+  mistakes show in the output. The template can be any `str` expression;
+  for values that are already strings in a vector, use `sf_format`.
+
+needs strfmt/lib strfmt/show_int strfmt/show_str strfmt/show_bool strfmt/show_char strfmt/show_ints strfmt/show_strs
+syntax expr
+  fmt ( {t: expr str} [, {x: expr any}]* ) -> str
+expand
+  sf_end({each g in ,}sf_arg({end}sf_start({t}){each g in ,}, show({g.x})){end})

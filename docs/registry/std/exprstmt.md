@@ -34,4 +34,4 @@ Kind: `statement`
 
 ## Used by
 
-[stdx/assert](../stdx/assert.md)
+[check/ensure](../check/ensure.md), [check/invariant](../check/invariant.md), [check/require](../check/require.md), [check/todo](../check/todo.md), [check/todo_msg](../check/todo_msg.md), [check/unreachable](../check/unreachable.md), [check/unreachable_msg](../check/unreachable_msg.md), [stdx/assert](../stdx/assert.md)

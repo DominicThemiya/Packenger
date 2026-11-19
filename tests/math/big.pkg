@@ -1,0 +1,62 @@
+use std
+use rt/test
+use math/big
+
+fn b(s: str) -> ptr Big
+  let ok = false
+  let x = big_parse(s, &ok)
+  if !ok
+    print str_concat("bad test number ", s)
+  end
+  return x
+end
+
+test_str(big_str(big_new(0)), "0", "zero")
+test_str(big_str(big_new(-1234567890123)), "-1234567890123", "new")
+test_str(big_str(big_new(-9223372036854775807 - 1)), "-9223372036854775808", "new min")
+test_str(big_str(b("000123")), "123", "leading zeros")
+test_str(big_str(b("-0")), "0", "negative zero")
+test_str(big_str(b("1_000_000_000_000")), "1000000000000", "underscores")
+let ok = true
+big_parse("12a", &ok)
+test_true(!ok, "parse bad")
+big_parse("-", &ok)
+test_true(!ok, "parse sign only")
+big_parse("1__0", &ok)
+test_true(!ok, "parse double _")
+let f = big_new(1)
+for i = 2 to 30
+  f = big_mul(f, big_new(i))
+end
+test_str(big_str(f), "265252859812191058636308480000000", "30!")
+let x = b("123456789012345678901234567890")
+let y = b("987654321098765432109876543210")
+test_str(big_str(big_add(x, y)), "1111111110111111111011111111100", "add")
+test_str(big_str(big_sub(x, y)), "-864197532086419753208641975320", "sub")
+test_str(big_str(big_sub(y, y)), "0", "sub to zero")
+test_str(big_str(big_add(big_neg(x), y)), "864197532086419753208641975320", "add negative")
+test_str(big_str(big_mul(x, big_neg(y))), "-121932631137021795226185032733622923332237463801111263526900", "mul")
+test_str(big_str(big_div(y, x)), "8", "div")
+test_str(big_str(big_mod(y, x)), "9000000000900000000090", "mod")
+test_str(big_str(big_div(big_neg(y), x)), "-8", "div truncates")
+test_str(big_str(big_mod(big_neg(y), x)), "-9000000000900000000090", "mod has the dividend's sign")
+test_str(big_str(big_div(b("-123456789012345678901234567890"), big_new(1000))), "-123456789012345678901234567", "div small")
+test_str(big_str(big_div(big_mul(x, y), y)), "123456789012345678901234567890", "div undoes mul")
+test_str(big_str(big_div(big_new(5), x)), "0", "div smaller")
+test_str(big_str(big_pow(big_new(2), 100)), "1267650600228229401496703205376", "2^100")
+test_str(big_str(big_pow(big_new(-3), 3)), "-27", "pow negative")
+test_str(big_str(big_pow(x, 0)), "1", "pow 0")
+test_true(big_cmp(x, y) < 0, "cmp")
+test_true(big_cmp(big_neg(x), big_neg(y)) > 0, "cmp negative")
+test_true(big_cmp(big_new(-1), big_new(0)) < 0, "cmp signs")
+test_true(big_eq(big_add(x, big_new(0)), x), "eq")
+test_true(big_is_zero(big_sub(x, x)), "is zero")
+test_int(big_sign(big_neg(x)), -1, "sign")
+test_str(big_str(big_abs(big_neg(x))), "123456789012345678901234567890", "abs")
+test_int(big_to_int(b("-9223372036854775808"), &ok), -9223372036854775807 - 1, "to_int min")
+test_true(ok, "to_int ok")
+test_int(big_to_int(b("9223372036854775807"), &ok), 9223372036854775807, "to_int max")
+big_to_int(b("9223372036854775808"), &ok)
+test_true(!ok, "to_int too big")
+test_int(big_to_int(big_new(42), &ok), 42, "to_int small")
+return test_done()

@@ -44,3 +44,7 @@ fn time_fmt(ns: int) -> str
   return str_concat(str_concat(s, str_from_int(tenths % 10)), " s")
 end
 ```
+
+## Used by
+
+[math/rand](../math/rand.md)

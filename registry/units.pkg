@@ -1,0 +1,49 @@
+doc Units: write 5 kb, 4 mib, 20 ms or 2 hour; sizes in bytes, durations in nanoseconds.
+  ```
+  use std
+  use units
+
+  let limit = 64 mib
+  let timeout = 1 min + 30 sec
+  print limit                 // 67108864
+  print timeout / (1 sec)     // 90
+  print units_dur(timeout)    // 1m30s
+  print units_size(limit)     // 64 MiB
+  ```
+
+  Each unit is a postfix word that multiplies an `int`:
+
+  | kind | units | in |
+  |---|---|---|
+  | decimal sizes | `kb`, `mb`, `gb`, `tb` (powers of 1000) | bytes |
+  | binary sizes | `kib`, `mib`, `gib`, `tib` (powers of 1024) | bytes |
+  | durations | `ns`, `us`, `ms`, `sec`, `min`, `hour`, `day`, `week` | nanoseconds, like `rt/time`'s `time_now()` |
+
+  `units/lib` writes them back as text: `units_dur(ns)` and
+  `units_size(bytes)`. A unit binds tighter than any operator:
+  `2 * 3 kb` is 6000 and `-5 ms` is -5000000. Dividing by a unit converts
+  back: `elapsed / (1 ms)`. Values are plain `int`s: nothing stops adding
+  bytes to seconds, and 64 bits hold durations up to about 292 years.
+
+  The unit words can still be names where they don't follow a value
+  (`let min = 0` works), but use single packages (`use units/ms`) to load
+  only the ones you need.
+
+truck
+  kb
+  mb
+  gb
+  tb
+  kib
+  mib
+  gib
+  tib
+  ns
+  us
+  ms
+  sec
+  min
+  hour
+  day
+  week
+  lib

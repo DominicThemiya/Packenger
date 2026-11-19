@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -327,6 +328,7 @@ type Parser struct {
 	consts   map[string]*Node // constant values
 	gorder   []*Var
 	loops    []*Node // enclosing loops, innermost last
+	topExp   bool    // the statement being expanded is at the top level
 }
 
 func newParser(L *Lang) *Parser {
@@ -484,17 +486,19 @@ func (p *Parser) parseProgram(units []Unit) (*Program, error) {
 				}
 			}
 			p.restoreFar(farState{})
-			if u.Lib && n.Frame == nil && (n.Rule == nil || n.Rule.Syn.Kind != "struct" && !n.Rule.Syn.Top) {
-				return nil, fmt.Errorf("%s: library code (%s) may only contain functions, structs and top-level declarations such as global and const", n.Pos, u.Name)
-			}
-			prog.Top = append(prog.Top, n)
-			switch {
-			case n.Rule != nil && n.Rule.Syn.Kind == "struct":
-				prog.Structs = append(prog.Structs, n)
-			case n.Frame != nil:
-				prog.Funcs = append(prog.Funcs, n)
-			default:
-				body.Items = append(body.Items, n)
+			for _, n := range topLevel(n) {
+				if u.Lib && n.Frame == nil && (n.Rule == nil || n.Rule.Syn.Kind != "struct" && !n.Rule.Syn.Top) {
+					return nil, fmt.Errorf("%s: library code (%s) may only contain functions, structs and top-level declarations such as global and const", n.Pos, u.Name)
+				}
+				prog.Top = append(prog.Top, n)
+				switch {
+				case n.Rule != nil && n.Rule.Syn.Kind == "struct":
+					prog.Structs = append(prog.Structs, n)
+				case n.Frame != nil:
+					prog.Funcs = append(prog.Funcs, n)
+				default:
+					body.Items = append(body.Items, n)
+				}
 			}
 		}
 	}
@@ -502,6 +506,36 @@ func (p *Parser) parseProgram(units []Unit) (*Program, error) {
 	prog.Globals = p.gorder
 	number(prog)
 	return prog, nil
+}
+
+// topLevel returns the top-level statements n stands for: n itself, or,
+// for an expansion that declares functions, structs, globals or constants
+// (such as an enum), the statements it expanded into, each marked as
+// expanded from the same packages.
+func topLevel(n *Node) []*Node {
+	if n.Kind != "block" || len(n.Expanded) == 0 || !declares(n) {
+		return []*Node{n}
+	}
+	var out []*Node
+	for _, c := range n.Items {
+		for _, d := range topLevel(c) {
+			d.Expanded = append(append([]string{}, n.Expanded...), d.Expanded...)
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// declares reports whether an expanded block holds a top-level
+// declaration, directly or in a nested expansion.
+func declares(n *Node) bool {
+	for _, c := range n.Items {
+		if c.Frame != nil || c.Rule != nil && (c.Rule.Syn.Kind == "struct" || c.Rule.Syn.Top) ||
+			c.Kind == "block" && len(c.Expanded) > 0 && declares(c) {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Parser) statement(top bool) (*Node, error) {
@@ -568,6 +602,7 @@ func (p *Parser) match(r *Rule, top bool) (*Node, error) {
 		return nil, err
 	}
 	if r.tmpl != nil {
+		p.topExp = top
 		return p.expand(r, n, s)
 	}
 	return n, nil
@@ -1518,6 +1553,8 @@ func (p *Parser) expand(r *Rule, n *Node, s snapshot) (*Node, error) {
 	if p.depth > 64 {
 		return nil, fmt.Errorf("%s: expansion of %s nests too deeply (does it expand into itself?)", n.Pos, r.Pkg.Name)
 	}
+	top := p.topExp // set by match for a statement at the top level
+	p.topExp = false
 	end, outer := p.i, p.toks
 	p.unwind(s) // declarations made while matching are redone by the expansion
 	toks, err := p.fill(r, n, r.tmpl, nil, nil)
@@ -1539,7 +1576,7 @@ func (p *Parser) expand(r *Rule, n *Node, s snapshot) (*Node, error) {
 			if p.tok().Kind == TEOF {
 				break
 			}
-			st, err := p.statement(false)
+			st, err := p.statement(top)
 			if err != nil {
 				return nil, fmt.Errorf("in expansion of %s at %s: %w", r.Pkg.Name, n.Pos, p.best(err))
 			}
@@ -1563,8 +1600,9 @@ func (p *Parser) expand(r *Rule, n *Node, s snapshot) (*Node, error) {
 
 // a loop variable of {each name in list}: the item it stands for
 type binding struct {
-	name string
-	item *Node
+	name  string
+	item  *Node
+	index int
 }
 
 // fill pastes the slots of n into template tmpl and appends the result to
@@ -1622,8 +1660,8 @@ func (p *Parser) fill(r *Rule, n *Node, tmpl []Token, env []binding, toks []Toke
 				if c.Kind != "groups" && c.Kind != "args" {
 					return nil, fmt.Errorf("%s: {each} needs a repeated group or an args slot, but {%s} is %s", t.Pos, list, c.Kind)
 				}
-				for _, item := range c.Items {
-					if toks, err = p.fill(r, n, tmpl[i+1:j], append(env[:len(env):len(env)], binding{name, item}), toks); err != nil {
+				for k, item := range c.Items {
+					if toks, err = p.fill(r, n, tmpl[i+1:j], append(env[:len(env):len(env)], binding{name, item, k}), toks); err != nil {
 						return nil, err
 					}
 				}
@@ -1633,6 +1671,37 @@ func (p *Parser) fill(r *Rule, n *Node, tmpl []Token, env []binding, toks []Toke
 		}
 		if t.Text == "end" {
 			return nil, fmt.Errorf("%s: {end} without {each}", t.Pos)
+		}
+		if name, ok := strings.CutPrefix(t.Text, "#"); ok {
+			// {#x}: the index of loop variable x, or the length of list x
+			k, err := p.holeIndex(r, n, strings.TrimSpace(name), env, t)
+			if err != nil {
+				return nil, err
+			}
+			toks = append(toks, Token{Kind: TInt, Text: strconv.Itoa(k), Int: int64(k), Pos: t.Pos})
+			continue
+		}
+		if f := strings.Fields(t.Text); len(f) == 2 && f[0] == "quote" {
+			// {quote x}: the source of slot x, as a string
+			c, err := p.lookupHole(r, n, f[1], env, t)
+			if err != nil {
+				return nil, err
+			}
+			text := ""
+			if c != nil {
+				text = SourceText(c.toks[c.start:c.end])
+			}
+			toks = append(toks, Token{Kind: TStr, Text: text, Pos: t.Pos})
+			continue
+		}
+		if f := strings.Fields(t.Text); len(f) > 1 && f[0] == "cat" {
+			// {cat a "_" b}: one name glued from slots and quoted text
+			id, err := p.holeCat(r, n, f[1:], env, t)
+			if err != nil {
+				return nil, err
+			}
+			toks = append(toks, Token{Kind: TIdent, Text: id, Pos: t.Pos})
+			continue
 		}
 		c, err := p.lookupHole(r, n, t.Text, env, t)
 		if err != nil {
@@ -1652,6 +1721,123 @@ func (p *Parser) fill(r *Rule, n *Node, tmpl []Token, env []binding, toks []Toke
 		}
 	}
 	return toks, nil
+}
+
+// SourceText writes tokens back as source: string and character literals
+// quoted, and a space between two tokens where the source had one (or a
+// line break).
+func SourceText(toks []Token) string {
+	var b strings.Builder
+	var prev Token
+	prevW := 0
+	for i, t := range toks {
+		if t.Kind == TNewline || t.Kind == TEOF {
+			continue
+		}
+		text := t.Text
+		switch t.Kind {
+		case TStr:
+			text = quoteText(t.Text, '"')
+		case TChar:
+			text = quoteText(string([]byte{byte(t.Int)}), '\'')
+		}
+		if i > 0 && b.Len() > 0 && (t.Pos.Line != prev.Pos.Line || t.Pos.Col != prev.Pos.Col+prevW) {
+			b.WriteByte(' ')
+		}
+		b.WriteString(text)
+		prev, prevW = t, len([]rune(text))
+	}
+	return b.String()
+}
+
+// quoteText quotes s with q, escaping like rt/str's str_quote.
+func quoteText(s string, q byte) string {
+	var b strings.Builder
+	b.WriteByte(q)
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c == q || c == '\\':
+			b.WriteByte('\\')
+			b.WriteByte(c)
+		case c == '\n':
+			b.WriteString("\\n")
+		case c == '\t':
+			b.WriteString("\\t")
+		case c == '\r':
+			b.WriteString("\\r")
+		case c < ' ' || c == 127 || q == '\'' && c >= 128:
+			fmt.Fprintf(&b, "\\x%02x", c)
+		default:
+			b.WriteByte(c)
+		}
+	}
+	b.WriteByte(q)
+	return b.String()
+}
+
+// holeIndex is {#x}: the 0-based index of the item that loop variable x
+// stands for, or the number of items of list slot x (0 if not given).
+func (p *Parser) holeIndex(r *Rule, n *Node, name string, env []binding, t Token) (int, error) {
+	for k := len(env) - 1; k >= 0; k-- {
+		if env[k].name == name {
+			return env[k].index, nil
+		}
+	}
+	c, err := p.lookupHole(r, n, name, env, t)
+	if err != nil {
+		return 0, err
+	}
+	if c == nil {
+		return 0, nil
+	}
+	if c.Kind != "groups" && c.Kind != "args" {
+		return 0, fmt.Errorf("%s: {#%s} needs a loop variable, a repeated group or an args slot, but {%s} is %s", t.Pos, name, name, c.Kind)
+	}
+	return len(c.Items), nil
+}
+
+// holeCat is {cat part...}: the parts glued into one name. A part in
+// double quotes is literal text, {#x} style "#x" an index, "$x" a private
+// name, and anything else a slot or loop variable written as one token.
+func (p *Parser) holeCat(r *Rule, n *Node, parts []string, env []binding, t Token) (string, error) {
+	var b strings.Builder
+	for _, part := range parts {
+		switch {
+		case len(part) >= 2 && part[0] == '"' && part[len(part)-1] == '"':
+			b.WriteString(part[1 : len(part)-1])
+		case strings.HasPrefix(part, "#"):
+			k, err := p.holeIndex(r, n, part[1:], env, t)
+			if err != nil {
+				return "", err
+			}
+			b.WriteString(strconv.Itoa(k))
+		case strings.HasPrefix(part, "$"):
+			fmt.Fprintf(&b, "__%s_%d_%d_%d", part[1:], n.Pos.Line, n.Pos.Col, p.depth)
+		default:
+			c, err := p.lookupHole(r, n, part, env, t)
+			if err != nil {
+				return "", err
+			}
+			if c == nil {
+				continue
+			}
+			if c.end-c.start != 1 {
+				return "", fmt.Errorf("%s: {cat}: {%s} must be a single name or number", t.Pos, part)
+			}
+			b.WriteString(c.toks[c.start].Text)
+		}
+	}
+	id := b.String()
+	if id == "" || !(id[0] == '_' || id[0] >= 'a' && id[0] <= 'z' || id[0] >= 'A' && id[0] <= 'Z') {
+		return "", fmt.Errorf("%s: {cat} made %q, which is not a name", t.Pos, id)
+	}
+	for _, ch := range id {
+		if !(ch == '_' || ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9') {
+			return "", fmt.Errorf("%s: {cat} made %q, which is not a name", t.Pos, id)
+		}
+	}
+	return id, nil
 }
 
 // lookupHole finds what {name} or {name.slot} refers to: a loop variable

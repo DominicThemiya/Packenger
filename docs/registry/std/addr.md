@@ -37,4 +37,4 @@ Produces: `ptr {x}`
 
 ## Used by
 
-[stdx/add_assign](../stdx/add_assign.md), [stdx/div_assign](../stdx/div_assign.md), [stdx/mod_assign](../stdx/mod_assign.md), [stdx/mul_assign](../stdx/mul_assign.md), [stdx/sub_assign](../stdx/sub_assign.md)
+[bits/band_assign](../bits/band_assign.md), [bits/bor_assign](../bits/bor_assign.md), [bits/bxor_assign](../bits/bxor_assign.md), [bits/shl_assign](../bits/shl_assign.md), [bits/shr_assign](../bits/shr_assign.md), [stdx/add_assign](../stdx/add_assign.md), [stdx/div_assign](../stdx/div_assign.md), [stdx/mod_assign](../stdx/mod_assign.md), [stdx/mul_assign](../stdx/mul_assign.md), [stdx/sub_assign](../stdx/sub_assign.md)

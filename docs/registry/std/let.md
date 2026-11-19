@@ -36,4 +36,4 @@ let {name: newvar of t value} [ : {t: type} ] = {value: expr {t}}
 
 ## Used by
 
-[std/for](for.md), [stdx/add_assign](../stdx/add_assign.md), [stdx/div_assign](../stdx/div_assign.md), [stdx/forin](../stdx/forin.md), [stdx/match](../stdx/match.md), [stdx/mod_assign](../stdx/mod_assign.md), [stdx/mul_assign](../stdx/mul_assign.md), [stdx/sub_assign](../stdx/sub_assign.md)
+[bits/band_assign](../bits/band_assign.md), [bits/bor_assign](../bits/bor_assign.md), [bits/bxor_assign](../bits/bxor_assign.md), [bits/shl_assign](../bits/shl_assign.md), [bits/shr_assign](../bits/shr_assign.md), [enums/flags](../enums/flags.md), [nocheck/ensure](../nocheck/ensure.md), [nocheck/invariant](../nocheck/invariant.md), [nocheck/require](../nocheck/require.md), [std/for](for.md), [stdx/add_assign](../stdx/add_assign.md), [stdx/div_assign](../stdx/div_assign.md), [stdx/forin](../stdx/forin.md), [stdx/match](../stdx/match.md), [stdx/mod_assign](../stdx/mod_assign.md), [stdx/mul_assign](../stdx/mul_assign.md), [stdx/sub_assign](../stdx/sub_assign.md)

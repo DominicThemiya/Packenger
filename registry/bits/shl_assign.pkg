@@ -1,0 +1,16 @@
+doc Shift-left assignment: x <<= y, short for x = x << y.
+  ```
+  let n = 3
+  n <<= 2
+  print n           // 12
+  ```
+
+  The left side can be any place of type `int`: a variable, a field, a
+  slice element or `*p`, evaluated once.
+
+needs std/let std/addr std/deref std/assign std/shl
+syntax statement
+  {x: place int} <<= {y: expr int}
+expand
+  let {$p} = &{x}
+  *{$p} = *{$p} << {y}

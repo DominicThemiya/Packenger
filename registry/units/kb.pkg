@@ -1,0 +1,13 @@
+doc n kb: kilobytes: 1000 bytes, as bytes.
+  ```
+  print 5 kb   // 5000
+  ```
+
+  Binds tighter than any operator, so `2 * 3 kb` is `2 * (3 kb)`.
+  See [units](../units.md).
+
+needs std/mul
+syntax postfix 90
+  {n: expr int} kb -> int
+expand
+  {n} * 1000

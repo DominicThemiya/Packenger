@@ -122,4 +122,4 @@ end
 
 ## Used by
 
-[rt/fs](fs.md), [rt/io](io.md), [rt/os](os.md), [rt/str](str.md), [rt/vec](vec.md)
+[math/big](../math/big.md), [rt/fs](fs.md), [rt/io](io.md), [rt/os](os.md), [rt/str](str.md), [rt/vec](vec.md)

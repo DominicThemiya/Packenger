@@ -9,6 +9,41 @@ format.
 
 ## The package tree
 
+- **[bits](bits.md)** (truck) — Bit twiddling: ~x, compound assignment for <<, >>, &, | and ^, and bit functions.
+  - [bits/bnot](bits/bnot.md) — Bitwise not: ~x flips every bit of an int.
+  - [bits/shl_assign](bits/shl_assign.md) — Shift-left assignment: x <<= y, short for x = x << y.
+  - [bits/shr_assign](bits/shr_assign.md) — Shift-right assignment: x >>= y, short for x = x >> y.
+  - [bits/band_assign](bits/band_assign.md) — Bitwise-and assignment: x &= y, short for x = x & y.
+  - [bits/bor_assign](bits/bor_assign.md) — Bitwise-or assignment: x |= y, short for x = x | y.
+  - [bits/bxor_assign](bits/bxor_assign.md) — Bitwise-xor assignment: x ^= y, short for x = x ^ y.
+  - [bits/ops](bits/ops.md) — Bit operations on ints: counting, rotating, single bits, fields, logical shifts and binary text.
+- **[check](check.md)** (truck) — Checks: require, ensure and invariant conditions, unreachable and todo, with nocheck to turn them off.
+  - [check/fail](check/fail.md) — Helper: how check's statements report a failure and stop.
+  - [check/require](check/require.md) — Precondition: require cond stops the program, saying where and what, if cond is false.
+  - [check/ensure](check/ensure.md) — Postcondition: ensure cond stops the program, saying where and what, if cond is false.
+  - [check/invariant](check/invariant.md) — Invariant: invariant cond stops the program, saying where and what, if cond is false.
+  - [check/unreachable](check/unreachable.md) — Unreachable code: unreachable stops the program if it is ever run.
+  - [check/unreachable_msg](check/unreachable_msg.md) — unreachable with messages: unreachable "why", more...
+  - [check/todo](check/todo.md) — Not written yet: todo stops the program here.
+  - [check/todo_msg](check/todo_msg.md) — todo with messages: todo "why", more...
+- **[cli](cli.md)** (truck) — Command-line interfaces: flags, arguments and subcommands, with --help written for you.
+  - [cli/cli](cli/cli.md) — Command-line parsing: flags, arguments, subcommands and generated --help.
+- **[enums](enums.md)** (truck) — Enumerations and bit flags: enum Color(red, green, blue) and flags Perm(read, write, exec).
+  - [enums/enum](enums/enum.md) — Enumeration: enum Color(red, green, blue) declares numbered constants.
+  - [enums/flags](enums/flags.md) — Bit flags: flags Perm(read, write, exec) declares constants 1, 2, 4, ...
+- **[json](json.md)** (truck) — JSON: parse text into a tree of values, read and build them, and write them back.
+  - [json/value](json/value.md) — JSON values: the Json tree, making values, and reading them.
+  - [json/parse](json/parse.md) — Reading JSON: json_parse(text, &ok) gives the tree, or an error with its line and column.
+  - [json/write](json/write.md) — Writing JSON: json_write for one line, json_pretty for indented output.
+- **[math](math.md)** (truck) — Math: integer functions, fixed-point decimals, big integers and random numbers.
+  - [math/int](math/int.md) — Integer math: abs, min, max, clamp, gcd, powers, roots, logs, primes, floor division and checked arithmetic.
+  - [math/fixed](math/fixed.md) — Fixed-point decimals: numbers with six decimal places, kept in an int as millionths.
+  - [math/big](math/big.md) — Big integers: whole numbers of any size, for when 64 bits aren't enough.
+  - [math/rand](math/rand.md) — Random numbers: a seedable generator (xorshift64*) for games, shuffles and tests. Not for secrets.
+- **[nocheck](nocheck.md)** (truck) — Checks turned off: the check truck's statements, with require, ensure and invariant costing nothing.
+  - [nocheck/require](nocheck/require.md) — Precondition, turned off: require cond checks only the types.
+  - [nocheck/ensure](nocheck/ensure.md) — Postcondition, turned off: ensure cond checks only the types.
+  - [nocheck/invariant](nocheck/invariant.md) — Invariant, turned off: invariant cond checks only the types.
 - **[pkc](pkc.md)** (truck) — pkc: the Packenger compiler, written in Packenger.
   - [pkc/util](pkc/util.md) — pkc helpers: errors as values, and Go-compatible number parsing (prefix u_).
   - [pkc/fetch](pkc/fetch.md) — pkc: downloading packages from the registry (port of internal/registry).
@@ -108,6 +143,34 @@ format.
   - [stdx/forin](stdx/forin.md) — Loop over a slice or a string: for x in xs ... end
   - [stdx/match](stdx/match.md) — Choosing by value: match x, then case a, b ... else ... end
   - [stdx/assert](stdx/assert.md) — Assertion: assert cond stops the program if cond is false.
+- **[strfmt](strfmt.md)** (truck) — String formatting: show(x), cat(...) and fmt("{} and {}", ...) for ints, strings, bools, bytes and slices.
+  - [strfmt/lib](strfmt/lib.md) — Helper: the functions that strfmt's show, cat and fmt expand into.
+  - [strfmt/show_int](strfmt/show_int.md) — show(x) for int: `-42`.
+  - [strfmt/show_str](strfmt/show_str.md) — show(x) for str: the string itself.
+  - [strfmt/show_bool](strfmt/show_bool.md) — show(x) for bool: `true` or `false`.
+  - [strfmt/show_char](strfmt/show_char.md) — show(x) for u8: the byte as a one-character string (`'a'` gives `a`; use `x as int` for its number).
+  - [strfmt/show_ints](strfmt/show_ints.md) — show(x) for [int]: `[1, 2, 3]`.
+  - [strfmt/show_strs](strfmt/show_strs.md) — show(x) for [str]: `["a", "b"]`, quoted.
+  - [strfmt/cat](strfmt/cat.md) — cat(a, b, ...): the values shown as text, one after another.
+  - [strfmt/fmt](strfmt/fmt.md) — fmt(template, values...): a template with {} filled in by the values.
+- **[units](units.md)** (truck) — Units: write 5 kb, 4 mib, 20 ms or 2 hour; sizes in bytes, durations in nanoseconds.
+  - [units/kb](units/kb.md) — n kb: kilobytes: 1000 bytes, as bytes.
+  - [units/mb](units/mb.md) — n mb: megabytes: 1000 kb, as bytes.
+  - [units/gb](units/gb.md) — n gb: gigabytes: 1000 mb, as bytes.
+  - [units/tb](units/tb.md) — n tb: terabytes: 1000 gb, as bytes.
+  - [units/kib](units/kib.md) — n kib: kibibytes: 1024 bytes, as bytes.
+  - [units/mib](units/mib.md) — n mib: mebibytes: 1024 kib, as bytes.
+  - [units/gib](units/gib.md) — n gib: gibibytes: 1024 mib, as bytes.
+  - [units/tib](units/tib.md) — n tib: tebibytes: 1024 gib, as bytes.
+  - [units/ns](units/ns.md) — n ns: nanoseconds: the unit durations are counted in, as nanoseconds.
+  - [units/us](units/us.md) — n us: microseconds: 1000 ns, as nanoseconds.
+  - [units/ms](units/ms.md) — n ms: milliseconds: 1000 us, as nanoseconds.
+  - [units/sec](units/sec.md) — n sec: seconds: 1000 ms, as nanoseconds.
+  - [units/min](units/min.md) — n min: minutes: 60 sec, as nanoseconds.
+  - [units/hour](units/hour.md) — n hour: hours: 60 min, as nanoseconds.
+  - [units/day](units/day.md) — n day: days: 24 hours, as nanoseconds.
+  - [units/week](units/week.md) — n week: weeks: 7 days, as nanoseconds.
+  - [units/lib](units/lib.md) — Durations and sizes as text: units_dur(ns) and units_size(bytes).
 - **[bintables](bintables.md)** (truck) — Backend truck: translates Packenger packages to NASM for x86-64 Linux.
   - [bintables/add](bintables/add.md) — + : `add`.
   - [bintables/addr](bintables/addr.md) — Address of: renders the operand's addr section.
@@ -297,6 +360,24 @@ format.
 
 | syntax package | becomes |
 |---|---|
+| [bits/band_assign](bits/band_assign.md) | expands into [std/let](std/let.md), [std/addr](std/addr.md), [std/deref](std/deref.md), [std/assign](std/assign.md), [std/band](std/band.md) |
+| [bits/bnot](bits/bnot.md) | expands into [std/bxor](std/bxor.md), [std/neg](std/neg.md) |
+| [bits/bor_assign](bits/bor_assign.md) | expands into [std/let](std/let.md), [std/addr](std/addr.md), [std/deref](std/deref.md), [std/assign](std/assign.md), [std/bor](std/bor.md) |
+| [bits/bxor_assign](bits/bxor_assign.md) | expands into [std/let](std/let.md), [std/addr](std/addr.md), [std/deref](std/deref.md), [std/assign](std/assign.md), [std/bxor](std/bxor.md) |
+| [bits/shl_assign](bits/shl_assign.md) | expands into [std/let](std/let.md), [std/addr](std/addr.md), [std/deref](std/deref.md), [std/assign](std/assign.md), [std/shl](std/shl.md) |
+| [bits/shr_assign](bits/shr_assign.md) | expands into [std/let](std/let.md), [std/addr](std/addr.md), [std/deref](std/deref.md), [std/assign](std/assign.md), [std/shr](std/shr.md) |
+| [check/ensure](check/ensure.md) | expands into [std/if](std/if.md), [std/not](std/not.md), [std/exprstmt](std/exprstmt.md), [check/fail](check/fail.md) |
+| [check/invariant](check/invariant.md) | expands into [std/if](std/if.md), [std/not](std/not.md), [std/exprstmt](std/exprstmt.md), [check/fail](check/fail.md) |
+| [check/require](check/require.md) | expands into [std/if](std/if.md), [std/not](std/not.md), [std/exprstmt](std/exprstmt.md), [check/fail](check/fail.md) |
+| [check/todo](check/todo.md) | expands into [std/exprstmt](std/exprstmt.md), [check/fail](check/fail.md) |
+| [check/todo_msg](check/todo_msg.md) | expands into [std/exprstmt](std/exprstmt.md), [check/fail](check/fail.md) |
+| [check/unreachable](check/unreachable.md) | expands into [std/exprstmt](std/exprstmt.md), [check/fail](check/fail.md) |
+| [check/unreachable_msg](check/unreachable_msg.md) | expands into [std/exprstmt](std/exprstmt.md), [check/fail](check/fail.md) |
+| [enums/enum](enums/enum.md) | expands into [std/const](std/const.md), [std/fn](std/fn.md), [std/if](std/if.md), [std/eq](std/eq.md), [std/return](std/return.md), [std/and](std/and.md), [std/ge](std/ge.md), [std/lt](std/lt.md) |
+| [enums/flags](enums/flags.md) | expands into [std/const](std/const.md), [std/fn](std/fn.md), [std/if](std/if.md), [std/ne](std/ne.md), [std/eq](std/eq.md), [std/return](std/return.md), [std/let](std/let.md), [std/band](std/band.md), [std/bor](std/bor.md), [std/shl](std/shl.md), [std/sub](std/sub.md), [std/lt](std/lt.md), [std/assign](std/assign.md), [std/while](std/while.md), [std/add](std/add.md), [rt/str](rt/str.md), [rt/vec](rt/vec.md) |
+| [nocheck/ensure](nocheck/ensure.md) | expands into [std/if](std/if.md), [std/and](std/and.md), [std/false](std/false.md), [std/let](std/let.md) |
+| [nocheck/invariant](nocheck/invariant.md) | expands into [std/if](std/if.md), [std/and](std/and.md), [std/false](std/false.md), [std/let](std/let.md) |
+| [nocheck/require](nocheck/require.md) | expands into [std/if](std/if.md), [std/and](std/and.md), [std/false](std/false.md), [std/let](std/let.md) |
 | [std/add](std/add.md) | [bintables/add](bintables/add.md), [ctables/add](ctables/add.md), [webtables/add](webtables/add.md) |
 | [std/addr](std/addr.md) | [bintables/addr](bintables/addr.md), [ctables/addr](ctables/addr.md), [webtables/addr](webtables/addr.md) |
 | [std/and](std/and.md) | [bintables/and](bintables/and.md), [ctables/and](ctables/and.md), [webtables/and](webtables/and.md) |
@@ -356,3 +437,27 @@ format.
 | [stdx/mod_assign](stdx/mod_assign.md) | expands into [std/let](std/let.md), [std/addr](std/addr.md), [std/deref](std/deref.md), [std/assign](std/assign.md), [std/mod](std/mod.md) |
 | [stdx/mul_assign](stdx/mul_assign.md) | expands into [std/let](std/let.md), [std/addr](std/addr.md), [std/deref](std/deref.md), [std/assign](std/assign.md), [std/mul](std/mul.md) |
 | [stdx/sub_assign](stdx/sub_assign.md) | expands into [std/let](std/let.md), [std/addr](std/addr.md), [std/deref](std/deref.md), [std/assign](std/assign.md), [std/sub](std/sub.md) |
+| [strfmt/cat](strfmt/cat.md) | expands into [strfmt/lib](strfmt/lib.md), [strfmt/show_int](strfmt/show_int.md), [strfmt/show_str](strfmt/show_str.md), [strfmt/show_bool](strfmt/show_bool.md), [strfmt/show_char](strfmt/show_char.md), [strfmt/show_ints](strfmt/show_ints.md), [strfmt/show_strs](strfmt/show_strs.md) |
+| [strfmt/fmt](strfmt/fmt.md) | expands into [strfmt/lib](strfmt/lib.md), [strfmt/show_int](strfmt/show_int.md), [strfmt/show_str](strfmt/show_str.md), [strfmt/show_bool](strfmt/show_bool.md), [strfmt/show_char](strfmt/show_char.md), [strfmt/show_ints](strfmt/show_ints.md), [strfmt/show_strs](strfmt/show_strs.md) |
+| [strfmt/show_bool](strfmt/show_bool.md) | expands into [strfmt/lib](strfmt/lib.md) |
+| [strfmt/show_char](strfmt/show_char.md) | expands into [strfmt/lib](strfmt/lib.md) |
+| [strfmt/show_int](strfmt/show_int.md) | expands into [strfmt/lib](strfmt/lib.md) |
+| [strfmt/show_ints](strfmt/show_ints.md) | expands into [strfmt/lib](strfmt/lib.md) |
+| [strfmt/show_str](strfmt/show_str.md) | expands into [strfmt/lib](strfmt/lib.md) |
+| [strfmt/show_strs](strfmt/show_strs.md) | expands into [strfmt/lib](strfmt/lib.md) |
+| [units/day](units/day.md) | expands into [std/mul](std/mul.md) |
+| [units/gb](units/gb.md) | expands into [std/mul](std/mul.md) |
+| [units/gib](units/gib.md) | expands into [std/mul](std/mul.md) |
+| [units/hour](units/hour.md) | expands into [std/mul](std/mul.md) |
+| [units/kb](units/kb.md) | expands into [std/mul](std/mul.md) |
+| [units/kib](units/kib.md) | expands into [std/mul](std/mul.md) |
+| [units/mb](units/mb.md) | expands into [std/mul](std/mul.md) |
+| [units/mib](units/mib.md) | expands into [std/mul](std/mul.md) |
+| [units/min](units/min.md) | expands into [std/mul](std/mul.md) |
+| [units/ms](units/ms.md) | expands into [std/mul](std/mul.md) |
+| [units/ns](units/ns.md) | expands into [std/mul](std/mul.md) |
+| [units/sec](units/sec.md) | expands into [std/mul](std/mul.md) |
+| [units/tb](units/tb.md) | expands into [std/mul](std/mul.md) |
+| [units/tib](units/tib.md) | expands into [std/mul](std/mul.md) |
+| [units/us](units/us.md) | expands into [std/mul](std/mul.md) |
+| [units/week](units/week.md) | expands into [std/mul](std/mul.md) |

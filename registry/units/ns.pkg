@@ -1,0 +1,13 @@
+doc n ns: nanoseconds: the unit durations are counted in, as nanoseconds.
+  ```
+  print 250 ns   // 250
+  ```
+
+  Binds tighter than any operator, so `2 * 3 ns` is `2 * (3 ns)`.
+  See [units](../units.md).
+
+needs std/mul
+syntax postfix 90
+  {n: expr int} ns -> int
+expand
+  {n} * 1

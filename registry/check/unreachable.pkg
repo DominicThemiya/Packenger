@@ -1,0 +1,27 @@
+doc Unreachable code: unreachable stops the program if it is ever run.
+  ```
+  match op
+  case ADD
+    return a + b
+  case SUB
+    return a - b
+  end
+  unreachable "unknown operator"
+  ```
+
+  Writes the position and any messages to stderr and exits with status 2:
+
+  ```
+  calc.pkg:20:3: unreachable code was reached: unknown operator
+  ```
+
+  `unreachable` alone has no message; with messages (`str` expressions, separated
+  by commas) it is [check/unreachable_msg](unreachable_msg.md). It is not turned off by
+  `nocheck`.
+
+needs std/exprstmt check/fail
+syntax statement
+  unreachable
+expand
+  check_fail({@pos}, "unreachable code was reached", "")
+  check_stop()

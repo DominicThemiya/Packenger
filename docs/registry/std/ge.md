@@ -31,3 +31,7 @@ Kind: `infix`, precedence 40, left-associative
 | `right` | expression | `u8` |
 
 Produces: `bool`
+
+## Used by
+
+[enums/enum](../enums/enum.md)

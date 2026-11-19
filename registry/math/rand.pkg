@@ -1,0 +1,105 @@
+doc Random numbers: a seedable generator (xorshift64*) for games, shuffles and tests. Not for secrets.
+  ```
+  rand_seed(42)                  // the same numbers every run
+  print rand_int(6) + 1          // a die roll
+  print rand_range(10, 20)       // 10 to 20, both included
+  let xs = make([int], 5)
+  for i = 0 to 4
+    xs[i] = i
+  end
+  rand_shuffle(xs)
+  rand_seed_time()               // different numbers every run
+  ```
+
+  | function | gives |
+  |---|---|
+  | `rand_seed(s: int)` | start the sequence from `s`; the same seed gives the same numbers on every backend |
+  | `rand_seed_time()` | seed from the clock |
+  | `rand_bits() -> int` | 64 random bits (any `int`, negative too) |
+  | `rand_int(n: int) -> int` | `0` to `n - 1`, every value equally likely; 0 if `n <= 0` |
+  | `rand_range(lo: int, hi: int) -> int` | `lo` to `hi`, both included |
+  | `rand_bool() -> bool` | true or false |
+  | `rand_chance(num: int, den: int) -> bool` | true with probability `num / den` |
+  | `rand_shuffle(xs: [int])` | put `xs` in a random order (Fisher–Yates) |
+
+  Without a seed, the sequence is the one for seed 0. The generator is
+  fast and good enough for simulations, but predictable: don't use it for
+  passwords or keys (read `/dev/urandom` for those).
+
+needs std rt/time math/int
+code
+  global rand_state: int = 0
+  global rand_seeded: bool = false
+
+  // splitmix64: spreads any seed over the 64 bits
+  fn rand_mix(x: int) -> int
+    let z = x
+    z = (z ^ math_ushr(z, 30)) * -4658895280553007687
+    z = (z ^ math_ushr(z, 27)) * -7723592293110705685
+    return z ^ math_ushr(z, 31)
+  end
+
+  fn rand_seed(s: int)
+    rand_state = rand_mix(s + -7046029254386353131)
+    if rand_state == 0
+      rand_state = 1
+    end
+    rand_seeded = true
+  end
+
+  fn rand_seed_time()
+    rand_seed(time_now())
+  end
+
+  fn rand_bits() -> int
+    if !rand_seeded
+      rand_seed(0)
+    end
+    let x = rand_state
+    x = x ^ math_ushr(x, 12)
+    x = x ^ (x << 25)
+    x = x ^ math_ushr(x, 27)
+    rand_state = x
+    return x * 2685821657736338717
+  end
+
+  fn rand_int(n: int) -> int
+    if n <= 0
+      return 0
+    end
+    // reject the top values that would make some results likelier
+    let lim = MATH_MAX - MATH_MAX % n
+    while true
+      let r = math_ushr(rand_bits(), 1)
+      if r < lim
+        return r % n
+      end
+    end
+    return 0
+  end
+
+  fn rand_range(lo: int, hi: int) -> int
+    if hi <= lo
+      return lo
+    end
+    return lo + rand_int(hi - lo + 1)
+  end
+
+  fn rand_bool() -> bool
+    return rand_bits() < 0
+  end
+
+  fn rand_chance(num: int, den: int) -> bool
+    return rand_int(den) < num
+  end
+
+  fn rand_shuffle(xs: [int])
+    let i = len(xs) - 1
+    while i > 0
+      let j = rand_int(i + 1)
+      let t = xs[i]
+      xs[i] = xs[j]
+      xs[j] = t
+      i = i - 1
+    end
+  end

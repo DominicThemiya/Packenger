@@ -1,0 +1,13 @@
+doc n mb: megabytes: 1000 kb, as bytes.
+  ```
+  print 2 mb   // 2000000
+  ```
+
+  Binds tighter than any operator, so `2 * 3 mb` is `2 * (3 mb)`.
+  See [units](../units.md).
+
+needs std/mul
+syntax postfix 90
+  {n: expr int} mb -> int
+expand
+  {n} * 1000000

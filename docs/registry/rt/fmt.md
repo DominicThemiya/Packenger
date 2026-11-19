@@ -145,3 +145,7 @@ fn fmt_bar(n: int, max: int, width: int) -> str
   return sb_str(b)
 end
 ```
+
+## Used by
+
+[math/fixed](../math/fixed.md)

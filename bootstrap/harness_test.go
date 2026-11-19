@@ -189,12 +189,22 @@ func corpus(t *testing.T, globs ...string) []string {
 	return files
 }
 
+// programGlobs are the programs every backend runs: the harness's own, the
+// examples, and the tests of the registry's trucks (tests/<truck>/*.pkg).
+var programGlobs = []string{"testdata/programs/*.pkg", "../examples/*.pkg", "../tests/*/*.pkg"}
+
+// isTruckTest reports whether f is one of a truck's tests, which must pass.
+func isTruckTest(f string) bool {
+	return strings.HasPrefix(filepath.ToSlash(f), "../tests/")
+}
+
 // Programs that compile: every stage must agree, and so must running them.
+// A truck's test must also pass: exit 0, with PASS last.
 func TestPrograms(t *testing.T) {
 	if _, err := exec.LookPath("nasm"); err != nil {
 		t.Skip("nasm not installed")
 	}
-	for _, f := range corpus(t, "testdata/programs/*.pkg", "../examples/*.pkg", "../tests/rt/*.pkg") {
+	for _, f := range corpus(t, programGlobs...) {
 		t.Run(filepath.Base(f), func(t *testing.T) {
 			for _, stage := range []string{"tokens", "ast", "asm"} {
 				if o := agree(t, "dump", stage, f); o.exit != 0 {
@@ -204,7 +214,10 @@ func TestPrograms(t *testing.T) {
 			// programs whose output can't repeat (timings) are marked
 			src, _ := os.ReadFile(f)
 			if !strings.Contains(string(src), "// output: varies") {
-				agree(t, "run", f)
+				o := agree(t, "run", f)
+				if isTruckTest(f) && (o.exit != 0 || !strings.HasSuffix(o.stdout, "PASS\n")) {
+					t.Fatalf("the test failed:\n%s", o)
+				}
 			}
 		})
 	}
@@ -600,7 +613,7 @@ func TestCTables(t *testing.T) {
 			t.Skip(tool + " not installed")
 		}
 	}
-	for _, f := range corpus(t, "testdata/programs/*.pkg", "../examples/*.pkg", "../tests/rt/*.pkg") {
+	for _, f := range corpus(t, programGlobs...) {
 		t.Run(filepath.Base(f), func(t *testing.T) {
 			if o := agree(t, "dump", "asm", "--target", "ctables", f); o.exit != 0 {
 				t.Fatalf("dump asm failed:\n%s", o)
@@ -666,7 +679,7 @@ func TestWebTables(t *testing.T) {
 			t.Skip(tool + " not installed")
 		}
 	}
-	for _, f := range corpus(t, "testdata/programs/*.pkg", "../examples/*.pkg", "../tests/rt/*.pkg") {
+	for _, f := range corpus(t, programGlobs...) {
 		t.Run(filepath.Base(f), func(t *testing.T) {
 			if o := agree(t, "dump", "asm", "--target", "webtables", f); o.exit != 0 {
 				t.Fatalf("dump asm failed:\n%s", o)

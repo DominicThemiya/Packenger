@@ -1,0 +1,21 @@
+use std
+use rt/test
+use nocheck
+
+global calls: int = 0
+
+fn count() -> bool
+  calls = calls + 1
+  return false
+end
+
+// turned off: never evaluated, never fails
+require count(), "not evaluated"
+ensure count()
+invariant count(), "a", "b"
+test_int(calls, 0, "conditions are not evaluated")
+if calls > 0
+  unreachable "still available"
+  todo
+end
+return test_done()

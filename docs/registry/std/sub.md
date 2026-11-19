@@ -32,4 +32,4 @@ Produces: `int`
 
 ## Used by
 
-[stdx/sub_assign](../stdx/sub_assign.md)
+[enums/flags](../enums/flags.md), [stdx/sub_assign](../stdx/sub_assign.md)

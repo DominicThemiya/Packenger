@@ -1,0 +1,258 @@
+doc Bit operations on ints: counting, rotating, single bits, fields, logical shifts and binary text.
+  ```
+  print bit_count(255)            // 8
+  print bit_tz(40)                // 3: 40 is 0b101000
+  print bit_get(5, 2)             // true
+  print bit_set(0, 4)             // 16
+  print bit_field(43981, 4, 8)    // 188: bits 4 to 11 of 0xabcd
+  print bit_str(10, 8)            // 00001010
+  ```
+
+  | function | gives |
+  |---|---|
+  | `bit_count(n: int) -> int` | the number of 1 bits (population count) |
+  | `bit_lz(n: int) -> int` | leading zero bits, counted from bit 63; 64 for 0 |
+  | `bit_tz(n: int) -> int` | trailing zero bits; 64 for 0 |
+  | `bit_len(n: int) -> int` | bits needed to write `n` (`64 - bit_lz(n)`); 0 for 0 |
+  | `bit_parity(n: int) -> int` | 1 if the number of 1 bits is odd, else 0 |
+  | `bit_ushr(n: int, k: int) -> int` | logical shift right: zeros come in at the top (`>>` copies the sign) |
+  | `bit_rotl(n: int, k: int) -> int`, `bit_rotr(n: int, k: int) -> int` | rotate left or right by `k` (taken modulo 64) |
+  | `bit_get(n: int, i: int) -> bool` | is bit `i` (0 = lowest) set |
+  | `bit_set(n: int, i: int) -> int`, `bit_clear(n: int, i: int) -> int`, `bit_flip(n: int, i: int) -> int` | `n` with bit `i` set, cleared or flipped |
+  | `bit_put(n: int, i: int, on: bool) -> int` | `n` with bit `i` set to `on` |
+  | `bit_mask(w: int) -> int` | the lowest `w` bits set: `bit_mask(4)` is 15; all 64 for `w >= 64` |
+  | `bit_field(n: int, lo: int, w: int) -> int` | the `w` bits of `n` from bit `lo` up, as an unsigned number |
+  | `bit_with_field(n: int, lo: int, w: int, v: int) -> int` | `n` with those bits replaced by the low `w` bits of `v` |
+  | `bit_is_pow2(n: int) -> bool` | is `n` a power of two (1, 2, 4, ...) |
+  | `bit_ceil_pow2(n: int) -> int` | the smallest power of two `>= n` (1 for `n <= 1`), or 0 if it doesn't fit |
+  | `bit_reverse(n: int) -> int` | the 64 bits in reverse order |
+  | `bit_swap(n: int) -> int` | the 8 bytes in reverse order (big- to little-endian) |
+  | `bit_str(n: int, width: int) -> str` | binary digits, at least `width` of them: `bit_str(5, 4)` is `"0101"` |
+  | `bit_parse(s: str, ok: ptr bool) -> int` | read binary digits (`_` allowed between them, an optional `0b`); `*ok` is false if it isn't one or has more than 64 |
+
+  Bit positions and counts outside 0 to 63 are allowed: a bit outside the
+  word reads as 0 and setting it changes nothing; shifting by 64 or more
+  gives 0.
+
+needs std rt/str
+code
+  fn bit_ushr(n: int, k: int) -> int
+    if k <= 0
+      return n
+    end
+    if k >= 64
+      return 0
+    end
+    return (n >> k) & ((1 << (64 - k)) - 1)
+  end
+
+  fn bit_count(n: int) -> int
+    let c = 0
+    let x = n
+    while x != 0
+      x = x & (x - 1)
+      c = c + 1
+    end
+    return c
+  end
+
+  fn bit_lz(n: int) -> int
+    if n == 0
+      return 64
+    end
+    if n < 0
+      return 0
+    end
+    let c = 0
+    let x = n
+    while x & (1 << 62) == 0
+      x = x << 1
+      c = c + 1
+    end
+    return c + 1
+  end
+
+  fn bit_tz(n: int) -> int
+    if n == 0
+      return 64
+    end
+    let c = 0
+    let x = n
+    while x & 1 == 0
+      x = x >> 1
+      c = c + 1
+    end
+    return c
+  end
+
+  fn bit_len(n: int) -> int
+    return 64 - bit_lz(n)
+  end
+
+  fn bit_parity(n: int) -> int
+    return bit_count(n) & 1
+  end
+
+  fn bit_rotl(n: int, k: int) -> int
+    let r = k & 63
+    if r == 0
+      return n
+    end
+    return (n << r) | bit_ushr(n, 64 - r)
+  end
+
+  fn bit_rotr(n: int, k: int) -> int
+    return bit_rotl(n, 64 - (k & 63))
+  end
+
+  fn bit_get(n: int, i: int) -> bool
+    if i < 0 || i > 63
+      return false
+    end
+    return (n >> i) & 1 == 1
+  end
+
+  fn bit_set(n: int, i: int) -> int
+    if i < 0 || i > 63
+      return n
+    end
+    return n | (1 << i)
+  end
+
+  fn bit_clear(n: int, i: int) -> int
+    if i < 0 || i > 63
+      return n
+    end
+    return n & ((1 << i) ^ -1)
+  end
+
+  fn bit_flip(n: int, i: int) -> int
+    if i < 0 || i > 63
+      return n
+    end
+    return n ^ (1 << i)
+  end
+
+  fn bit_put(n: int, i: int, on: bool) -> int
+    if on
+      return bit_set(n, i)
+    end
+    return bit_clear(n, i)
+  end
+
+  fn bit_mask(w: int) -> int
+    if w <= 0
+      return 0
+    end
+    if w >= 64
+      return -1
+    end
+    return (1 << w) - 1
+  end
+
+  fn bit_field(n: int, lo: int, w: int) -> int
+    if lo < 0 || lo > 63
+      return 0
+    end
+    return bit_ushr(n, lo) & bit_mask(w)
+  end
+
+  fn bit_with_field(n: int, lo: int, w: int, v: int) -> int
+    if lo < 0 || lo > 63
+      return n
+    end
+    let m = bit_mask(w) << lo
+    return (n & (m ^ -1)) | ((v << lo) & m)
+  end
+
+  fn bit_is_pow2(n: int) -> bool
+    return n > 0 && n & (n - 1) == 0
+  end
+
+  fn bit_ceil_pow2(n: int) -> int
+    if n <= 1
+      return 1
+    end
+    if n > (1 << 62)
+      return 0
+    end
+    return 1 << bit_len(n - 1)
+  end
+
+  fn bit_reverse(n: int) -> int
+    let r = 0
+    let x = n
+    for i = 0 to 63
+      r = (r << 1) | (x & 1)
+      x = x >> 1
+    end
+    return r
+  end
+
+  fn bit_swap(n: int) -> int
+    let r = 0
+    let x = n
+    for i = 0 to 7
+      r = (r << 8) | (x & 255)
+      x = x >> 8
+    end
+    return r
+  end
+
+  fn bit_str(n: int, width: int) -> str
+    let w = bit_len(n)
+    if width > w
+      w = width
+    end
+    if w > 64
+      w = 64
+    end
+    if w == 0
+      w = 1
+    end
+    let b = sb_new()
+    let i = w - 1
+    while i >= 0
+      if bit_get(n, i)
+        sb_byte(b, '1')
+      else
+        sb_byte(b, '0')
+      end
+      i = i - 1
+    end
+    return sb_str(b)
+  end
+
+  fn bit_parse(s: str, ok: ptr bool) -> int
+    *ok = false
+    let i = 0
+    if len(s) >= 2 && s[0] == '0' && (s[1] == 'b' || s[1] == 'B')
+      i = 2
+    end
+    let n = 0
+    let digits = 0
+    let last_ = '_'
+    while i < len(s)
+      let c = s[i]
+      if c == '_'
+        if digits == 0 || last_ == '_'
+          return 0
+        end
+      elif c == '0' || c == '1'
+        if digits == 64
+          return 0
+        end
+        n = (n << 1) | (c as int - '0' as int)
+        digits = digits + 1
+      else
+        return 0
+      end
+      last_ = c
+      i = i + 1
+    end
+    if digits == 0 || last_ == '_'
+      return 0
+    end
+    *ok = true
+    return n
+  end

@@ -1,0 +1,36 @@
+doc Postcondition: ensure cond stops the program, saying where and what, if cond is false.
+  Use it before returning, for what a function promises:
+
+  ```
+  fn sorted_copy(xs: [int]) -> [int]
+    let out = ...
+    ensure is_sorted(out)
+    return out
+  end
+  ```
+
+  If the condition is false, the program writes the position, the
+  condition as written, and the message after it, to stderr, and exits
+  with status 2:
+
+  ```
+  app.pkg:12:3: ensure failed: n >= 0 && n <= len(xs): n is out of range
+  ```
+
+  The message is any number of `str` expressions, written one after
+  another, and evaluated only when the check fails: `require n > 0, "got ",
+  show(n)` with `strfmt`. Swap `use check` for
+  `use nocheck` to turn every check into nothing (the conditions are
+  still type-checked).
+
+needs std/if std/not std/exprstmt check/fail
+syntax statement
+  ensure {c: expr bool} [, {m: expr str}]*
+expand
+  if !{c}
+    check_fail({@pos}, "ensure failed", {quote c})
+    {each g in ,}
+    check_note({g.m})
+    {end}
+    check_stop()
+  end

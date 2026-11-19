@@ -1,0 +1,109 @@
+use std
+use rt
+use rt/test
+use cli
+
+// argv for a test: the program name, then the words of s
+fn args(s: str) -> [str]
+  let words = str_fields(s)
+  let out = make([str], vec_len(words) + 1)
+  out[0] = "prog"
+  for i = 0 to vec_len(words) - 1
+    out[i + 1] = vec_get_str(words, i)
+  end
+  return out
+end
+
+fn make_cli() -> ptr Cli
+  let c = cli_new("pkget", "download packages")
+  cli_flag(c, "verbose", "v", "say what is happening")
+  cli_flag(c, "quiet", "q", "say nothing")
+  cli_opt(c, "out", "o", "DIR", "where to put them", "pkgs")
+  cli_num(c, "jobs", "j", "N", "downloads at once", 4)
+  cli_arg(c, "package", "a package name")
+  cli_arg_opt(c, "version", "a version")
+  cli_rest(c, "more", "more packages")
+  return c
+end
+
+// defaults
+let c = make_cli()
+test_true(cli_parse(c, args("std")), "parse one argument")
+test_true(!cli_bool(c, "verbose"), "switch off by default")
+test_str(cli_str(c, "out"), "pkgs", "string default")
+test_int(cli_int(c, "jobs"), 4, "int default")
+test_true(!cli_given(c, "out"), "not given")
+test_str(cli_get(c, "package"), "std", "positional")
+test_str(cli_get(c, "version"), "", "optional positional missing")
+test_str(cli_command(c), "", "no command")
+
+// every way of writing flags
+c = make_cli()
+test_true(cli_parse(c, args("-v --out x a -j8 b --jobs=9 c d")), "mixed flags")
+test_true(cli_bool(c, "verbose"), "short switch")
+test_str(cli_str(c, "out"), "x", "long with a separate value")
+test_int(cli_int(c, "jobs"), 9, "last value wins")
+test_true(cli_given(c, "jobs"), "given")
+test_int(vec_len(cli_args(c)), 4, "flags between arguments")
+test_str(cli_get(c, "version"), "b", "second positional")
+test_str(cli_get(c, "more"), "c d", "rest")
+c = make_cli()
+test_true(cli_parse(c, args("-vq -oout -j 2 --verbose=false p")), "combined shorts")
+test_true(!cli_bool(c, "verbose"), "=false")
+test_true(cli_bool(c, "quiet"), "second of combined")
+test_str(cli_str(c, "out"), "out", "-oVALUE")
+test_int(cli_int(c, "jobs"), 2, "-j VALUE")
+c = make_cli()
+test_true(cli_parse(c, args("--verbose --no-verbose -- -x --out")), "-- ends the flags")
+test_true(!cli_bool(c, "verbose"), "--no-")
+test_str(cli_get(c, "package"), "-x", "after --")
+test_str(cli_get(c, "version"), "--out", "a flag-like argument after --")
+
+// errors: false, status 2, and a message on stderr
+c = make_cli()
+test_true(!cli_parse(c, args("--colour p")), "unknown flag")
+test_int(cli_status(c), 2, "error status")
+test_true(!cli_parse(make_cli(), args("-x p")), "unknown short flag")
+test_true(!cli_parse(make_cli(), args("")), "missing argument")
+test_true(!cli_parse(make_cli(), args("p --jobs many")), "not a number")
+test_true(!cli_parse(make_cli(), args("p --out")), "missing value")
+test_true(!cli_parse(make_cli(), args("p --verbose=maybe")), "bad switch value")
+let strict = cli_new("one", "")
+cli_arg(strict, "x", "")
+test_true(!cli_parse(strict, args("a b")), "too many arguments")
+
+// help: false, status 0, usage on stdout
+c = make_cli()
+test_true(!cli_parse(c, args("p --help")), "help stops")
+test_int(cli_status(c), 0, "help status")
+test_str(cli_usage(make_cli()), "pkget: download packages\n\nUsage:\n  pkget [flags] <package> [version] [more...]\n\nArguments:\n  package  a package name\n  version  a version\n  more     more packages\n\nFlags:\n  -v, --verbose  say what is happening\n  -q, --quiet    say nothing\n  -o, --out DIR  where to put them (default \"pkgs\")\n  -j, --jobs N   downloads at once (default 4)\n  -h, --help     show this help\n", "usage")
+
+// subcommands
+fn make_tool() -> ptr Cli
+  let t = cli_new("tool", "a tool")
+  cli_flag(t, "verbose", "v", "more output")
+  let b = cli_cmd(t, "build", "compile a program")
+  cli_opt(b, "target", "t", "NAME", "the backend", "bintables")
+  cli_arg(b, "file", "the program")
+  let r = cli_cmd(t, "run", "run a program")
+  cli_rest(r, "args", "")
+  return t
+end
+let t = make_tool()
+test_true(cli_parse(t, args("-v build --target ctables -v x.pkg")), "subcommand")
+test_str(cli_command(t), "build", "chosen command")
+let b = cli_sub(t)
+test_str(cli_str(b, "target"), "ctables", "subcommand flag")
+test_true(cli_bool(b, "verbose"), "parent flag seen from the subcommand")
+test_str(cli_get(b, "file"), "x.pkg", "subcommand argument")
+t = make_tool()
+test_true(!cli_parse(t, args("build")), "subcommand missing argument")
+t = make_tool()
+test_true(!cli_parse(t, args("frobnicate")), "unknown command")
+t = make_tool()
+test_true(cli_parse(t, args("run a b")), "rest after a command")
+test_int(vec_len(cli_args(cli_sub(t))), 2, "run's arguments")
+test_true(cli_parse(make_tool(), args("")), "no command at all")
+test_str(cli_usage(make_tool()), "tool: a tool\n\nUsage:\n  tool [flags]\n  tool <command> [flags]\n\nCommands:\n  build  compile a program\n  run    run a program\n\nFlags:\n  -v, --verbose  more output\n  -h, --help     show this help\n", "usage with commands")
+test_str(cli_usage(vec_get(make_tool().cmds, 0) as ptr Cli), "tool build: compile a program\n\nUsage:\n  tool build [flags] <file>\n\nArguments:\n  file  the program\n\nFlags:\n  -t, --target NAME  the backend (default \"bintables\")\n  -v, --verbose      more output\n  -h, --help         show this help\n", "subcommand usage")
+return test_done()

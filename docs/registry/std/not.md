@@ -30,4 +30,4 @@ Produces: `bool`
 
 ## Used by
 
-[stdx/assert](../stdx/assert.md)
+[check/ensure](../check/ensure.md), [check/invariant](../check/invariant.md), [check/require](../check/require.md), [stdx/assert](../stdx/assert.md)

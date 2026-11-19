@@ -1,0 +1,516 @@
+doc Command-line parsing: flags, arguments, subcommands and generated --help.
+  ```
+  let c = cli_new("pkget", "download Packenger packages")
+  cli_flag(c, "verbose", "v", "say what is happening")
+  cli_opt(c, "out", "o", "DIR", "where to put them", "pkgs")
+  cli_num(c, "jobs", "j", "N", "downloads at once", 4)
+  cli_arg(c, "package", "a package name, like std/if")
+  cli_rest(c, "more", "more packages")
+  if !cli_parse(c, argv)
+    return cli_status(c)
+  end
+  print cli_str(c, "out")
+  print vec_len(cli_args(c))
+  ```
+
+  **Declaring**: each takes the parser first. Flag names are what follows
+  `--`; the short name is one letter (or `""` for none).
+
+  | function | declares |
+  |---|---|
+  | `cli_new(name: str, about: str) -> ptr Cli` | a parser for a program |
+  | `cli_flag(c, name, short, help)` | a switch: `--verbose`, `-v`, `--no-verbose` |
+  | `cli_opt(c, name, short, meta, help, def: str)` | a string: `--out DIR`, `--out=DIR`, `-o DIR`, `-oDIR` |
+  | `cli_num(c, name, short, meta, help, def: int)` | an integer, the same ways |
+  | `cli_arg(c, name, help)`, `cli_arg_opt(c, name, help)` | a positional argument, required or optional, in order |
+  | `cli_rest(c, name, help)` | any number of further arguments |
+  | `cli_cmd(c, name, about) -> ptr Cli` | a subcommand, with its own flags and arguments |
+
+  **Parsing**: `cli_parse(c, argv) -> bool` reads the program's arguments
+  (`argv[0]`, the program, is skipped). Flags may come before, between or
+  after the arguments; `--` ends the flags; `-abc` is `-a -b -c` when they
+  are switches. The first argument that names a subcommand switches to
+  it, and flags it doesn't know are looked up in its parents. It returns
+  false when the program should stop: after printing the help for `-h` or
+  `--help` (status 0), or an error and a hint to stderr (status 2), such
+  as `pkget: unknown flag --colour`. `cli_status(c)` is that status, and
+  `cli_parse_or_exit(c, argv)` exits with it.
+
+  **Reading**:
+
+  | function | gives |
+  |---|---|
+  | `cli_bool(c, name) -> bool`, `cli_str(c, name) -> str`, `cli_int(c, name) -> int` | a flag's value (its default if not given) |
+  | `cli_given(c, name) -> bool` | was the flag on the command line |
+  | `cli_get(c, name) -> str` | a positional argument by name, or `""` |
+  | `cli_args(c) -> ptr Vec` | every positional argument (`str`s), the rest included |
+  | `cli_command(c) -> str` | the chosen subcommand's name, or `""` |
+  | `cli_sub(c) -> ptr Cli` | the chosen subcommand's parser (`c` itself if none), to read its flags and arguments |
+  | `cli_usage(c) -> str` | the help text |
+
+  Asking for a flag that wasn't declared stops the program with an
+  error, since it's a mistake in the program, not in its arguments.
+
+needs std rt/str rt/vec rt/io rt/os
+code
+  const CLI_BOOL = 0
+  const CLI_STR = 1
+  const CLI_INT = 2
+
+  struct CliFlag
+    name: str
+    short: str
+    kind: int
+    meta: str
+    help: str
+    sval: str
+    ival: int
+    bval: bool
+    given: bool
+    def: str
+  end
+
+  struct CliArg
+    name: str
+    help: str
+    required: bool
+    rest: bool
+  end
+
+  struct Cli
+    name: str
+    about: str
+    path: str
+    flags: ptr Vec
+    specs: ptr Vec
+    cmds: ptr Vec
+    parent: ptr Cli
+    chosen: ptr Cli
+    args: ptr Vec
+    status: int
+  end
+
+  fn cli_new(name: str, about: str) -> ptr Cli
+    let c = new Cli
+    c.name = name
+    c.path = name
+    c.about = about
+    c.flags = vec_new()
+    c.specs = vec_new()
+    c.cmds = vec_new()
+    c.args = vec_new()
+    return c
+  end
+
+  fn cli_add(c: ptr Cli, name: str, short: str, kind: int, meta: str, help: str) -> ptr CliFlag
+    let f = new CliFlag
+    f.name = name
+    f.short = short
+    f.kind = kind
+    f.meta = meta
+    f.help = help
+    vec_push(c.flags, f as int)
+    return f
+  end
+
+  fn cli_flag(c: ptr Cli, name: str, short: str, help: str)
+    cli_add(c, name, short, CLI_BOOL, "", help)
+  end
+
+  fn cli_opt(c: ptr Cli, name: str, short: str, meta: str, help: str, def: str)
+    let f = cli_add(c, name, short, CLI_STR, meta, help)
+    f.sval = def
+    f.def = def
+  end
+
+  fn cli_num(c: ptr Cli, name: str, short: str, meta: str, help: str, def: int)
+    let f = cli_add(c, name, short, CLI_INT, meta, help)
+    f.ival = def
+    f.def = str_from_int(def)
+  end
+
+  fn cli_spec(c: ptr Cli, name: str, help: str, required: bool, rest: bool)
+    let a = new CliArg
+    a.name = name
+    a.help = help
+    a.required = required
+    a.rest = rest
+    vec_push(c.specs, a as int)
+  end
+
+  fn cli_arg(c: ptr Cli, name: str, help: str)
+    cli_spec(c, name, help, true, false)
+  end
+
+  fn cli_arg_opt(c: ptr Cli, name: str, help: str)
+    cli_spec(c, name, help, false, false)
+  end
+
+  fn cli_rest(c: ptr Cli, name: str, help: str)
+    cli_spec(c, name, help, false, true)
+  end
+
+  fn cli_cmd(c: ptr Cli, name: str, about: str) -> ptr Cli
+    let s = cli_new(name, about)
+    s.parent = c
+    s.path = str_concat3(c.path, " ", name)
+    vec_push(c.cmds, s as int)
+    return s
+  end
+
+  // cli_find looks a flag up by long or short name in c and its parents.
+  fn cli_find(c: ptr Cli, name: str, short: bool) -> ptr CliFlag
+    let p = c
+    while p != null
+      for i = 0 to vec_len(p.flags) - 1
+        let f = vec_get(p.flags, i) as ptr CliFlag
+        if !short && f.name == name || short && f.short == name && name != ""
+          return f
+        end
+      end
+      p = p.parent
+    end
+    return null
+  end
+
+  fn cli_must(c: ptr Cli, name: str) -> ptr CliFlag
+    let f = cli_find(c, name, false)
+    if f == null
+      io_err(str_concat4(c.name, ": the program asked for flag --", name, ", which it never declared\n"))
+      os_exit(2)
+    end
+    return f
+  end
+
+  fn cli_root(c: ptr Cli) -> ptr Cli
+    let p = c
+    while p.parent != null
+      p = p.parent
+    end
+    return p
+  end
+
+  // cli_error prints an error for the subcommand in use and a hint.
+  fn cli_error(c: ptr Cli, msg: str) -> bool
+    io_err(str_concat4(cli_root(c).name, ": ", msg, "\n"))
+    io_err(str_concat3("Run '", c.path, " --help' for usage.\n"))
+    cli_root(c).status = 2
+    return false
+  end
+
+  // cli_set gives a flag a value from the command line.
+  fn cli_set(c: ptr Cli, f: ptr CliFlag, shown: str, v: str) -> bool
+    f.given = true
+    if f.kind == CLI_STR
+      f.sval = v
+      return true
+    end
+    let ok = false
+    let n = str_parse_int(v, &ok)
+    if !ok
+      return cli_error(c, str_concat4(shown, ": ", str_quote(v), " is not a whole number"))
+    end
+    f.ival = n
+    return true
+  end
+
+  fn cli_parse_or_exit(c: ptr Cli, args: [str])
+    if !cli_parse(c, args)
+      os_exit(cli_status(c))
+    end
+  end
+
+  fn cli_status(c: ptr Cli) -> int
+    return cli_root(c).status
+  end
+
+  fn cli_parse(c: ptr Cli, args: [str]) -> bool
+    let cur = c
+    c.chosen = c
+    let flags_done = false
+    let i = 1
+    while i < len(args)
+      let a = args[i]
+      i = i + 1
+      if !flags_done && a == "--"
+        flags_done = true
+      elif !flags_done && (a == "-h" || a == "--help")
+        io_out(cli_usage(cur))
+        io_flush()
+        cli_root(c).status = 0
+        return false
+      elif !flags_done && str_starts(a, "--")
+        let body = str_slice(a, 2, len(a))
+        let eq = str_find_byte(body, '=', 0)
+        let name = body
+        let val = ""
+        if eq >= 0
+          name = str_slice(body, 0, eq)
+          val = str_slice(body, eq + 1, len(body))
+        end
+        let f = cli_find(cur, name, false)
+        if f == null && str_starts(name, "no-") && eq < 0
+          let g = cli_find(cur, str_slice(name, 3, len(name)), false)
+          if g != null && g.kind == CLI_BOOL
+            g.bval = false
+            g.given = true
+            continue
+          end
+        end
+        if f == null
+          return cli_error(cur, str_concat("unknown flag --", name))
+        end
+        if f.kind == CLI_BOOL
+          if eq >= 0
+            if val == "true"
+              f.bval = true
+            elif val == "false"
+              f.bval = false
+            else
+              return cli_error(cur, str_concat4("--", name, " is a switch: give it alone, or =true or =false, not =", val))
+            end
+          else
+            f.bval = true
+          end
+          f.given = true
+        else
+          if eq < 0
+            if i >= len(args)
+              return cli_error(cur, str_concat3("--", name, str_concat3(" needs a value (", f.meta, ")")))
+            end
+            val = args[i]
+            i = i + 1
+          end
+          if !cli_set(cur, f, str_concat("--", name), val)
+            return false
+          end
+        end
+      elif !flags_done && str_starts(a, "-") && len(a) > 1
+        // one or more short flags; a value-taking one takes the rest
+        let k = 1
+        while k < len(a)
+          let s = str_slice(a, k, k + 1)
+          let f = cli_find(cur, s, true)
+          if f == null
+            return cli_error(cur, str_concat("unknown flag -", s))
+          end
+          k = k + 1
+          if f.kind == CLI_BOOL
+            f.bval = true
+            f.given = true
+          else
+            let val = str_slice(a, k, len(a))
+            if val == ""
+              if i >= len(args)
+                return cli_error(cur, str_concat3("-", s, str_concat3(" needs a value (", f.meta, ")")))
+              end
+              val = args[i]
+              i = i + 1
+            end
+            if !cli_set(cur, f, str_concat("-", s), val)
+              return false
+            end
+            k = len(a)
+          end
+        end
+      else
+        // a positional argument, or the subcommand
+        let sub: ptr Cli = null
+        if vec_len(cur.args) == 0 && !flags_done
+          for k = 0 to vec_len(cur.cmds) - 1
+            let s = vec_get(cur.cmds, k) as ptr Cli
+            if s.name == a
+              sub = s
+            end
+          end
+        end
+        if sub != null
+          cur = sub
+          c.chosen = sub
+          sub.chosen = sub
+        else
+          vec_push_str(cur.args, a)
+        end
+      end
+    end
+    // check the positional arguments
+    let need = 0
+    let most = 0
+    let rest = false
+    for k = 0 to vec_len(cur.specs) - 1
+      let s = vec_get(cur.specs, k) as ptr CliArg
+      if s.rest
+        rest = true
+      else
+        most = most + 1
+        if s.required
+          need = most
+        end
+      end
+    end
+    if vec_len(cur.cmds) > 0 && cur == c && vec_len(c.specs) == 0 && vec_len(c.args) > 0
+      return cli_error(cur, str_concat("unknown command ", str_quote(vec_get_str(c.args, 0))))
+    end
+    if vec_len(cur.args) < need
+      let missing = vec_get(cur.specs, vec_len(cur.args)) as ptr CliArg
+      return cli_error(cur, str_concat3("missing <", missing.name, ">"))
+    end
+    if !rest && vec_len(cur.args) > most
+      return cli_error(cur, str_concat("unexpected argument ", str_quote(vec_get_str(cur.args, most))))
+    end
+    return true
+  end
+
+  fn cli_bool(c: ptr Cli, name: str) -> bool
+    return cli_must(c, name).bval
+  end
+
+  fn cli_str(c: ptr Cli, name: str) -> str
+    return cli_must(c, name).sval
+  end
+
+  fn cli_int(c: ptr Cli, name: str) -> int
+    return cli_must(c, name).ival
+  end
+
+  fn cli_given(c: ptr Cli, name: str) -> bool
+    return cli_must(c, name).given
+  end
+
+  fn cli_args(c: ptr Cli) -> ptr Vec
+    return c.args
+  end
+
+  fn cli_get(c: ptr Cli, name: str) -> str
+    let n = 0
+    for k = 0 to vec_len(c.specs) - 1
+      let s = vec_get(c.specs, k) as ptr CliArg
+      if s.name == name
+        if s.rest
+          return str_join_from(c.args, n, " ")
+        end
+        if n < vec_len(c.args)
+          return vec_get_str(c.args, n)
+        end
+        return ""
+      end
+      n = n + 1
+    end
+    return ""
+  end
+
+  fn cli_command(c: ptr Cli) -> str
+    if c.chosen == null || c.chosen == c
+      return ""
+    end
+    return c.chosen.name
+  end
+
+  fn cli_sub(c: ptr Cli) -> ptr Cli
+    if c.chosen == null
+      return c
+    end
+    return c.chosen
+  end
+
+  fn cli_usage(c: ptr Cli) -> str
+    let b = sb_new()
+    sb_add(b, c.path)
+    if c.about != ""
+      sb_add(b, ": ")
+      sb_add(b, c.about)
+    end
+    sb_add(b, "\n\nUsage:\n  ")
+    sb_add(b, c.path)
+    sb_add(b, " [flags]")
+    for k = 0 to vec_len(c.specs) - 1
+      let s = vec_get(c.specs, k) as ptr CliArg
+      if s.rest
+        sb_add(b, str_concat3(" [", s.name, "...]"))
+      elif s.required
+        sb_add(b, str_concat3(" <", s.name, ">"))
+      else
+        sb_add(b, str_concat3(" [", s.name, "]"))
+      end
+    end
+    if vec_len(c.cmds) > 0
+      sb_add(b, "\n  ")
+      sb_add(b, c.path)
+      sb_add(b, " <command> [flags]")
+    end
+    sb_byte(b, '\n')
+    let rows = vec_new()
+    let helps = vec_new()
+    for k = 0 to vec_len(c.specs) - 1
+      let s = vec_get(c.specs, k) as ptr CliArg
+      if s.help != ""
+        vec_push_str(rows, s.name)
+        vec_push_str(helps, s.help)
+      end
+    end
+    cli_table(b, "Arguments", rows, helps)
+    rows = vec_new()
+    helps = vec_new()
+    for k = 0 to vec_len(c.cmds) - 1
+      let s = vec_get(c.cmds, k) as ptr Cli
+      vec_push_str(rows, s.name)
+      vec_push_str(helps, s.about)
+    end
+    cli_table(b, "Commands", rows, helps)
+    rows = vec_new()
+    helps = vec_new()
+    let p = c
+    while p != null
+      for k = 0 to vec_len(p.flags) - 1
+        let f = vec_get(p.flags, k) as ptr CliFlag
+        let row = "    "
+        if f.short != ""
+          row = str_concat3("-", f.short, ", ")
+        end
+        row = str_concat3(row, "--", f.name)
+        if f.kind != CLI_BOOL
+          row = str_concat3(row, " ", f.meta)
+        end
+        let help = f.help
+        if f.kind == CLI_STR && f.def != ""
+          help = str_concat3(help, " (default ", str_concat(str_quote(f.def), ")"))
+        elif f.kind == CLI_INT
+          help = str_concat3(help, " (default ", str_concat(f.def, ")"))
+        end
+        vec_push_str(rows, row)
+        vec_push_str(helps, help)
+      end
+      p = p.parent
+    end
+    vec_push_str(rows, "-h, --help")
+    vec_push_str(helps, "show this help")
+    cli_table(b, "Flags", rows, helps)
+    return sb_str(b)
+  end
+
+  fn cli_table(b: ptr StrBuf, title: str, rows: ptr Vec, helps: ptr Vec)
+    if vec_len(rows) == 0
+      return
+    end
+    let w = 0
+    for k = 0 to vec_len(rows) - 1
+      if len(vec_get_str(rows, k)) > w
+        w = len(vec_get_str(rows, k))
+      end
+    end
+    sb_byte(b, '\n')
+    sb_add(b, title)
+    sb_add(b, ":\n")
+    for k = 0 to vec_len(rows) - 1
+      sb_add(b, "  ")
+      let h = vec_get_str(helps, k)
+      if h == ""
+        sb_add(b, vec_get_str(rows, k))
+      else
+        sb_add(b, str_pad(vec_get_str(rows, k), w))
+        sb_add(b, "  ")
+        sb_add(b, h)
+      end
+      sb_byte(b, '\n')
+    end
+  end

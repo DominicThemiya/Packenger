@@ -1,0 +1,16 @@
+doc Bitwise-and assignment: x &= y, short for x = x & y.
+  ```
+  let flags = 13
+  flags &= 6
+  print flags       // 4
+  ```
+
+  The left side can be any place of type `int`: a variable, a field, a
+  slice element or `*p`, evaluated once.
+
+needs std/let std/addr std/deref std/assign std/band
+syntax statement
+  {x: place int} &= {y: expr int}
+expand
+  let {$p} = &{x}
+  *{$p} = *{$p} & {y}

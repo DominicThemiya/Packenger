@@ -1,0 +1,43 @@
+use std
+use rt/test
+use check
+
+fn average(xs: [int]) -> int
+  require len(xs) > 0, "average of nothing"
+  let total = 0
+  for i = 0 to len(xs) - 1
+    invariant i >= 0 && i < len(xs)
+    total = total + xs[i]
+  end
+  ensure total >= 0
+  return total / len(xs)
+end
+
+fn calls() -> int
+  global_calls = global_calls + 1
+  return global_calls
+end
+
+global global_calls: int = 0
+
+fn msg() -> str
+  global_calls = global_calls + 100
+  return "never built"
+end
+
+let xs = make([int], 4)
+for i = 0 to 3
+  xs[i] = i * 2
+end
+test_int(average(xs), 3, "checks that hold change nothing")
+require calls() == 1, msg()
+test_int(global_calls, 1, "the condition runs once, the message never")
+require true, "a", "b"
+ensure 1 < 2
+if false
+  unreachable
+  todo "never"
+  unreachable "x", "y"
+  todo
+end
+return test_done()

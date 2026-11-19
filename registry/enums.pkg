@@ -1,0 +1,24 @@
+doc Enumerations and bit flags: enum Color(red, green, blue) and flags Perm(read, write, exec).
+  ```
+  use std
+  use enums
+
+  enum Color(red, green, blue)
+  flags Perm(read, write, exec)
+
+  print Color_name(green)     // green
+  print Perm_name(read | exec) // read|exec
+  ```
+
+  | package | declares |
+  |---|---|
+  | `enums/enum` | constants 0, 1, 2, ... and `<Name>_count`, `<Name>_name`, `<Name>_parse`, `<Name>_valid` |
+  | `enums/flags` | constants 1, 2, 4, ... and `<Name>_count`, `<Name>_all`, `<Name>_name`, `<Name>_parse` |
+
+  Both expand into `const` and `fn` declarations, so they work with every
+  backend. The names are ordinary constants: use them in `match`, `if`,
+  arithmetic and other constants.
+
+truck
+  enum
+  flags

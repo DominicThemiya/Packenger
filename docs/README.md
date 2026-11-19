@@ -15,6 +15,7 @@
 | [Runtime library](registry/rt.md) | the `rt` truck: memory, vectors, strings, maps, files, folders, paths, processes, sorting, formatting |
 | [Conflict resolution](registry/resolve.md) | the `resolve` truck: renaming what other packages define, without editing them |
 | [Standard extensions](registry/stdx.md) | the `stdx` truck: `+=` and friends, `for x in xs`, `match`, `assert` |
+| [More trucks](language.md#more-trucks) | `bits`, `enums`, `check`, `strfmt`, `units`, `json`, `cli` and `math` |
 | [Package reference](registry/README.md) | generated: every truck and package in the registry |
 
 The package reference is generated from the packages themselves. Don't

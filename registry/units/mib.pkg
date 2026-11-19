@@ -1,0 +1,13 @@
+doc n mib: mebibytes: 1024 kib, as bytes.
+  ```
+  print 1 mib  // 1048576
+  ```
+
+  Binds tighter than any operator, so `2 * 3 mib` is `2 * (3 mib)`.
+  See [units](../units.md).
+
+needs std/mul
+syntax postfix 90
+  {n: expr int} mib -> int
+expand
+  {n} * 1048576

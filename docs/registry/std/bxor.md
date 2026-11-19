@@ -27,3 +27,7 @@ Kind: `infix`, precedence 50, left-associative
 | `right` | expression | `int` |
 
 Produces: `int`
+
+## Used by
+
+[bits/bnot](../bits/bnot.md), [bits/bxor_assign](../bits/bxor_assign.md)

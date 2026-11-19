@@ -1,0 +1,48 @@
+use std
+use rt/test
+use rt/time
+use units
+
+test_int(5 kb, 5000, "kb")
+test_int(2 mb, 2000000, "mb")
+test_int(1 gb, 1000000000, "gb")
+test_int(3 tb, 3000000000000, "tb")
+test_int(4 kib, 4096, "kib")
+test_int(1 mib, 1048576, "mib")
+test_int(2 gib, 2147483648, "gib")
+test_int(1 tib, 1099511627776, "tib")
+test_int(250 ns, 250, "ns")
+test_int(3 us, 3000, "us")
+test_int(20 ms, 20000000, "ms")
+test_int(2 sec, 2000000000, "sec")
+test_int(5 min, 300000000000, "min")
+test_int(1 hour, 3600000000000, "hour")
+test_int(2 day, 172800000000000, "day")
+test_int(1 week, 604800000000000, "week")
+test_int(2 * 3 kb, 6000, "binds tighter than *")
+test_int(-5 ms, -5000000, "with a minus")
+test_int((1 + 2) sec / (1 ms), 3000, "convert back")
+let n = 7
+test_int(n kib, 7168, "on a variable")
+let min = 3
+test_int(min min, 180000000000, "a unit word as a name")
+test_true(time_now() + 1 sec > time_now(), "with rt/time")
+
+test_str(units_dur(0), "0s", "dur 0")
+test_str(units_dur(12 ns), "12ns", "dur ns")
+test_str(units_dur(3500 ns), "3.5us", "dur us")
+test_str(units_dur(20 ms), "20ms", "dur ms")
+test_str(units_dur(1250 ms), "1.25s", "dur s")
+test_str(units_dur(90 sec), "1m30s", "dur m")
+test_str(units_dur(2 hour + 3 min + 4500 ms), "2h3m4.5s", "dur h")
+test_str(units_dur(26 hour), "26h0m0s", "dur over a day")
+test_str(units_dur(-1500 ms), "-1.5s", "dur negative")
+test_str(units_dur(1 sec + 1), "1.000000001s", "dur 1 ns over")
+test_str(units_size(999), "999 B", "size B")
+test_str(units_size(1536), "1.5 KiB", "size KiB")
+test_str(units_size(3 mib), "3 MiB", "size MiB")
+test_str(units_size(1536 kib), "1.5 MiB", "size 1.5 MiB")
+test_str(units_size(2 gib + 200 mib), "2.1 GiB", "size GiB")
+test_str(units_size(1 tib), "1 TiB", "size TiB")
+test_str(units_size(-2048), "-2 KiB", "size negative")
+return test_done()

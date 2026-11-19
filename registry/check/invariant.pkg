@@ -1,0 +1,35 @@
+doc Invariant: invariant cond stops the program, saying where and what, if cond is false.
+  Use it for what must stay true, e.g. inside a loop:
+
+  ```
+  while lo < hi
+    invariant lo >= 0 && hi <= len(xs)
+    ...
+  end
+  ```
+
+  If the condition is false, the program writes the position, the
+  condition as written, and the message after it, to stderr, and exits
+  with status 2:
+
+  ```
+  app.pkg:12:3: invariant failed: n >= 0 && n <= len(xs): n is out of range
+  ```
+
+  The message is any number of `str` expressions, written one after
+  another, and evaluated only when the check fails: `require n > 0, "got ",
+  show(n)` with `strfmt`. Swap `use check` for
+  `use nocheck` to turn every check into nothing (the conditions are
+  still type-checked).
+
+needs std/if std/not std/exprstmt check/fail
+syntax statement
+  invariant {c: expr bool} [, {m: expr str}]*
+expand
+  if !{c}
+    check_fail({@pos}, "invariant failed", {quote c})
+    {each g in ,}
+    check_note({g.m})
+    {end}
+    check_stop()
+  end

@@ -1,0 +1,9 @@
+doc show(x) for str: the string itself.
+  One of the `show` packages; the type of `x` picks which one applies.
+  See [strfmt](../strfmt.md).
+
+needs strfmt/lib
+syntax expr
+  show ( {x: expr str} ) -> str
+expand
+  {x}

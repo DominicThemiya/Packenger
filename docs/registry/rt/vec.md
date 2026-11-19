@@ -118,4 +118,4 @@ end
 
 ## Used by
 
-[rt/fs](fs.md), [rt/map](map.md), [rt/os](os.md), [rt/sort](sort.md), [rt/str](str.md)
+[cli/cli](../cli/cli.md), [enums/flags](../enums/flags.md), [json/parse](../json/parse.md), [json/value](../json/value.md), [json/write](../json/write.md), [rt/fs](fs.md), [rt/map](map.md), [rt/os](os.md), [rt/sort](sort.md), [rt/str](str.md), [strfmt/lib](../strfmt/lib.md)

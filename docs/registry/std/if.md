@@ -42,4 +42,4 @@ if {cond: expr bool} {then: block} [ elif {cond: expr bool} {then: block} ]* [ e
 
 ## Used by
 
-[stdx/assert](../stdx/assert.md), [stdx/match](../stdx/match.md)
+[check/ensure](../check/ensure.md), [check/invariant](../check/invariant.md), [check/require](../check/require.md), [enums/enum](../enums/enum.md), [enums/flags](../enums/flags.md), [nocheck/ensure](../nocheck/ensure.md), [nocheck/invariant](../nocheck/invariant.md), [nocheck/require](../nocheck/require.md), [stdx/assert](../stdx/assert.md), [stdx/match](../stdx/match.md)

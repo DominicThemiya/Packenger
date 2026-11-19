@@ -331,6 +331,43 @@ There's an example of each feature in [`examples/`](../examples):
 `stats.pkg` (`+=` and friends), `letters.pkg` (`for x in`), `roman.pkg`
 (`match`) and `bsearch.pkg` (`assert`).
 
+## More trucks
+
+More trucks come with the registry. The syntax ones expand into `std`, and
+the libraries are written in Packenger, so all of them work with every
+backend.
+
+| truck | gives |
+|---|---|
+| [`bits`](registry/bits.md) | `~x`, `<<=`, `>>=`, `&=`, `\|=`, `^=`, and `bit_count`, `bit_rotl`, `bit_field`, `bit_ushr`, `bit_str`, ... |
+| [`enums`](registry/enums.md) | `enum Color(red, green, blue)` and `flags Perm(read, write, exec)`, with `Color_name`, `Color_parse`, `Perm_all`, ... |
+| [`check`](registry/check.md) | `require`, `ensure` and `invariant` with messages, `unreachable`, `todo`; [`nocheck`](registry/nocheck.md) turns them off |
+| [`strfmt`](registry/strfmt.md) | `show(x)`, `cat(a, b, ...)` and `fmt("{} is {:5}", a, b)` |
+| [`units`](registry/units.md) | `64 kib`, `20 ms`, `1 min + 30 sec`, and `units_dur`, `units_size` |
+| [`json`](registry/json.md) | `json_parse`, `json_path`, `json_obj`, `json_write`, `json_pretty`, ... |
+| [`cli`](registry/cli.md) | flags, arguments, subcommands and `--help` for command-line programs |
+| [`math`](registry/math.md) | `math_gcd`, `math_is_prime`, `math_pow_mod`, fixed-point decimals (`fx_*`), big integers (`big_*`) and random numbers (`rand_*`) |
+
+```
+use std
+use enums
+use check
+use strfmt
+use units
+
+enum Level(debug, info, warn)
+
+fn log(level: int, msg: str)
+  require Level_valid(level), "bad level ", show(level)
+  print fmt("[{:-5}] {}", Level_name(level), msg)
+end
+
+log(warn, fmt("took {}", units_dur(1500 ms)))   // [warn ] took 1.5s
+```
+
+Each truck's tests are in [`tests/`](../tests), one folder per truck, and
+run with `packenger test tests/<truck>`.
+
 ## Keywords as names
 
 The words packages use in their syntax (`to`, `in`, `next`, `end`, `new`,

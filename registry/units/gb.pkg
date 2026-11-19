@@ -1,0 +1,13 @@
+doc n gb: gigabytes: 1000 mb, as bytes.
+  ```
+  print 1 gb   // 1000000000
+  ```
+
+  Binds tighter than any operator, so `2 * 3 gb` is `2 * (3 gb)`.
+  See [units](../units.md).
+
+needs std/mul
+syntax postfix 90
+  {n: expr int} gb -> int
+expand
+  {n} * 1000000000

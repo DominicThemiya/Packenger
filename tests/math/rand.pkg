@@ -1,0 +1,61 @@
+use std
+use rt/test
+use math
+
+// the same seed gives the same numbers, on every backend
+rand_seed(42)
+test_int(rand_bits(), 3580622183945639842, "first number for seed 42")
+test_int(rand_bits(), -8068018748417085693, "second number")
+test_int(rand_bits(), 8967075514996744559, "third number")
+rand_seed(42)
+test_int(rand_bits(), 3580622183945639842, "seeding again restarts")
+
+rand_seed(7)
+let counts = make([int], 6)
+for i = 1 to 6000
+  let r = rand_int(6)
+  counts[r] = counts[r] + 1
+end
+let fair = true
+for i = 0 to 5
+  if counts[i] < 800 || counts[i] > 1200
+    fair = false
+  end
+end
+test_true(fair, "rand_int spreads evenly")
+let inside = true
+for i = 1 to 1000
+  let r = rand_range(-3, 3)
+  if r < -3 || r > 3
+    inside = false
+  end
+end
+test_true(inside, "rand_range stays inside")
+test_int(rand_range(5, 5), 5, "range of one")
+test_int(rand_int(0), 0, "rand_int 0")
+let heads = 0
+for i = 1 to 1000
+  if rand_bool()
+    heads = heads + 1
+  end
+end
+test_true(heads > 400 && heads < 600, "rand_bool is fair")
+test_true(!rand_chance(0, 10), "chance 0")
+test_true(rand_chance(10, 10), "chance 1")
+
+let xs = make([int], 50)
+for i = 0 to 49
+  xs[i] = i
+end
+rand_shuffle(xs)
+let sum = 0
+let moved = 0
+for i = 0 to 49
+  sum = sum + xs[i]
+  if xs[i] != i
+    moved = moved + 1
+  end
+end
+test_int(sum, 1225, "shuffle keeps the items")
+test_true(moved > 25, "shuffle moves them")
+return test_done()

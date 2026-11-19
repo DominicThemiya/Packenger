@@ -1,0 +1,14 @@
+doc Precondition, turned off: require cond checks only the types.
+  The same syntax as [check/require](../check/require.md), but the condition and
+  messages are never evaluated: the statement compiles to a jump over
+  them. Use the `nocheck` truck to switch a whole program's checks off.
+
+needs std/if std/and std/false std/let
+syntax statement
+  require {c: expr bool} [, {m: expr str}]*
+expand
+  if false && {c}
+    {each g in ,}
+    let {cat $m #g} = {g.m}
+    {end}
+  end

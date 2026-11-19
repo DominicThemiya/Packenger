@@ -1,0 +1,34 @@
+doc JSON: parse text into a tree of values, read and build them, and write them back.
+  ```
+  use std
+  use json
+
+  let ok = false
+  let doc = json_parse("{\"user\": {\"name\": \"Ada\", \"langs\": [\"en\", \"fr\"]}}", &ok)
+  if !ok
+    print json_error()
+    return 1
+  end
+  print json_as_str(json_path(doc, "user.name"))      // Ada
+  print json_len(json_path(doc, "user.langs"))        // 2
+
+  let reply = json_obj()
+  json_set(reply, "ok", json_bool(true))
+  json_set(reply, "count", json_int(2))
+  print json_write(reply)                             // {"ok":true,"count":2}
+  ```
+
+  | package | gives |
+  |---|---|
+  | `json/value` | the `Json` tree: `json_obj`, `json_arr`, `json_str`, `json_int`, `json_set`, `json_push`, `json_get`, `json_at`, `json_path`, `json_as_int`, ... |
+  | `json/parse` | `json_parse(text, &ok)` and `json_error()` |
+  | `json/write` | `json_write(j)`, `json_pretty(j, indent)`, `json_quote(s)` |
+
+  Packenger has no floating point, so numbers keep their JSON text:
+  `json_as_int` truncates a fraction, `json_as_fixed(j, 2, &ok)` gives
+  hundredths, and writing a parsed number back gives exactly its text.
+
+truck
+  value
+  parse
+  write

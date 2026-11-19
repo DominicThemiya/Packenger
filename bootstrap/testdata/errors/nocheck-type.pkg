@@ -1,0 +1,5 @@
+use std
+use nocheck
+
+// turned off, but still type-checked
+invariant true, 42

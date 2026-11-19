@@ -1,0 +1,13 @@
+doc n tib: tebibytes: 1024 gib, as bytes.
+  ```
+  print 1 tib  // 1099511627776
+  ```
+
+  Binds tighter than any operator, so `2 * 3 tib` is `2 * (3 tib)`.
+  See [units](../units.md).
+
+needs std/mul
+syntax postfix 90
+  {n: expr int} tib -> int
+expand
+  {n} * 1099511627776

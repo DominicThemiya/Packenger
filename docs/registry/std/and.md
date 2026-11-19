@@ -28,3 +28,7 @@ Kind: `infix`, precedence 20, left-associative
 | `right` | expression | `bool` |
 
 Produces: `bool`
+
+## Used by
+
+[enums/enum](../enums/enum.md), [nocheck/ensure](../nocheck/ensure.md), [nocheck/invariant](../nocheck/invariant.md), [nocheck/require](../nocheck/require.md)

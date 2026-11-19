@@ -1,0 +1,18 @@
+doc todo with messages: todo "why", more...
+  Like [check/todo](todo.md), followed by a message: any
+  number of `str` expressions, written one after another.
+
+  ```
+  app.pkg:2:3: not implemented yet: PDF export
+  ```
+
+needs std/exprstmt check/fail
+syntax statement
+  todo {m: expr str} [, {more: expr str}]*
+expand
+  check_fail({@pos}, "not implemented yet", "")
+  check_note({m})
+  {each x in ,}
+  check_note({x.more})
+  {end}
+  check_stop()

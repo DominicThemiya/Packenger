@@ -1,0 +1,86 @@
+doc Bit flags: flags Perm(read, write, exec) declares constants 1, 2, 4, ...
+  ```
+  flags Perm(read, write, exec)
+
+  let p = read | exec
+  print p                     // 5
+  print p & write != 0        // false
+  print Perm_name(p)          // read|exec
+  print Perm_parse("write|exec")  // 6
+  print Perm_all              // 7
+  ```
+
+  Each name becomes a `const` with its own bit: the first is 1, the next
+  2, then 4, and so on, up to 63 names. Combine them with `|`, test them
+  with `&`. It also declares, named after the set:
+
+  | declaration | is |
+  |---|---|
+  | `const <Name>_count` | how many flags there are |
+  | `const <Name>_all` | every flag set |
+  | `fn <Name>_name(v: int) -> str` | the set flags' names joined by `\|`, in declaration order; other bits as a number at the end (`read\|64`); `""` for 0 |
+  | `fn <Name>_parse(s: str) -> int` | the flags named in `s`, separated by `\|` (spaces allowed); 0 for `""`, -1 if a name isn't a flag |
+
+  Use it at the top level, like `const`. The `bits` truck's `|=`, `&=` and
+  `~` go well with it: `p &= ~write`.
+
+needs std/const std/fn std/if std/ne std/eq std/return std/let std/band std/bor std/shl std/sub std/lt std/assign std/while std/add rt/str rt/vec
+syntax statement top
+  flags {name: ident} ( {first: ident} [, {n: ident}]* )
+expand
+  const {first} = 1
+  {each c in ,}
+  const {c.n} = 1 << ({#c} + 1)
+  {end}
+  const {cat name "_count"} = {#,} + 1
+  const {cat name "_all"} = (1 << ({#,} + 1)) - 1
+
+  fn {cat name "_name"}({$v}: int) -> str
+    let {$b} = sb_new()
+    if {$v} & {first} != 0
+      sb_add({$b}, {quote first})
+    end
+    {each c in ,}
+    if {$v} & {c.n} != 0
+      if sb_len({$b}) > 0
+        sb_byte({$b}, '|')
+      end
+      sb_add({$b}, {quote c.n})
+    end
+    {end}
+    let {$rest} = {$v} & ({cat name "_all"} ^ -1)
+    if {$rest} != 0
+      if sb_len({$b}) > 0
+        sb_byte({$b}, '|')
+      end
+      sb_int({$b}, {$rest})
+    end
+    return sb_str({$b})
+  end
+
+  fn {cat name "_parse"}({$s}: str) -> int
+    let {$v} = 0
+    if str_trim({$s}) == ""
+      return 0
+    end
+    let {$parts} = str_split({$s}, '|')
+    let {$i} = 0
+    while {$i} < vec_len({$parts})
+      let {$p} = str_trim(vec_get_str({$parts}, {$i}))
+      let {$bit} = -1
+      if {$p} == {quote first}
+        {$bit} = {first}
+      end
+      {each c in ,}
+      if {$p} == {quote c.n}
+        {$bit} = {c.n}
+      end
+      {end}
+      if {$bit} < 0
+        return -1
+      end
+      {$v} = {$v} | {$bit}
+      {$i} = {$i} + 1
+    end
+    return {$v}
+  end

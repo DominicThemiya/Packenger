@@ -1,0 +1,59 @@
+use std
+use stdx
+use rt/test
+use enums
+
+// usable before the declaration
+test_int(f(), 9, "used in a function before the enum")
+
+enum Color(red, green,
+    blue)
+enum Size(small)
+flags Perm(read, write, exec)
+
+fn f() -> int
+  return blue + 7
+end
+
+const WARM = red
+
+test_int(red, 0, "first is 0")
+test_int(green, 1, "second")
+test_int(blue, 2, "third")
+test_int(Color_count, 3, "count")
+test_int(Size_count, 1, "one name")
+test_int(WARM, 0, "in a const")
+test_str(Color_name(blue), "blue", "name")
+test_str(Color_name(9), "", "name of a non-value")
+test_str(Size_name(small), "small", "name of the only one")
+test_int(Color_parse("green"), green, "parse")
+test_int(Color_parse("purple"), -1, "parse unknown")
+test_true(Color_valid(red), "valid")
+test_true(!Color_valid(3), "not valid")
+test_true(!Color_valid(-1), "negative not valid")
+
+let c = green
+let said = ""
+match c
+case red, green
+  said = "warm-ish"
+else
+  said = "cool"
+end
+test_str(said, "warm-ish", "match on enum values")
+
+test_int(read, 1, "flag 1")
+test_int(write, 2, "flag 2")
+test_int(exec, 4, "flag 3")
+test_int(Perm_all, 7, "all")
+test_int(Perm_count, 3, "flags count")
+let p = read | exec
+test_true(p & write == 0, "flag not set")
+test_str(Perm_name(p), "read|exec", "flag names")
+test_str(Perm_name(0), "", "no flags")
+test_str(Perm_name(write | 64), "write|64", "unknown bits")
+test_int(Perm_parse("write|exec"), 6, "parse flags")
+test_int(Perm_parse(" read | write "), 3, "parse with spaces")
+test_int(Perm_parse(""), 0, "parse nothing")
+test_int(Perm_parse("read|fly"), -1, "parse unknown flag")
+return test_done()

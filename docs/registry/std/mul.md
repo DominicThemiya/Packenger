@@ -32,4 +32,4 @@ Produces: `int`
 
 ## Used by
 
-[stdx/mul_assign](../stdx/mul_assign.md)
+[stdx/mul_assign](../stdx/mul_assign.md), [units/day](../units/day.md), [units/gb](../units/gb.md), [units/gib](../units/gib.md), [units/hour](../units/hour.md), [units/kb](../units/kb.md), [units/kib](../units/kib.md), [units/mb](../units/mb.md), [units/mib](../units/mib.md), [units/min](../units/min.md), [units/ms](../units/ms.md), [units/ns](../units/ns.md), [units/sec](../units/sec.md), [units/tb](../units/tb.md), [units/tib](../units/tib.md), [units/us](../units/us.md), [units/week](../units/week.md)

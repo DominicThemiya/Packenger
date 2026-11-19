@@ -34,4 +34,4 @@ Produces: `bool`
 
 ## Used by
 
-[stdx/match](../stdx/match.md)
+[enums/enum](../enums/enum.md), [enums/flags](../enums/flags.md), [stdx/match](../stdx/match.md)

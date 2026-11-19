@@ -1,0 +1,37 @@
+doc Helper: how check's statements report a failure and stop.
+  `check_fail(pos, what, detail)` writes `pos: what: detail` to stderr,
+  after flushing what `rt/io` buffered for stdout; `check_note` adds a
+  piece of the message (the first after `: `), and `check_stop` ends the
+  line and exits with status 2, like other runtime errors.
+
+  ```
+  app.pkg:12:3: requirement failed: n > 0: the count must be positive
+  ```
+
+needs std rt/io
+code
+  global check_noted: bool = false
+
+  fn check_fail(pos: str, what: str, detail: str)
+    check_noted = false
+    io_err(pos)
+    io_err(": ")
+    io_err(what)
+    if detail != ""
+      io_err(": ")
+      io_err(detail)
+    end
+  end
+
+  fn check_note(m: str)
+    if !check_noted
+      io_err(": ")
+      check_noted = true
+    end
+    io_err(m)
+  end
+
+  fn check_stop()
+    io_err("\n")
+    syscall(60, 2)
+  end

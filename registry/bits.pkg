@@ -1,0 +1,32 @@
+doc Bit twiddling: ~x, compound assignment for <<, >>, &, | and ^, and bit functions.
+  ```
+  use std
+  use bits
+
+  let flags = 0
+  flags |= 1 << 3
+  flags ^= 1
+  flags &= ~1
+  print bit_get(flags, 3)       // true
+  print bit_count(255)          // 8
+  print bit_str(flags, 8)       // 00001000
+  ```
+
+  | package | gives |
+  |---|---|
+  | `bits/bnot` | `~x`: every bit flipped |
+  | `bits/shl_assign`, `bits/shr_assign` | `x <<= n`, `x >>= n` |
+  | `bits/band_assign`, `bits/bor_assign`, `bits/bxor_assign` | `x &= y`, `x \|= y`, `x ^= y` |
+  | `bits/ops` | `bit_count`, `bit_lz`, `bit_tz`, `bit_rotl`, `bit_get`, `bit_set`, `bit_field`, `bit_ushr` (logical shift), `bit_str` and more |
+
+  The assignments and `~` expand into `std` operators, so they work with
+  every backend. Pair with `stdx` for `+=` and friends.
+
+truck
+  bnot
+  shl_assign
+  shr_assign
+  band_assign
+  bor_assign
+  bxor_assign
+  ops
